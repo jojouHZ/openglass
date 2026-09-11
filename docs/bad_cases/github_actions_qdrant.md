@@ -26,6 +26,11 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 
 **Fix:** REST port corrected to 6333, `search()` replaced with `query_points()`, and the script now exits non-zero when any file fails to vectorize or zero points are uploaded.
 
+## Failure 5: Invalid point IDs
+**Cause:** With error propagation in place, the vectorize step failed for real — `_generate_point_id` produced string IDs like `a1b2c3d4_0`, but Qdrant only accepts unsigned 64-bit integers or UUIDs. Every upsert was rejected.
+
+**Fix:** Point IDs are now generated as uint64 from an md5 digest of `file_path + chunk_index` (deterministic, so re-runs upsert the same points).
+
 ## Lessons
 - Prefer `services:` over manual `docker run` in GitHub Actions.
 - Never assume common CLI tools (`curl`, `bash`) exist inside third-party minimal images.
@@ -37,3 +42,4 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 - `97c3b3e` Remove container health check - qdrant image lacks curl
 - `40cef82` Fix Qdrant readiness check - use root endpoint instead of /health
 - `87407ee` Fix Qdrant REST port (6333), replace removed search() with query_points(), fail on errors
+- `bab64ab` Fix point IDs - Qdrant requires uint64 or UUID
