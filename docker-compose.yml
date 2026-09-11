@@ -1,23 +1,16 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: openglass-qdrant
     ports:
       - "6333:6333"  # REST API
-      - "6334:6334"  # gRPC API (для Go)
+      - "6334:6334"  # gRPC API (for Go client)
     volumes:
-      - ./qdrant_storage:/qdrant/storage
+      - qdrant_storage:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
-      - QDRANT__LOG_LEVEL=DEBUG
+      - QDRANT__LOG_LEVEL=INFO
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   qdrant_storage:

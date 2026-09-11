@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Qdrant local storage (if bind-mounted)
+qdrant_storage/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
