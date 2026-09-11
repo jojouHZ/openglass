@@ -293,10 +293,10 @@ class DocumentationVectorizor:
                 'error': str(e)
             }
     
-    def _generate_point_id(self, file_path: str, chunk_index: int) -> str:
-        """Generate unique point ID from file path and chunk index."""
-        file_hash = hashlib.md5(file_path.encode()).hexdigest()[:8]
-        return f"{file_hash}_{chunk_index}"
+    def _generate_point_id(self, file_path: str, chunk_index: int) -> int:
+        """Generate unique point ID (Qdrant accepts uint64 or UUID only)."""
+        digest = hashlib.md5(f"{file_path}_{chunk_index}".encode()).hexdigest()
+        return int(digest[:16], 16)
     
     def vectorize_directory(self, directory: str) -> List[Dict[str, Any]]:
         """Vectorize all markdown files in a directory."""
