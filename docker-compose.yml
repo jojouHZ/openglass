@@ -12,6 +12,18 @@ services:
       - QDRANT__LOG_LEVEL=INFO
     restart: unless-stopped
 
+  embedder:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    container_name: openglass-embedder
+    ports:
+      - "8080:80"
+    volumes:
+      - tei_models:/data
+    command: --model-id BAAI/bge-large-en-v1.5 --port 80
+    restart: unless-stopped
+
 volumes:
   qdrant_storage:
+    driver: local
+  tei_models:
     driver: local
