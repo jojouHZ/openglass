@@ -16,6 +16,11 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 
 **Fix:** Removed the `options:` health check entirely. Readiness is handled by the explicit `Wait for Qdrant to be ready` step, which runs `curl` on the runner (where it exists).
 
+## Failure 3: Wait for Qdrant to be ready
+**Cause:** The readiness check polled `http://localhost:6333/health`, which Qdrant does not expose (it has `/healthz`/`/readyz`, version-dependent). `curl -f` got 404 for 60s and the step timed out.
+
+**Fix:** Poll the root endpoint `http://localhost:6333/` instead — it returns 200 on every Qdrant version once the HTTP server is up.
+
 ## Lessons
 - Prefer `services:` over manual `docker run` in GitHub Actions.
 - Never assume common CLI tools (`curl`, `bash`) exist inside third-party minimal images.
@@ -25,3 +30,4 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 ## Related commits
 - `2a0390e` Fix GitHub Actions: use services for Qdrant and cache HuggingFace models
 - `97c3b3e` Remove container health check - qdrant image lacks curl
+- `40cef82` Fix Qdrant readiness check - use root endpoint instead of /health
