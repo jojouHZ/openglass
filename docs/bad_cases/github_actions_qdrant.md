@@ -21,6 +21,11 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 
 **Fix:** Poll the root endpoint `http://localhost:6333/` instead — it returns 200 on every Qdrant version once the HTTP server is up.
 
+## Failure 4: Test vectorization (false success on vectorize step)
+**Cause:** Three bugs combined. `QdrantClient(port=6334)` sent REST traffic to the gRPC port, so every `upsert` failed — but exceptions were caught and only printed, so the step exited 0 and reported "success". Then the test step called `client.search()`, removed in recent `qdrant-client` releases (requirements use unpinned `>=1.7.0`), which finally produced a real failure.
+
+**Fix:** REST port corrected to 6333, `search()` replaced with `query_points()`, and the script now exits non-zero when any file fails to vectorize or zero points are uploaded.
+
 ## Lessons
 - Prefer `services:` over manual `docker run` in GitHub Actions.
 - Never assume common CLI tools (`curl`, `bash`) exist inside third-party minimal images.
@@ -31,3 +36,4 @@ The `vectorize_docs.yml` workflow failed twice before succeeding.
 - `2a0390e` Fix GitHub Actions: use services for Qdrant and cache HuggingFace models
 - `97c3b3e` Remove container health check - qdrant image lacks curl
 - `40cef82` Fix Qdrant readiness check - use root endpoint instead of /health
+- `87407ee` Fix Qdrant REST port (6333), replace removed search() with query_points(), fail on errors
