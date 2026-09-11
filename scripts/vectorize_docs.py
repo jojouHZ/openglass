@@ -7,6 +7,7 @@ Uses hierarchical smart chunking and BGE-large embeddings (1024-dimensional).
 
 import os
 import re
+import sys
 import json
 import hashlib
 from pathlib import Path
@@ -148,7 +149,7 @@ class MarkdownChunker:
 class DocumentationVectorizor:
     """Main vectorization pipeline for OpenGlass documentation."""
     
-    def __init__(self, qdrant_url: str = "localhost", qdrant_port: int = 6334):
+    def __init__(self, qdrant_url: str = "localhost", qdrant_port: int = 6333):
         self.qdrant_client = QdrantClient(host=qdrant_url, port=qdrant_port)
         self.chunker = MarkdownChunker()
         
@@ -331,12 +332,12 @@ class DocumentationVectorizor:
             )
         
         # Search in Qdrant
-        results = self.qdrant_client.search(
+        results = self.qdrant_client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=limit,
             query_filter=search_filter
-        )
+        ).points
         
         # Format results
         formatted_results = []
@@ -366,8 +367,8 @@ def main():
                        help='Filter by case type')
     parser.add_argument('--qdrant-url', default='localhost', 
                        help='Qdrant server URL')
-    parser.add_argument('--qdrant-port', type=int, default=6334, 
-                       help='Qdrant server port')
+    parser.add_argument('--qdrant-port', type=int, default=6333, 
+                       help='Qdrant server port (REST)')
     
     args = parser.parse_args()
     
@@ -398,6 +399,8 @@ def main():
         # Single file mode
         result = vectorizor.vectorize_document(args.file)
         print(f"Result: {result}")
+        if result['status'] == 'error':
+            sys.exit(1)
         
     else:
         # Directory mode
@@ -414,6 +417,9 @@ def main():
         print(f"Failed: {failed}")
         print(f"Total chunks: {total_chunks}")
         print(f"Total points uploaded: {total_points}")
+        
+        if failed > 0 or (len(results) > 0 and total_points == 0):
+            sys.exit(1)
 
 
 if __name__ == "__main__":
