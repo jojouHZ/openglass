@@ -20,6 +20,19 @@ on:
 jobs:
   vectorize:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+          - 6334:6334
+        options: >-
+          --health-cmd "curl -f http://localhost:6333/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     
     steps:
     - name: Checkout repository
@@ -30,6 +43,14 @@ jobs:
       with:
         python-version: '3.11'
         
+    - name: Cache HuggingFace models
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/huggingface
+        key: ${{ runner.os }}-huggingface-${{ hashFiles('scripts/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-huggingface-
+        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -38,11 +59,6 @@ jobs:
         else
           pip install sentence-transformers qdrant-client beautifulsoup4 markdown
         fi
-        
-    - name: Start Qdrant
-      run: |
-        docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:latest
-        sleep 10
         
     - name: Wait for Qdrant to be ready
       run: |
@@ -54,10 +70,14 @@ jobs:
         python scripts/vectorize_docs.py --directory .devin/skills
         python scripts/vectorize_docs.py --file AGENTS.md
         python scripts/vectorize_docs.py --file README.md
+      env:
+        HF_HOME: ~/.cache/huggingface
         
     - name: Test vectorization
       run: |
         python scripts/vectorize_docs.py --search "WebSocket implementation"
+      env:
+        HF_HOME: ~/.cache/huggingface
         
     - name: Summary
       run: |
