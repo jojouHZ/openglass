@@ -1,0 +1,66 @@
+name: Vectorize Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '.devin/skills/**'
+      - 'AGENTS.md'
+      - 'README.md'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '.devin/skills/**'
+      - 'AGENTS.md'
+      - 'README.md'
+  workflow_dispatch:
+
+jobs:
+  vectorize:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f scripts/requirements.txt ]; then
+          pip install -r scripts/requirements.txt
+        else
+          pip install sentence-transformers qdrant-client beautifulsoup4 markdown
+        fi
+        
+    - name: Start Qdrant
+      run: |
+        docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:latest
+        sleep 10
+        
+    - name: Wait for Qdrant to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:6333/health; do sleep 2; done'
+        
+    - name: Vectorize documentation
+      run: |
+        python scripts/vectorize_docs.py --directory docs
+        python scripts/vectorize_docs.py --directory .devin/skills
+        python scripts/vectorize_docs.py --file AGENTS.md
+        python scripts/vectorize_docs.py --file README.md
+        
+    - name: Test vectorization
+      run: |
+        python scripts/vectorize_docs.py --search "WebSocket implementation"
+        
+    - name: Summary
+      run: |
+        echo "Documentation vectorization completed successfully"
+        echo "Qdrant collection: openglass_docs"
+        echo "Embeddings: BGE-large (1024-dimensional)"
