@@ -67,11 +67,12 @@ itself is a separate channel that never touches message storage.
 
 ## Development Infrastructure
 
-- **Agent team**: hierarchical agent system (see `AGENTS.md`), work tracked in
-  GitHub Issues + Project board (`proceed → done → approved → next`).
+- **Workflow**: work is tracked in GitHub Issues + a kanban Project board
+  (`proceed → done → approved → next`) with human review gates.
 - **Knowledge base**: all documentation, success cases, bad cases and rollbacks
   are vectorized into Qdrant (`openglass_docs`, 1024-dim BGE-large embeddings)
-  so agents can search project history. See `docs/architecture/04-backend.md`.
+  for semantic search over project history. See
+  `docs/architecture/04-backend.md`.
 
 ## Scaling Model
 

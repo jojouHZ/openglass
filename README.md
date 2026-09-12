@@ -24,13 +24,6 @@ layer and an ephemeral, zero-persistence private layer.
 
 - [Architecture](docs/architecture/00-overview.md) — full system docs
 - [Threat model](docs/architecture/05-threat-model.md)
-- [AGENTS.md](AGENTS.md) — agent system
-- [Project checkup](docs/PROJECT_CHECKUP.md)
-
-## Agent System
-
-OpenGlass is built by a hierarchical agent team (orchestrator → specialist
-agents) with human review gates. See [AGENTS.md](AGENTS.md).
 
 ## License
 

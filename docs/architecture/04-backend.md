@@ -9,10 +9,10 @@ client platform — no per-platform server code.
 ```
 cmd/                 entrypoint
 internal/
-  knowledge/         Qdrant knowledge-base client (agent infrastructure)
   api/               public REST API (planned)
   ws/                WebSocket hub + relay (planned)
   relay/             private session relay, in-process buffers (planned)
+  knowledge/         Qdrant knowledge-base client (planned)
 ```
 
 ## Responsibilities
@@ -57,12 +57,12 @@ public-layer sessions.
 - Multi-node scale-out (>5–10k concurrent, sticky sessions, shared state) is
   out of scope for v1 — revisit only if a client demands it.
 
-## Knowledge Base (agent infrastructure)
+## Knowledge Base
 
 - **Qdrant** vector DB: collection `openglass_docs`, 1024-dim vectors
   (BGE-large via TEI embedder service, port 8080).
-- `internal/knowledge` connects over gRPC (port 6334); agents query project
-  knowledge (success cases, bad cases, rollbacks, architecture docs).
+- Clients connect over gRPC (port 6334) to query project knowledge
+  (success cases, bad cases, rollbacks, architecture docs).
 - Python `scripts/vectorize_docs.py` indexes docs in CI — not a production
   runtime dependency.
 
