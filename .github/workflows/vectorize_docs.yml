@@ -5,15 +5,11 @@ on:
     branches: [ main ]
     paths:
       - 'docs/**'
-      - '.devin/skills/**'
-      - 'AGENTS.md'
       - 'README.md'
   pull_request:
     branches: [ main ]
     paths:
       - 'docs/**'
-      - '.devin/skills/**'
-      - 'AGENTS.md'
       - 'README.md'
   workflow_dispatch:
 
@@ -21,23 +17,23 @@ jobs:
   vectorize:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
     services:
       qdrant:
         image: qdrant/qdrant:latest
         ports:
           - 6333:6333
           - 6334:6334
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
+
     - name: Cache HuggingFace models
       uses: actions/cache@v3
       with:
@@ -45,7 +41,7 @@ jobs:
         key: ${{ runner.os }}-huggingface-${{ hashFiles('scripts/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-huggingface-
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -54,26 +50,24 @@ jobs:
         else
           pip install sentence-transformers qdrant-client beautifulsoup4 markdown
         fi
-        
+
     - name: Wait for Qdrant to be ready
       run: |
         timeout 90 bash -c 'until curl -sf http://localhost:6333/; do sleep 2; done'
-        
+
     - name: Vectorize documentation
       run: |
         python scripts/vectorize_docs.py --directory docs
-        python scripts/vectorize_docs.py --directory .devin/skills
-        python scripts/vectorize_docs.py --file AGENTS.md
         python scripts/vectorize_docs.py --file README.md
       env:
         HF_HOME: ~/.cache/huggingface
-        
+
     - name: Test vectorization
       run: |
         python scripts/vectorize_docs.py --search "WebSocket implementation"
       env:
         HF_HOME: ~/.cache/huggingface
-        
+
     - name: Summary
       run: |
         echo "Documentation vectorization completed successfully"

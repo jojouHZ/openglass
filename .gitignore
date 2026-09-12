@@ -15,13 +15,18 @@ qdrant_storage/
 .DS_Store
 Thumbs.db
 
-# Go
-*.exe
-*.test
-*.out
-vendor/
-
 # Env / secrets
 .env
 .env.*
 !.env.example
+
+# === Internal development infrastructure (local-only, never committed) ===
+.devin/
+AGENTS.md
+scripts/test_agents.py
+scripts/test_structure.py
+docs/PROJECT_CHECKUP.md
+cmd/
+internal/
+go.mod
+go.sum
