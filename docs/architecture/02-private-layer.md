@@ -22,7 +22,7 @@ inside an otherwise normal conversation — agree in public, transmit in private
 1. Both users are mutual contacts.
 2. User A taps **[Invite to private chat]** inside their public chat.
 3. User B sees an invite message → **accept** or **decline**.
-4. On accept: a separate private chat window opens (Telegram secret-chat UX);
+4. On accept: a separate private chat window opens;
    ECDH key exchange happens over the relay channel.
 5. On decline: nothing is created.
 
@@ -63,7 +63,7 @@ session lifetime.
 
 A relay server could theoretically MITM the key exchange. Mitigation shipped
 in MVP-private: after accept, both clients display a short **verification
-fingerprint** (emoji/numeric code, Signal-style). Users may compare
+fingerprint** (emoji/numeric code). Users may compare
 out-of-band; the UI shows it prominently but does not force it.
 
 ## Relay Semantics

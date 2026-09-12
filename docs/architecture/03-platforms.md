@@ -4,7 +4,7 @@ OpenGlass uses a **micro-frontend (MFE)** architecture: one shared frontend
 core plus thin per-platform shells. Remote modules are loaded dynamically —
 which modules a shell loads defines what the platform can do.
 
-## Shell Matrix
+## Shell Overview
 
 | Shell | Tech | Public layer | Private layer | Key storage |
 |-------|------|:---:|:---:|-------------|
@@ -13,8 +13,10 @@ which modules a shell loads defines what the platform can do.
 | Android | Capacitor | ✅ | ✅ | Keystore |
 | Desktop | Electron | ✅ | ✅ | `safeStorage` (weaker) |
 
-Each shell lives in its **own repository** — including the private-hosting
-deployment host.
+During MVP the backend, shared core and PWA shell live in a **single
+monorepo**. Shells are extracted into their own repositories starting with
+the iOS shell at the Alpha stage (native plugins, signing, entitlements).
+The private-hosting deployment host always lives in a separate repository.
 
 ## Remote Modules
 
