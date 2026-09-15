@@ -24,6 +24,16 @@ layer and an ephemeral, zero-persistence private layer.
 
 - [Architecture](docs/architecture/00-overview.md) — full system docs
 - [Threat model](docs/architecture/05-threat-model.md)
+- [AI workflow](docs/ai-workflow.md) — RAG knowledge pipeline and
+  human-gated, AI-assisted development process
+
+## AI-Driven Development
+
+This project is built with an AI-assisted workflow backed by a persistent
+project knowledge base: all documentation, success cases, and post-mortems
+are vectorized (BGE-large → Qdrant) and searchable. Tasks run through a
+human-gated Kanban cycle — every change is reviewed before approval. See
+[docs/ai-workflow.md](docs/ai-workflow.md) for the architecture.
 
 ## License
 
