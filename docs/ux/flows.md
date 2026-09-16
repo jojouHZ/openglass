@@ -17,7 +17,8 @@ navigation event, every screen lists the data it needs.
 | S6 | Contact search & add | Public |
 | S7 | Contact profile / chat actions | Public |
 | S8 | Group creation | Public |
-| S9 | Group view + management | Public |
+| S9 | Group view | Public |
+| S9a | Group management (owner panel) | Public |
 | S10 | Private session invite (in-chat) | Private |
 | S11 | Private session setup | Private |
 | S12 | Private chat window | Private |
@@ -52,7 +53,8 @@ flowchart TD
 
     S4 -->|new group| S8[S8 Group Creation]
     S8 -->|members picked| S9
-    S9 -->|owner: manage members/rights| S9
+    S9 -->|owner: manage entry| S9a[S9a Group Management]
+    S9a -->|save rights/members| S9
     S9 -->|member: read/post per rights| S9
 
     S10 -->|B accepts| S11[S11 Session Setup]
@@ -75,8 +77,13 @@ that I can request access to the closed instance.
 **US-1.2** As a user, I want to verify a one-time code sent to my email, so
 that the server confirms I own the address.
 
-**US-1.3** As a new user, I want to pick a nickname and see my generated
-unique ID, so that others can find me.
+**US-1.3** As a new user, I want to pick a nickname and receive a unique
+tag number (`nickname#NNNN`), so that others can find me.
+
+**Identity scheme**: every user gets `nickname#number`. `#1` is reserved
+for the instance owner (the hoster — first registered user) and can never
+be reissued, making admin impersonation impossible. Numbers are sequential
+per instance.
 
 **Transitions**
 - `S1 → S2`: submit invite + email → server sends OTP
@@ -98,6 +105,9 @@ can find contacts without sharing phone numbers.
 appear in my contact list.
 
 **US-2.3** As a user, I want to open a chat directly from a contact profile.
+
+**US-2.4** As a user, I want to report a user from their profile, so that
+abuse can be flagged to the instance owner.
 
 **Transitions**
 - `S4 → S6`: search field / "add contact" action
@@ -163,6 +173,10 @@ inside the public chat, so that I control when sessions start.
 **US-5.3** As the inviter, I want to set session lifetime (1 min–24 h,
 default 10 min, remember last choice) and per-message burn, so that the
 session matches the sensitivity level.
+
+**US-5.3a** As BOTH participants, I want to see and verify the session
+fingerprint before the session starts, so that neither side can be
+MITM'd — verification is mutual, not inviter-only.
 
 **US-5.4** As a participant, I want to see the countdown, the partner's
 connection state, and a fingerprint I can verify, so that I trust the
