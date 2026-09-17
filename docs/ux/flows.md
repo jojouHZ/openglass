@@ -184,8 +184,9 @@ message actions are one gesture away.
 
 **Message anatomy**: read receipt `✓✓` bottom-right inside own bubble;
 timestamp beside it; date separators ("September 14") between groups;
-burn `🔥` top-left on private bubbles — long-press 1–2 s with progress
-ring, never a single tap.
+burn `🔥` top-left on private bubbles — a single tap only shows the
+"hold to burn" hint; the burn itself requires a long-press of 1–2 s
+with a progress ring.
 
 **Data needed per message**: `id, sender_id, text, attachments[],
 created_at, edited_at, read_at, pinned`
