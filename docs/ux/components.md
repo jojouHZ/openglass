@@ -8,6 +8,29 @@ and frontend components mirror this spec 1:1. Tokens: `design-tokens.md`.
 `ui/<name>` in Penpot ↔ `<UiName>` in code. States listed exhaustively —
 if a state isn't here, it doesn't exist.
 
+## Text styles
+
+| Style | Size/Weight | Color | Usage |
+|-------|------------|-------|-------|
+| `display` | 24/700 | ink | screen titles (Sign in, Create profile) |
+| `title` | 15/600 | ink | header names, list names |
+| `body` | 13/400 | ink | message text, menu rows |
+| `secondary` | 12/400 | muted | previews, descriptions |
+| `label` | 10/400 caps | muted | field labels, section headers |
+| `caption` | 10/400 | muted | timestamps, hints |
+| `meta` | 9/400 | muted/#c4c4c4 | in-bubble time + receipt |
+| `link` | 13/400 | accent + underline | user tag, tappable refs |
+
+## Alignment rules
+
+- Screen-edge margin: 24px everywhere.
+- Centered blocks (avatar, name, tag, caption on profile screens):
+  optical center = 195 on 390 canvas — no hand-tuned x.
+- Button labels always centered in their rect.
+- Input placeholders and field text: left + 16px inside the field.
+- Header title block: left-aligned next to avatar, never centered.
+- Status-bar time: left 24px; header icons: right 24px.
+
 ---
 
 ## ui/status-bar
