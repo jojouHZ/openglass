@@ -111,6 +111,16 @@ appear in my contact list.
 **US-2.4** As a user, I want to report a user from their profile, so that
 abuse can be flagged to the instance owner.
 
+**US-2.5** As a user, I want to verify a contact's identity (emoji grid /
+QR) right from their profile — without starting a private session — so
+that the private toggle is unlocked in advance. Verified contacts show
+a "verified" mark on profile and in chat.
+
+**US-2.6** As a user, I want an optional verification freshness reminder:
+if a contact was last verified more than N days ago (default 90,
+configurable/off in settings), show a soft banner suggesting to
+re-verify at the next opportunity. Non-blocking.
+
 **Transitions**
 - `S4 → S6`: search field / "add contact" action
 - `S6 → S7`: select a result → contact profile card
