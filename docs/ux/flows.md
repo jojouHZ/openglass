@@ -82,10 +82,16 @@ that the server confirms I own the address.
 **US-1.3** As a new user, I want to pick a nickname and receive a unique
 tag number (`nickname#NNNN`), so that others can find me.
 
-**Identity scheme**: every user gets `nickname#number`. `#1` is reserved
-for the instance owner (the hoster — first registered user) and can never
-be reissued, making admin impersonation impossible. Numbers are sequential
-per instance.
+**Identity scheme**: two separate identifiers.
+
+- **Display name** — free-form, changeable anytime, NOT unique (two
+  users named "jojou" is fine). Purely cosmetic.
+- **Tag `name#NNNN`** — unique handle bound at registration, immutable.
+  Its prefix is taken from the display name chosen at registration but
+  lives independently afterward. Tag uniqueness enforced: if `jojou` is
+  taken, registration suggests a free variant (`Jojou13245`). `#1` is
+  reserved for the instance owner (the hoster) and can never be
+  reissued — admin impersonation impossible.
 
 **Transitions**
 - `S1 → S2`: submit invite + email → server sends OTP
@@ -166,8 +172,23 @@ that I know the conversation state.
 **US-3.4** As a user, I want to see the contact's presence (online/last
 seen) in the chat header.
 
+**US-3.5** As a user, I want to pin a message inside a chat and see a
+pinned bar at the top, so that key info stays visible.
+
+**US-3.6** As a user, I want to search within a chat's history, so that
+I can find an old message without scrolling.
+
+**US-3.7** As a user, I want a context menu on long-press on a message
+(reply / copy / edit / pin / delete; 🔥 burn in private mode), so that
+message actions are one gesture away.
+
+**Message anatomy**: read receipt `✓✓` bottom-right inside own bubble;
+timestamp beside it; date separators ("September 14") between groups;
+burn `🔥` top-left on private bubbles — long-press 1–2 s with progress
+ring, never a single tap.
+
 **Data needed per message**: `id, sender_id, text, attachments[],
-created_at, edited_at, read_at`
+created_at, edited_at, read_at, pinned`
 
 **Edge cases**
 - Send while offline → queue locally, send on reconnect, "sending" state

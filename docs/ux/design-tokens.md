@@ -14,6 +14,9 @@ to a `tailwind.config` key. Adjust here → regenerate.
 | `soft` | `#dedede` | Incoming bubbles, status bar, selected states |
 | `bg` | `#ffffff` | Public-layer background |
 | `bg-private` | `#0e0e10` | Private-mode background |
+| `accent` | `#3d6b99` | Links, verified chip, copy affordances, active states |
+| `bubble-own` | `#181818` | Own public message (white text) |
+| `bubble-in` | `#f1f1f4` | Incoming public message (ink text) |
 | `danger` | `#b00000` | Destructive text (report, burn confirm) |
 
 ## Typography
@@ -60,3 +63,12 @@ Mobile: **390×844** (iPhone 14 class). Safe areas: `env(safe-area-inset-*)`.
 
 Private mode inverts: `bg` → `#0e0e10`, incoming bubble → `#3c3c43`,
 outgoing → `#c4c4c4`, text → `#ffffff`. Lock icon + countdown in header.
+
+## Message anatomy
+
+- Read receipt `✓✓` — bottom-right inside own bubble
+- Timestamp — beside receipt, `meta` size
+- Date separators — centered pill `September 14` between message groups
+- Private burn icon `🔥` — top-left corner of private bubble;
+  **long-press 1–2 s** to burn (misclick guard), progress ring on hold
+- Tag copy — `⧉` icon + accent-colored underlined tag; "copied" tooltip
