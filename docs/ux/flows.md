@@ -218,24 +218,38 @@ starts.
 message, so that I can destroy individual messages manually — full
 point-level control instead of a session-wide flag.
 
-**US-5.3a** As BOTH participants, I want verification to follow a TOFU
-(trust-on-first-use) model:
+**US-5.3a** As BOTH participants, I want verification to follow a
+per-device TOFU (trust-on-first-use) model:
 
-- **First session with a contact** requires manual verification —
-  emoji grid ritual or QR code. Hoster-signed alone is NOT sufficient
-  for a never-verified contact.
-- After successful verification, the peer's identity key is **pinned
-  locally**. Subsequent sessions use hoster-signed verification
-  automatically (zero friction).
-- If a pinned key ever changes → prominent "identity key changed"
-  warning → re-verification required. Detects device compromise and
-  account attacks.
+- **Verification binds device pairs, not accounts.** My iOS↔friend's
+  iOS verified ≠ my desktop↔friend's iOS verified. A private session
+  exists only between two specific devices — never shared account-wide.
+- **First contact between a device pair** requires manual
+  verification — emoji grid ritual or QR. Hoster-signed alone is NOT
+  sufficient for a never-verified pair.
+- **Chain of trust for new devices**: once one device pair is
+  verified, a new device is verified through the existing private
+  channel — the peer reads their emoji grid and I confirm it via the
+  already-verified session. No call or meeting needed.
+- **Key pinning**: after verification the peer device's identity key is
+  pinned locally. Subsequent sessions on the same pair use
+  hoster-signed verification automatically.
+- **Key change detection**: a changed pinned key → prominent in-chat
+  "identity key changed" banner → re-verification required before the
+  private toggle unlocks.
+- **No key backup**: private identity keys never leave the device —
+  lost device = lost keys = re-verify.
 
 | Method | Protection tier | When |
 |--------|----------------|------|
-| Emoji grid ritual | "Extra check" — mutual 5-emoji grid, both tap 3 | First session with a contact; re-verify after key change |
-| QR code | "Maximum — verify in person" | Face-to-face; paranoid mode; first-time exchange |
-| Hoster-signed identity keys | "Verified by instance" — automatic | Only for previously verified contacts (pinned keys) |
+| Emoji grid ritual | "Extra check" — mutual 5-emoji grid, both tap 3 | First session on a device pair; re-verify after key change; new device via existing private channel |
+| QR code | "Maximum — verify in person" | Face-to-face anchor; paranoid mode |
+| Hoster-signed identity keys | "Verified by instance" — automatic | Only for previously verified device pairs (pinned keys) |
+
+**Trust indicators**: contacts and chats show a binary verification
+chip — `unverified` (no pinned key or key changed) / `verified`
+(key pinned, matches). Device details surface on tap ("verified:
+my iOS ↔ their iOS · my desktop: unverified"), keeping the chip clean.
 
 **US-5.3c** As a participant, I want session setup and verification to
 appear as an in-chat system card (not a modal), so that the flow stays
