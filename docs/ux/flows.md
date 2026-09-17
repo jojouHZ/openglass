@@ -208,8 +208,16 @@ starts.
 message, so that I can destroy individual messages manually — full
 point-level control instead of a session-wide flag.
 
-**US-5.3a** As BOTH participants, I want to see and verify the session
-fingerprint before the session starts — verification is mutual.
+**US-5.3a** As BOTH participants, I want to verify the session before it
+starts — via a 5-emoji grid derived from the session fingerprint shown
+identically to both sides; each user taps any 3 tiles to confirm they
+see the same grid. Verification is mutual and requires no external
+channel (out-of-band comparison stays available for high-paranoia use).
+
+**Verification model**: (1) identity keys are signed by the instance
+hoster at registration — automatic MITM resistance for a trusted-hoster
+threat model; (2) emoji-grid ritual — detects active key substitution;
+(3) optional manual comparison via public chat or in person.
 
 **US-5.4** As a participant, I want an unmistakable private-mode
 indicator: dark header with countdown + lock, muted message styling,
