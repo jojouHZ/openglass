@@ -19,9 +19,9 @@ navigation event, every screen lists the data it needs.
 | S8 | Group creation | Public |
 | S9 | Group view | Public |
 | S9a | Group management (owner panel) | Public |
-| S10 | Private session invite (in-chat) | Private |
-| S11 | Private session setup | Private |
-| S12 | Private chat window | Private |
+| S10 | Private session invite (in-chat card) | Private |
+| S11 | Private session setup + mutual verify | Private |
+| S12 | Chat view in PRIVATE MODE (same window, private messages styled dark/muted with lock icon, dark header w/ countdown + BURN) | Private |
 | S13 | Profile & settings | Public |
 | S14 | Security & sessions | Public |
 | S15 | PWA install / push / offline | Public |
@@ -57,10 +57,12 @@ flowchart TD
     S9a -->|save rights/members| S9
     S9 -->|member: read/post per rights| S9
 
-    S10 -->|B accepts| S11[S11 Session Setup]
+    S5 -->|privacy toggle ON| S11[S11 Setup + Verify]
+    S11 -->|invite sent| S10[S10 Invite Card in-chat]
+    S10 -->|B accepts → verify| S12[S12 Private Mode in S5]
     S10 -->|B declines/timeout| S5
-    S11 -->|lifetime + burn options| S12[S12 Private Chat]
     S12 -->|burn/expiry/disconnect| S5
+    S5 <-->|toggle ON/OFF, session alive| S12
 
     S13 --> S14[S14 Security & Sessions]
     S14 --> S13
@@ -119,6 +121,27 @@ abuse can be flagged to the instance owner.
 - Already in contacts → profile shows "in contacts" state
 - Blocked user → no profile actions (post-MVP block feature)
 
+## Flow 2.5 — Chat List Features (S4)
+
+**US-2.5.1** As a user, I want to pin important chats to the top of the
+list, so that key conversations are always reachable.
+
+**US-2.5.2** As a user, I want to mute a chat and see a mute icon on its
+list item, so that I control noise per conversation.
+
+**US-2.5.3** As a user, I want a "Saved Messages" self-chat pinned at the
+top, so that I have a private scratch space for notes and drafts.
+
+**US-2.5.4** As a user, I want folder tabs (All / custom folders) above
+the chat list, so that I can group conversations.
+
+**US-2.5.5** As a user, I want folder/group tags shown as chips under a
+contact's name (in list and profile), so that I can see which folders or
+groups a contact belongs to.
+
+**Data**: `chat.pinned`, `chat.muted`, `chat.folder_ids[]`,
+`contact.folder_tags[]`, `saved_messages` (self-chat type)
+
 ## Flow 3 — Public 1-1 Chat
 
 **US-3.1** As a user, I want to send text and attachments, so that I can
@@ -162,42 +185,55 @@ actions are hidden or explained, not silently failing.
   transfer to oldest member — simpler, matches party model)
 - Member without post rights → read-only view with explanation
 
-## Flow 5 — Private Session
+## Flow 5 — Private Session (mode-toggle model)
 
-**US-5.1** As a user in a 1-1 chat, I want to invite the contact to a
-private session, so that we can exchange sensitive data.
+**Core concept**: a private session is NOT a separate chat window — it is
+a **mode of the existing 1-1 conversation**. A privacy toggle in the chat
+header switches the conversation between public and private mode. Private
+messages render inline in the same timeline, visually distinct (dark
+muted bubbles + lock icon), and burn without leaving the window.
+
+**US-5.1** As a user in a 1-1 chat, I want to flip a privacy toggle, so
+that I can start exchanging sensitive data without leaving the
+conversation.
 
 **US-5.2** As the invited user, I want to accept or decline the invite
-inside the public chat, so that I control when sessions start.
+inside the same chat, so that I control when the mode activates.
 
 **US-5.3** As the inviter, I want to set session lifetime (1 min–24 h,
-default 10 min, remember last choice) and per-message burn, so that the
-session matches the sensitivity level.
+default 10 min, remember last choice) and per-message burn in a modal
+before the session starts.
 
 **US-5.3a** As BOTH participants, I want to see and verify the session
-fingerprint before the session starts, so that neither side can be
-MITM'd — verification is mutual, not inviter-only.
+fingerprint before the session starts — verification is mutual.
 
-**US-5.4** As a participant, I want to see the countdown, the partner's
-connection state, and a fingerprint I can verify, so that I trust the
-channel.
+**US-5.4** As a participant, I want an unmistakable private-mode
+indicator: dark header with countdown + lock, muted message styling,
+and a BURN action — so that I can never mistake which mode I'm in.
 
-**US-5.5** As a participant, I want a burn action that destroys the session
-immediately for both sides.
+**US-5.5** As a participant, I want to toggle private mode OFF and back
+ON while the session is alive (lifetime not expired, not burned), so
+that I can mix public and private messages in one conversation.
 
 **Transitions**
-- `S5 → S10`: invite appears as an in-chat card
-- `S10 → S11`: accept → setup (inviter configures; invitee sees summary)
-- `S10 → S5`: decline or timeout → card shows "declined/expired"
-- `S11 → S12`: both confirmed → private window opens
-- `S12 → S5`: burn / lifetime expiry / disconnect grace exceeded → return
-  to public chat, session content gone
+- `S5 (toggle ON) → S11`: setup modal — lifetime + burn options
+- `S11 → verify screen`: mutual fingerprint check, both sides
+- `S11 → S10`: partner sees invite card in chat → accept/decline
+- `S10 accept → verify` for invitee → both toggles ON
+- `private mode ON → S12 state`: dark header, countdown, BURN, private
+  messages inline (dark bubbles + lock)
+- `toggle OFF (session alive)`: back to public mode, private history
+  stays visible until burn/expiry
+- `burn / expiry / grace exceeded`: private messages destroyed, toggle
+  dies, timeline shows system marker "private session ended"
 
 **Edge cases**
 - Invitee offline → invite expires after configured timeout
-- Disconnect mid-session → 60 s grace with visible "waiting" state, then
-  auto-burn
+- Disconnect mid-session → 60 s grace, visible "waiting" state → auto-burn
 - App killed → same as disconnect; no session restore (zero persistence)
+- Mode-confusion guard: private mode must be visually unmistakable —
+  dark header, lock icon on every private bubble, changed composer
+  placeholder ("Ephemeral message…")
 
 ## Flow 6 — Profile & Settings
 
