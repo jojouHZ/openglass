@@ -201,8 +201,12 @@ conversation.
 inside the same chat, so that I control when the mode activates.
 
 **US-5.3** As the inviter, I want to set session lifetime (1 min–24 h,
-default 10 min, remember last choice) and per-message burn in a modal
-before the session starts.
+default 10 min, remember last choice) in a modal before the session
+starts.
+
+**US-5.3b** As a participant, I want a flame (burn) icon on every private
+message, so that I can destroy individual messages manually — full
+point-level control instead of a session-wide flag.
 
 **US-5.3a** As BOTH participants, I want to see and verify the session
 fingerprint before the session starts — verification is mutual.
@@ -216,7 +220,7 @@ ON while the session is alive (lifetime not expired, not burned), so
 that I can mix public and private messages in one conversation.
 
 **Transitions**
-- `S5 (toggle ON) → S11`: setup modal — lifetime + burn options
+- `S5 (toggle ON) → S11`: setup modal — lifetime only
 - `S11 → verify screen`: mutual fingerprint check, both sides
 - `S11 → S10`: partner sees invite card in chat → accept/decline
 - `S10 accept → verify` for invitee → both toggles ON
