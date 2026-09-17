@@ -208,16 +208,20 @@ starts.
 message, so that I can destroy individual messages manually — full
 point-level control instead of a session-wide flag.
 
-**US-5.3a** As BOTH participants, I want to verify the session before it
-starts — via a 5-emoji grid derived from the session fingerprint shown
-identically to both sides; each user taps any 3 tiles to confirm they
-see the same grid. Verification is mutual and requires no external
-channel (out-of-band comparison stays available for high-paranoia use).
+**US-5.3a** As BOTH participants, I want to verify the session with a
+choice of method matched to sensitivity level — each labeled with its
+protection tier:
 
-**Verification model**: (1) identity keys are signed by the instance
-hoster at registration — automatic MITM resistance for a trusted-hoster
-threat model; (2) emoji-grid ritual — detects active key substitution;
-(3) optional manual comparison via public chat or in person.
+| Method | Protection tier | When |
+|--------|----------------|------|
+| Hoster-signed identity keys (default) | "Verified by instance" — automatic, zero friction | Everyday sessions; hoster is root of trust |
+| Emoji grid ritual | "Extra check" — mutual 5-emoji grid, both tap 3 | Sensitive payloads; also detects compromised peer device keys, not just server MITM |
+| QR code | "Maximum — verify in person" | Face-to-face verification; paranoid mode; first-time key exchange |
+
+**US-5.3c** As a participant, I want session setup and verification to
+appear as an in-chat system card (not a modal), so that the flow stays
+inside the conversation timeline — same visual language as invite cards
+and session markers.
 
 **US-5.4** As a participant, I want an unmistakable private-mode
 indicator: dark header with countdown + lock, muted message styling,
