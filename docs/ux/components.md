@@ -3,6 +3,20 @@
 Every reusable UI element — anatomy, states, spacing. Penpot components
 and frontend components mirror this spec 1:1. Tokens: `design-tokens.md`.
 
+## Sizing contract (adopted from exyte/chat, radii ours)
+
+```
+message row:   edge→bubble 12px · text pad 12h/8v · avatar↔bubble 6px
+               opposite inset 70px · avatar only on last of user group
+               gap 4px in-group / 8px between groups
+reply:         2px capsule accent bar + quoted text 12 muted, reduced opacity
+receipt/time:  inside bubble bottom-right; own status icon may sit outside
+composer:      bar minHeight 48, radius 18 · send = 48 circle OUTSIDE bar
+               attach button 36 inside-left · horizontal margin 12
+attachment:    card ~200×92, radius 14, hairline border
+radius:        bubbles 14 · cards 10-14 · pills 22 · (not exyte's 20+)
+```
+
 ## Naming
 
 `ui/<name>` in Penpot ↔ `<UiName>` in code. States listed exhaustively —
