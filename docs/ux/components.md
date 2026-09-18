@@ -28,7 +28,7 @@ if a state isn't here, it doesn't exist.
   optical center = 195 on 390 canvas — no hand-tuned x.
 - Button labels always centered in their rect.
 - Input placeholders and field text: left + 16px inside the field.
-- Header title block: left-aligned next to avatar, never centered.
+- Header title+subtitle: centered on canvas; avatar on the right.
 - Status-bar time: left 24px; header icons: right 24px.
 
 ---
@@ -41,10 +41,27 @@ States: `public` (soft bg, ink text) / `private` (ink bg, white text).
 ## ui/header
 
 Height 76 · `bg` fill · 1px `line` bottom border.
-Slots: `[back ‹][avatar 44][title block][actions right]`.
-Title block: name 15/600 + subtitle 11/400 `muted`.
+Slots: `[back ‹ left 16][title+subtitle centered][avatar 44 right 15]`
+with `⋯` centered under the subtitle.
+Title 15/600 · subtitle 11/400 `muted`.
 Private variant: `ink` fill, white text, countdown + `verified` chip,
 BURN button right.
+
+## ui/msg-group
+
+Group incoming message: `avatar-sm 28` left + sender name 10 `muted`
+above an `incoming` bubble (indent 36 from avatar edge).
+
+## ui/member-row
+
+Group-management row: `avatar 44` + name 13/600 + rights summary 11
+`muted` + `rights` chip (58×28, radius 6) + `✕` remove at right.
+Row height ~60, dividers optional.
+
+## ui/avatar
+
+`avatar-sm` 28 · `avatar-md` 44 · `avatar-lg` 96–100.
+Fill `soft`/`#dedede` placeholder until image support.
 
 ## ui/button
 
