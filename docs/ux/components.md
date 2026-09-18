@@ -63,6 +63,32 @@ Row height ~60, dividers optional.
 `avatar-sm` 28 · `avatar-md` 44 · `avatar-lg` 96–100.
 Fill `soft`/`#dedede` placeholder until image support.
 
+## Primitives
+
+`nav-back` — `←` 20px, top-left of every sub-screen (x24 y~70).
+`screen-title` — display style, left 24px (Sign in, Security…).
+`field-label` — `label` style above inputs/sections (INVITE CODE…).
+`otp-cell` — 48×60 radius-8 box + digit 20/600.
+`checkbox` — 28×28 radius-6, `ink` fill + white ✓ when checked.
+`switch` — 52×28 pill + 20 knob; privacy toggle in chat header.
+`preset-chip` — 95×40 radius-8 option (lifetime presets).
+`verify-option` — 298×36 radius-8 row (verification methods).
+`tooltip` — 136×30 pill `ink`, white caption (copied ✓).
+
+## Composites
+
+`header-list` — chat-list header: avatar-md + title + `+` button.
+`header-private` — private-mode header: `ink` fill, title +
+countdown + verified + BURN button.
+`profile-head` — avatar-md + name + tag link (settings/profile).
+`member-pick` — avatar-md + name, used with checkbox (group create).
+`msg-attachment` — 190×96 radius-12 card: 📎 name + size + time.
+`system-card` — 342-wide radius-16 `body`-bordered in-chat card.
+`session-row` — 342×60: device + meta + revoke (security screen).
+`settings-row` — label + `›` + divider, 56px pitch.
+`member-row` — avatar + name + rights + chip + ✕ (group manage).
+`prompt-card` — grouped card content on S15 (install/notif/offline).
+
 ## ui/button
 
 Height 52 · radius 8 · text 14.
