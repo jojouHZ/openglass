@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- S7 · Contact Profile — screen-s7 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Contact</title>
+<style>
+  .actions { display: flex; gap: 12px; padding: 0 24px; }
+  .actions .btn { flex: 1; height: 44px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header">
+      <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"></div><span></span>
+    </div>
+    <div class="scroll">
+      <div class="profile-head">
+        <span class="avatar avatar-64"></span>
+        <div class="name">alice</div>
+        <span class="tag">alice#0001
+          <svg class="icon icon-16"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        </span>
+        <div style="display:flex;gap:4px;padding-top:4px">
+          <span class="chip chip-accent">verified</span>
+          <span class="chip chip-soft">work</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary">message</button>
+        <button class="btn btn-secondary">private session</button>
+      </div>
+      <div class="settings-section">
+        <div class="label">labels</div>
+        <div class="settings-row"><span class="grow">work · friend</span>
+          <svg class="icon icon-16 chev"><path d="m9 18 6-6-6-6"/></svg></div>
+      </div>
+      <div class="settings-section">
+        <div class="label">options</div>
+        <div class="settings-row"><span class="grow">notifications</span>
+          <svg class="icon icon-16 chev"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="settings-row"><span class="grow">media</span>
+          <svg class="icon icon-16 chev"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="settings-row danger"><span class="grow">block contact</span></div>
+      </div>
+    </div>
+    <p class="dev-note">GET /users/:tag · labels editable · verified = device-pair</p>
+  </main>
+</body>
+</html>

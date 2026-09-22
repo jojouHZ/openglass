@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!-- S8 · Group Creation — screen-s8. name input + member-pick + create -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — New group</title>
+<style>
+  .pick { height: 56px; display: flex; align-items: center; gap: 12px;
+    padding: 0 24px; font-size: 14px; }
+  .checkbox { width: 28px; height: 28px; border-radius: 6px;
+    border: 1.5px solid var(--line); margin-left: auto; display: flex;
+    align-items: center; justify-content: center; color: #fff; }
+  .checkbox.on { background: var(--ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header">
+      <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"><div class="title">New group</div></div><span></span>
+    </div>
+    <div class="scroll">
+      <div style="padding:16px 24px">
+        <div class="field"><label class="field-label">Group name</label>
+          <input class="input" placeholder="group name"></div>
+      </div>
+      <div class="sec-label" style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 24px 8px">members · 2 selected</div>
+      <div class="pick"><span class="avatar avatar-28"></span><span>alice</span>
+        <span class="checkbox on"><svg class="icon icon-16"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+      <div class="pick"><span class="avatar avatar-28"></span><span>bob</span>
+        <span class="checkbox"></span></div>
+      <div class="pick"><span class="avatar avatar-28"></span><span>carol</span>
+        <span class="checkbox on"><svg class="icon icon-16"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+      <div class="pick"><span class="avatar avatar-28"></span><span>dave</span>
+        <span class="checkbox"></span></div>
+    </div>
+    <div style="padding:0 24px calc(16px + var(--sab))">
+      <button class="btn btn-primary" style="width:100%">Create group</button>
+    </div>
+    <p class="dev-note">POST /groups {name, member_ids[]} → creator = OWNER</p>
+  </main>
+</body>
+</html>

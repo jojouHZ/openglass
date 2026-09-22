@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<!-- S5d · Composer states catalog — reply / edit / attachment strips.
+     Each state = .strip above .composer; one strip active at a time. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Composer states</title>
+<style>
+  .demo-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted2); padding: 0 24px 8px; }
+  .demo { padding: 24px 0 32px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header">
+      <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"><div class="title">composer states</div>
+        <div class="subtitle">strip above pill · one at a time</div></div>
+      <span></span>
+    </div>
+    <div class="scroll">
+
+      <div class="demo">
+        <div class="demo-label">reply</div>
+        <div class="strip">
+          <i class="bar"></i>
+          <div><div class="s-name">alice</div>
+            <div>did the deploy go through?</div></div>
+          <svg class="icon icon-16 x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </div>
+        <div class="composer"><div class="pill"><span>reply…</span></div>
+          <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
+      </div>
+
+      <div class="demo">
+        <div class="demo-label">edit own message</div>
+        <div class="strip">
+          <i class="bar"></i>
+          <div><div class="s-name">editing</div>
+            <div>yes, all green</div></div>
+          <svg class="icon icon-16 x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </div>
+        <div class="composer"><div class="pill" style="color:var(--ink)"><span>yes, all green!</span></div>
+          <button class="send"><svg class="icon"><path d="M20 6 9 17l-5-5"/></svg></button></div>
+      </div>
+
+      <div class="demo">
+        <div class="demo-label">attachment staged</div>
+        <div class="strip">
+          <svg class="icon icon-16" style="color:var(--accent)"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <div><div class="s-name">photo.png · 2.4 mb</div>
+            <div>limit 25 mb</div></div>
+          <svg class="icon icon-16 x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </div>
+        <div class="composer"><div class="pill"><span>caption…</span></div>
+          <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
+      </div>
+
+      <div class="demo">
+        <div class="demo-label">attachment error — too large</div>
+        <div class="strip" style="border-color:var(--danger)">
+          <svg class="icon icon-16" style="color:var(--danger)"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <div><div class="s-name" style="color:var(--danger)">video.mov · 61 mb</div>
+            <div>exceeds 25 mb limit</div></div>
+          <svg class="icon icon-16 x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </div>
+        <div class="composer"><div class="pill"><span>message…</span></div>
+          <button class="send" style="background:var(--line)"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
+      </div>
+
+    </div>
+    <p class="dev-note">reply_to / edit_of / attachment_ids[] on POST /messages</p>
+  </main>
+</body>
+</html>

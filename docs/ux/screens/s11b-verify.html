@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- S11b · Device-pair verification — emoji grid ritual + QR variant.
+     Reached from S11 setup and from S7 contact profile (standalone verify).
+     Binds DEVICE PAIRS, not accounts — TOFU + key pinning. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Verify device</title>
+</head>
+<body>
+  <main class="screen private-surface">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header" style="background:var(--bg-private);border-color:var(--body);color:#fff">
+      <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"><div class="title">verify device</div>
+        <div class="subtitle">first contact · manual ritual</div></div>
+      <svg class="icon" style="justify-self:end"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+    </div>
+    <div class="scroll" style="display:flex;flex-direction:column;gap:24px;padding:32px 24px">
+      <div class="device-pair">my phone ↔ alice's phone<br>device pair · keys never leave devices</div>
+
+      <!-- method switch: emoji ritual (default) / qr in-person -->
+      <div class="folder-bar" style="border:none;justify-content:center;padding:0">
+        <span class="folder-tab active" style="border-color:var(--body)">emoji grid</span>
+        <span class="folder-tab" style="border-color:var(--body)">qr code</span>
+      </div>
+
+      <!-- emoji ritual: both sides see same 5-emoji fingerprint, each taps the 3 that match -->
+      <div class="emoji-grid">
+        <button class="emoji-cell">🧊</button>
+        <button class="emoji-cell sel">🔥</button>
+        <button class="emoji-cell">🌙</button>
+        <button class="emoji-cell sel">⚓</button>
+        <button class="emoji-cell">🗝</button>
+      </div>
+      <p class="hint-text" style="text-align:center;color:var(--muted2)">
+        compare with your partner's screen — tap the 3 emoji that match their grid · 2/3 selected
+      </p>
+
+      <!-- qr variant (shown when tab = qr): in-person "maximum" tier
+      <div class="qr-box" style="align-self:center">qr placeholder<br>scan partner's code in person</div>
+      -->
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:auto">
+        <button class="btn btn-primary" style="background:#fff;color:var(--ink)">match — pin this key</button>
+        <button class="btn btn-ghost" style="color:var(--muted2)">they don't match</button>
+      </div>
+    </div>
+    <p class="dev-note">POST /private/verify {device_pair, fingerprint} · pinned key stored locally only</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!-- OpenGlass · S1 Invite/Email — reference prototype.
+     Mirrors Penpot page "Hi-Fi · S1 · Invite/Email" (pwa-mobile + pwa-desktop).
+     Tokens: docs/ux/design-tokens.md -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenGlass — Invite</title>
+<style>
+  :root {
+    --ink: #181818; --muted: #666666; --line: #c4c4c4;
+    --bg: #ffffff; --canvas: #f8f8f8;
+    --font: "Source Code Pro", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: var(--font); background: var(--canvas); }
+
+  /* pwa-mobile: 390x844 column, space-between */
+  .screen {
+    width: 390px; min-height: 100dvh; margin: 0 auto;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding-bottom: 24px;
+  }
+  .status-bar {
+    width: 100%; height: 44px; padding-top: env(safe-area-inset-top);
+    display: flex; align-items: center; justify-content: space-between;
+    padding-inline: 24px; font-size: 13px; color: var(--ink);
+  }
+  .content {
+    width: 342px; display: flex; flex-direction: column;
+    align-items: flex-start; gap: 16px;
+  }
+  .title { font-size: 24px; color: var(--ink); }
+  .subtitle { font-size: 12px; color: var(--muted); }
+
+  .field { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .field-label {
+    font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .input {
+    width: 342px; height: 52px; border: 1.5px solid var(--line);
+    border-radius: 8px; display: flex; align-items: center;
+    padding: 0 16px; font-size: 14px; color: var(--muted);
+    font-family: inherit; background: var(--bg);
+  }
+  .input::placeholder { color: var(--muted); }
+  .input:focus { border-color: var(--ink); outline: none; }
+
+  .btn-primary {
+    width: 342px; height: 52px; border: none; border-radius: 8px;
+    background: var(--ink); color: #fff; font: inherit; font-size: 14px;
+    cursor: pointer;
+  }
+  .btn-primary:active { opacity: .88; }
+
+  .dev-note { font-size: 9px; color: var(--muted); }
+
+  /* pwa-desktop: centered auth card */
+  @media (min-width: 1024px) {
+    .screen {
+      width: auto; min-height: 100dvh;
+      background: var(--canvas);
+      justify-content: center;
+    }
+    .status-bar, .dev-note { display: none; }
+    .content {
+      width: auto; background: var(--bg);
+      border: 1px solid var(--line); border-radius: 16px;
+      padding: 40px;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="content">
+      <h1 class="title">OpenGlass</h1>
+      <p class="subtitle">Private messenger</p>
+      <div class="field">
+        <label class="field-label" for="invite">Invite code</label>
+        <input class="input" id="invite" placeholder="invite code">
+      </div>
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input class="input" id="email" type="email" placeholder="email">
+      </div>
+      <button class="btn-primary" type="submit">Request code</button>
+    </div>
+    <p class="dev-note">data: invite_code, email → POST /auth/request</p>
+  </main>
+</body>
+</html>

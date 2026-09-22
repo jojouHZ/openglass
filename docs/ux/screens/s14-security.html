@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- S14 · Security & Sessions — screen-s14. session rows + verify options -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Security</title>
+<style>
+  .session-row { height: 60px; display: flex; align-items: center; gap: 12px;
+    padding: 0 24px; border-bottom: 1px solid var(--line); }
+  .session-row .col { flex: 1; min-width: 0; }
+  .session-row .dev { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .session-row .meta { font-size: 11px; color: var(--muted); }
+  .session-row .revoke { color: var(--muted); }
+  .verify-opt { height: 36px; border: 1px solid var(--line); border-radius: 8px;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    margin: 8px 24px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header">
+      <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"><div class="title">Security</div></div><span></span>
+    </div>
+    <div class="scroll">
+      <div class="settings-section">
+        <div class="label">sessions</div>
+        <div class="session-row">
+          <svg class="icon"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+          <div class="col"><div class="dev">iPhone · this device</div>
+            <div class="meta">last active now · Berlin</div></div>
+          <span class="chip chip-accent">verified</span></div>
+        <div class="session-row">
+          <svg class="icon"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+          <div class="col"><div class="dev">macOS desktop</div>
+            <div class="meta">last active 2h ago</div></div>
+          <svg class="icon icon-16 revoke"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></div>
+      </div>
+      <div class="settings-section">
+        <div class="label">verify a device pair</div>
+        <div class="verify-opt"><svg class="icon icon-16"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>compare fingerprint</div>
+        <div class="verify-opt"><svg class="icon icon-16"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>via trusted private channel</div>
+        <div class="verify-opt"><svg class="icon icon-16"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>pairing code</div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-row"><span class="grow">screenshot alerts</span>
+          <span style="font-size:11px;color:var(--muted)">post-MVP</span></div>
+        <div class="settings-row danger"><span class="grow">revoke all other sessions</span></div>
+      </div>
+    </div>
+    <p class="dev-note">GET /sessions · DELETE /sessions/:id · verification is device-pair scoped</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!-- S5a · Message context menu — screen-s5a. chat + scrim + context-menu -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Message menu</title>
+<style>
+  .scrim { position: fixed; inset: 0; background: rgba(24,24,24,.4);
+    display: flex; align-items: center; justify-content: center; }
+  .scrim .context-menu { position: relative; }
+  .anchor { margin-bottom: 12px; opacity: .6; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="header"><svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="title-block"><div class="title">alice</div><div class="subtitle">online</div></div>
+      <span class="avatar avatar-40"></span></div>
+    <div class="scroll"><div class="msg-flow">
+      <div class="msg last"><span class="avatar avatar-28"></span>
+        <div class="bubble"><div class="body">long-press me</div>
+          <div class="foot"><span class="time">10:31</span>
+            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
+    </div></div>
+    <div class="composer"><div class="pill">
+      <svg class="icon"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <span>message…</span></div>
+      <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
+  </main>
+  <div class="scrim">
+    <div class="context-menu">
+      <div class="mi"><svg class="icon"><path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>reply</div>
+      <div class="mi"><svg class="icon"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>copy</div>
+      <div class="mi"><svg class="icon"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>edit</div>
+      <div class="mi"><svg class="icon"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/></svg>pin</div>
+      <div class="mi danger"><svg class="icon"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>delete</div>
+    </div>
+  </div>
+  <p class="dev-note" style="position:fixed;bottom:4px;left:8px;color:#fff">long-press → menu · destructive = danger</p>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- S6 · Contact Search — screen-s6. search-bar + results -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Search</title>
+<style>
+  .sec-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); padding: 16px 24px 8px; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 8px 16px">
+      <svg class="icon"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      <div class="search-bar" style="flex:1">
+        <svg class="icon icon-16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <span style="color:var(--ink)">ali|</span>
+        <svg class="icon icon-16" style="margin-left:auto"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </div>
+    </div>
+    <div class="scroll">
+      <div class="sec-label">contacts</div>
+      <div class="member-row"><span class="avatar avatar-28"></span>
+        <span class="name">alice <span class="tag">alice#0001</span></span></div>
+      <div class="member-row"><span class="avatar avatar-28"></span>
+        <span class="name">alina <span class="tag">alina#3417</span></span></div>
+      <div class="sec-label">global</div>
+      <div class="member-row"><span class="avatar avatar-28"></span>
+        <span class="name">ali_far <span class="tag">ali_far#8812</span></span>
+        <span class="chip chip-line">add</span></div>
+      <div class="sec-label">recent</div>
+      <div class="member-row"><span class="name" style="color:var(--muted);font-size:13px">bob#0014</span>
+        <svg class="icon icon-16" style="color:var(--muted)"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></div>
+    </div>
+    <p class="dev-note">GET /users/search?q= · by tag exact or name prefix</p>
+  </main>
+</body>
+</html>

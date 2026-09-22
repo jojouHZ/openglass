@@ -21,6 +21,7 @@ navigation event, every screen lists the data it needs.
 | S9a | Group management (owner panel) | Public |
 | S10 | Private session invite (in-chat card) | Private |
 | S11 | Private session setup + mutual verify | Private |
+| S11b | Device-pair verification ritual (emoji grid / QR) | Private |
 | S12 | Chat view in PRIVATE MODE (same window, private messages styled dark/muted with lock icon, dark header w/ countdown + BURN) | Private |
 | S13 | Profile & settings | Public |
 | S14 | Security & sessions | Public |
@@ -350,3 +351,21 @@ silent.
 4. All flows must work fully keyboard-accessible (native shells later).
 5. Empty states are designed states, not afterthoughts: every list has a
    defined empty view.
+
+## Recorded Product Decisions
+
+- **Invite issuance**: no in-app UI. The hoster generates invite codes via
+  a CLI script shipped with the instance (`POST /admin/invites`, local
+  only). Fits the ~100-user closed-instance scope; revisit if instances
+  grow.
+- **Push payload privacy**: notifications carry no message content —
+  "New message" + sender display name at most. Private sessions never
+  trigger push (relay-only, no server-readable content anyway).
+- **Dark theme**: deferred post-MVP. Dark surfaces are reserved for the
+  private layer as a mode-confusion guard; a general dark theme would
+  weaken that signal. Tokens are structured so a `.theme-dark` can be
+  added later without refactoring.
+- **Fonts**: Source Code Pro is self-hosted (`docs/ux/fonts/`, OFL).
+  No third-party font CDN anywhere in the app.
+- **Verification ritual placement**: S11b is reachable both inside the
+  session-setup flow and standalone from S7 contact profile (US-2.5).

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- S3 · Profile Setup — screen-s3. Tokens: design-tokens.md -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="base.css">
+<title>OpenGlass — Profile setup</title>
+<style>
+  .avatar-pick { width: 64px; height: 64px; border-radius: 50%;
+    background: var(--soft); display: flex; align-items: center;
+    justify-content: center; color: var(--muted); }
+  .hint { font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <main class="screen auth">
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="content center-wrap" style="padding-top:0">
+      <button class="nav-back btn-ghost" style="width:44px;height:44px;padding:0;justify-content:flex-start">←</button>
+      <h1 class="screen-title">Set up profile</h1>
+      <div class="avatar-pick">
+        <svg class="icon"><circle cx="11" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 12 0v2"/></svg>
+      </div>
+      <span class="hint">add photo · optional</span>
+      <div class="field">
+        <label class="field-label" for="name">Display name</label>
+        <input class="input" id="name" placeholder="display name">
+      </div>
+      <div class="field">
+        <label class="field-label" for="tag">Tag</label>
+        <input class="input" id="tag" value="name#0000" readonly>
+      </div>
+      <span class="hint">tag is unique and immutable · display name can change later</span>
+      <button class="btn btn-primary" style="width:342px">Continue</button>
+    </div>
+    <p class="dev-note">data: display_name, avatar? → POST /profile/setup → tag issued</p>
+  </main>
+</body>
+</html>
