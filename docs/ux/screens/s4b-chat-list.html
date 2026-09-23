@@ -12,10 +12,9 @@
     <div class="pane-list">
       <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
       <div class="header">
-        <span></span>
+        <span class="avatar avatar-40" style="justify-self:start"></span>
         <div class="title-block"><div class="title">Chats</div></div>
-        <span class="avatar avatar-40" style="justify-self:start;margin-left:16px"></span>
-        <svg class="icon" style="position:absolute;right:24px"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        <button class="icon-btn plus" aria-label="new chat"><svg class="icon"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
       </div>
       <div class="folder-bar">
         <span class="folder-tab active">all</span>
@@ -60,9 +59,10 @@
         </div>
         <div class="chat-item">
           <span class="avatar avatar-52"></span>
-          <div class="col"><div class="name">work group
-            <span class="chip chip-soft">group</span></div>
-            <div class="preview">dave: looks good</div></div>
+          <div class="col"><div class="name">work group</div>
+            <!-- chips live on the preview line, left of text, size xs -->
+            <div class="preview"><span class="chip chip-xs chip-soft">group</span>
+              <span class="text">dave: looks good</span></div></div>
           <div class="side"><span class="time">mon</span><span class="badge">12</span></div>
         </div>
       </div>

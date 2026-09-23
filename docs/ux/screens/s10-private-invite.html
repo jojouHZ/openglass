@@ -7,11 +7,8 @@
 <link rel="stylesheet" href="base.css">
 <title>OpenGlass — Private invite</title>
 <style>
-  .scrim { position: fixed; inset: 0; background: rgba(24,24,24,.4);
-    display: flex; align-items: flex-end; justify-content: center; }
   .sheet { width: 390px; }
   .sheet .chips { display: flex; gap: 8px; justify-content: center; }
-  .sheet .chips .chip { height: 32px; }
   .sheet .actions { display: flex; gap: 12px; }
   .sheet .actions .btn { flex: 1; }
 </style>
@@ -23,33 +20,36 @@
       <div class="title-block"><div class="title">alice</div><div class="subtitle">online</div></div>
       <span class="avatar avatar-40"></span></div>
     <div class="scroll"><div class="msg-flow">
-      <div class="msg last"><span class="avatar avatar-28"></span>
+      <div class="msg-series"><div class="msg last"><span class="avatar avatar-28"></span>
         <div class="bubble"><div class="body">can we talk private?</div>
           <div class="foot"><span class="time">10:31</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
+            <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div></div>
     </div></div>
     <div class="composer"><div class="pill"><span>message…</span></div>
       <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
   </main>
-  <div class="scrim">
+  <div class="scrim bottom">
     <div class="sheet">
       <i class="grabber"></i>
+      <!-- dismiss: X top-right (desktop + mobile); scrim tap also closes -->
+      <button class="icon-btn x-close" aria-label="close">
+        <svg class="icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
       <div class="s-title">private session with alice</div>
       <div class="ttl-picker">
         <i class="band"></i>
-        <div class="col"><span style="opacity:.25">23</span><span style="opacity:.5">0</span><span class="sel" style="font-size:18px;color:#fff">0</span><span style="opacity:.5">1</span><span style="opacity:.25">2</span></div>
+        <div class="col"><span style="opacity:.25">23</span><span style="opacity:.5">0</span><span class="sel">0</span><span style="opacity:.5">1</span><span style="opacity:.25">2</span></div>
         <div class="lbl">hours</div>
-        <div class="col"><span style="opacity:.25">5</span><span style="opacity:.5">9</span><span class="sel" style="font-size:18px;color:#fff">10</span><span style="opacity:.5">11</span><span style="opacity:.25">15</span></div>
+        <div class="col"><span style="opacity:.25">5</span><span style="opacity:.5">9</span><span class="sel">10</span><span style="opacity:.5">11</span><span style="opacity:.25">15</span></div>
         <div class="lbl">min</div>
       </div>
       <div class="chips">
-        <span class="chip chip-line" style="color:#fff">5m</span>
-        <span class="chip chip-ink" style="background:#fff;color:var(--ink)">10m</span>
-        <span class="chip chip-line" style="color:#fff">30m</span>
-        <span class="chip chip-line" style="color:#fff">1h</span>
+        <span class="preset-chip">5m</span>
+        <span class="preset-chip sel">10m</span>
+        <span class="preset-chip">30m</span>
+        <span class="preset-chip">1h</span>
       </div>
       <div class="actions">
-        <button class="btn btn-ghost" style="color:#fff">decline</button>
         <button class="btn" style="background:#fff;color:var(--ink)">accept</button>
       </div>
     </div>

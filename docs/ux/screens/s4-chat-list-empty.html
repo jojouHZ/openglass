@@ -6,27 +6,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="base.css">
 <title>OpenGlass — Chats</title>
-<style>
-  .empty { display: flex; flex-direction: column; align-items: center;
-    gap: 12px; padding-top: 96px; }
-  .empty .ring { width: 56px; height: 56px; border-radius: 50%;
-    background: var(--soft); display: flex; align-items: center;
-    justify-content: center; color: var(--muted); }
-  .empty .e-title { font-size: 15px; }
-  .empty .e-hint { font-size: 11px; color: var(--muted); }
-</style>
 </head>
 <body>
   <main class="screen">
     <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
     <div class="header">
-      <span class="avatar avatar-40"></span>
+      <span class="avatar avatar-40" style="justify-self:start"></span>
       <div class="title-block"><div class="title">Chats</div></div>
-      <svg class="icon" style="justify-self:end"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      <button class="icon-btn plus" aria-label="new chat"><svg class="icon"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
     </div>
     <div class="scroll">
-      <div class="empty">
-        <span class="ring"><svg class="icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <div class="empty-state">
+        <span class="e-icon"><svg class="icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         <div class="e-title">no chats yet</div>
         <div class="e-hint">find people by tag to start</div>
         <button class="btn btn-primary" style="width:145px;height:44px">find contacts</button>

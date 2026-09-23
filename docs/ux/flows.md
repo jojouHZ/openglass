@@ -346,7 +346,8 @@ silent.
 
 1. Every destructive action (delete message, remove member, burn session,
    revoke device) requires explicit confirmation.
-2. Private-layer UI never appears in PWA — the module is not loaded.
+2. Private-layer UI ships ONLY in the pilot PWA build — the regular
+   build excludes the module entirely (see Recorded Product Decisions).
 3. Presence/typing must degrade gracefully when Redis is unavailable.
 4. All flows must work fully keyboard-accessible (native shells later).
 5. Empty states are designed states, not afterthoughts: every list has a
@@ -369,3 +370,12 @@ silent.
   No third-party font CDN anywhere in the app.
 - **Verification ritual placement**: S11b is reachable both inside the
   session-setup flow and standalone from S7 contact profile (US-2.5).
+- **Two PWA builds**: `pilot` — full build incl. the private layer
+  (demo/testing track); `regular` — public layer only, private module
+  is tree-shaken out (no code, no UI entry points). Build-time flag,
+  same codebase.
+- **Sheet/modal rule**: bottom sheets are mobile-only. On desktop PWA
+  every sheet renders as a centered modal (`.scrim.bottom` → centered,
+  `.sheet` 420px radius 16). Dismissal = X in the top-right corner or
+  scrim tap; no dedicated "decline/cancel" button for dismiss-only
+  sheets.

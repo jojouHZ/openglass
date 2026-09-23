@@ -7,39 +7,34 @@
 <link rel="stylesheet" href="base.css">
 <title>OpenGlass — PWA prompts</title>
 <style>
-  .prompt-card { width: 342px; margin: 16px auto 0; border: 1.5px solid var(--body);
-    border-radius: 16px; padding: 20px; display: flex; flex-direction: column;
-    gap: 12px; background: var(--bg); }
-  .prompt-card .p-title { font-size: 14px; }
-  .prompt-card .p-body { font-size: 11px; color: var(--muted); }
-  .prompt-card .p-actions { display: flex; gap: 12px; }
-  .prompt-card .p-actions .btn { flex: 1; height: 44px; font-size: 13px; }
+  .prompt-stack { display: flex; flex-direction: column; gap: 16px;
+    padding-top: 16px; }
 </style>
 </head>
 <body>
   <main class="screen">
     <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
-    <div class="scroll" style="padding-bottom:24px">
-      <div class="prompt-card">
-        <div class="p-title">install OpenGlass</div>
-        <div class="p-body">add to home screen for a native feel — standalone window, no browser chrome</div>
-        <div class="p-actions">
+    <div class="scroll prompt-stack" style="padding-bottom:24px">
+      <div class="system-card">
+        <div class="c-title">install OpenGlass</div>
+        <div class="c-body">add to home screen for a native feel — standalone window, no browser chrome</div>
+        <div class="c-actions">
           <button class="btn btn-ghost">not now</button>
           <button class="btn btn-primary">install</button>
         </div>
       </div>
-      <div class="prompt-card">
-        <div class="p-title">enable notifications</div>
-        <div class="p-body">web push for new messages — works while the app is closed</div>
-        <div class="p-actions">
+      <div class="system-card">
+        <div class="c-title">enable notifications</div>
+        <div class="c-body">web push for new messages — works while the app is closed</div>
+        <div class="c-actions">
           <button class="btn btn-ghost">later</button>
           <button class="btn btn-primary">enable</button>
         </div>
       </div>
-      <div class="prompt-card">
-        <div class="p-title">offline mode</div>
-        <div class="p-body">chat list and recent history cached locally; sending queues until reconnect</div>
-        <div class="p-actions">
+      <div class="system-card">
+        <div class="c-title">offline mode</div>
+        <div class="c-body">chat list and recent history cached locally; sending queues until reconnect</div>
+        <div class="c-actions">
           <button class="btn btn-primary">got it</button>
         </div>
       </div>

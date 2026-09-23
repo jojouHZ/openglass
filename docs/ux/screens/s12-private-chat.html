@@ -9,37 +9,37 @@
 <style>
   .header.private .sub-row { display: flex; align-items: center;
     justify-content: center; gap: 8px; margin-top: 4px; }
-  .ttl-chip { background: var(--body); color: #fff; border-radius: 11px;
-    height: 22px; padding: 0 10px; font-size: 10px;
-    display: inline-flex; align-items: center; }
 </style>
 </head>
 <body>
   <main class="screen private-surface">
-    <div class="status-bar" style="color:#fff"><span>9:41</span><span>signal · wifi · batt</span></div>
+    <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
     <div class="header private">
       <svg class="icon back"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
       <div class="title-block">
         <div class="title" style="display:flex;align-items:center;gap:6px;justify-content:center">alice
           <svg class="icon icon-16"><path d="M18 11c-1.5 0-2.5.5-3 2"/><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2Z"/><path d="M8 11c1.5 0 2.5.5 3 2"/></svg></div>
-        <div class="sub-row"><span class="chip chip-accent">verified</span>
-          <span class="ttl-chip">09:42</span></div>
+        <div class="sub-row"><span class="chip chip-xs chip-accent">verified</span>
+          <span class="chip chip-xs chip-ttl">09:42</span></div>
       </div>
-      <svg class="icon" style="color:#e03131;justify-self:end"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+      <!-- flame is the only FILLED icon: #e03131 fill + ink stroke -->
+      <svg class="icon" style="justify-self:end;fill:#e03131;stroke:#181818"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
     </div>
     <div class="scroll"><div class="msg-flow">
-      <div class="msg last"><span class="avatar avatar-28"></span>
+      <div class="msg-series"><div class="msg last"><span class="avatar avatar-28"></span>
         <div class="bubble private"><div class="head" style="justify-content:flex-end">
-          <svg class="icon icon-16 privacy"><path d="M18 11c-1.5 0-2.5.5-3 2"/><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2Z"/><path d="M8 11c1.5 0 2.5.5 3 2"/></svg></div>
+          <span class="privacy"><svg class="icon"><path d="M18 11c-1.5 0-2.5.5-3 2"/><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2Z"/><path d="M8 11c1.5 0 2.5.5 3 2"/></svg></span></div>
           <div class="body">secret</div>
           <div class="foot"><span class="time">9:42</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
-      <div class="msg own last"><span class="avatar avatar-28"></span>
-        <div class="bubble private"><div class="body">reply secret</div>
+            <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div></div>
+      <div class="msg-series"><div class="msg own last"><span class="avatar avatar-28"></span>
+        <div class="bubble private"><div class="head" style="justify-content:flex-end">
+          <span class="privacy"><svg class="icon"><path d="M18 11c-1.5 0-2.5.5-3 2"/><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2Z"/><path d="M8 11c1.5 0 2.5.5 3 2"/></svg></span></div>
+          <div class="body">reply secret</div>
           <div class="foot"><span class="time">9:43</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
+            <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div></div>
     </div></div>
-    <div class="composer"><div class="pill"><span>message…</span></div>
+    <div class="composer"><div class="pill"><span>ephemeral message…</span></div>
       <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
     <p class="dev-note" style="color:var(--muted2)">relay only · no persistence · burns on expiry/close</p>
   </main>

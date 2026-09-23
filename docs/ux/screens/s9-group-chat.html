@@ -18,29 +18,32 @@
     </div>
     <div class="scroll"><div class="msg-flow">
       <div class="day-sep">Nov 4</div>
-      <div class="msg last"><span class="avatar avatar-28"></span>
+      <div class="msg-series"><div class="msg last"><span class="avatar avatar-28"></span>
         <div class="bubble"><div class="head"><span class="sender">alice</span>
-          <span class="chip chip-soft" style="height:16px;font-size:8px">admin</span></div>
+          <span class="chip chip-xs chip-soft">admin</span></div>
           <div class="body">morning — who needs the staging server?</div>
           <div class="foot"><span class="time">10:25</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
+            <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div></div>
       <div class="day-sep">Nov 29</div>
-      <div class="msg"><span class="avatar avatar-28"></span>
-        <div class="bubble"><div class="head"><span class="sender">carol</span></div>
-          <div class="body">first of a series — no avatar yet</div>
-          <div class="foot"><span class="time">17:00</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
-      <div class="msg last"><span class="avatar avatar-28"></span>
-        <div class="bubble"><div class="body">second — avatar lands here</div>
-          <div class="foot"><span class="time">17:01</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
-      <div class="msg own last"><span class="avatar avatar-28"></span>
+      <!-- carol series: name in FIRST bubble only, avatar on LAST -->
+      <div class="msg-series">
+        <div class="msg"><span class="avatar avatar-28"></span>
+          <div class="bubble"><div class="head"><span class="sender">carol</span></div>
+            <div class="body">first of a series — no avatar yet</div>
+            <div class="foot"><span class="time">17:00</span>
+              <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div>
+        <div class="msg last"><span class="avatar avatar-28"></span>
+          <div class="bubble"><div class="body">second — avatar lands here</div>
+            <div class="foot"><span class="time">17:01</span>
+              <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div>
+      </div>
+      <div class="msg-series"><div class="msg own last"><span class="avatar avatar-28"></span>
         <div class="bubble"><div class="body">ok thanks!</div>
           <div class="foot"><span class="time">17:02</span>
-            <svg class="icon icon-14 state"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></div></div></div>
+            <span class="state"><svg class="icon icon-14"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span></div></div></div></div>
     </div></div>
     <div class="composer"><div class="pill">
-      <svg class="icon"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <span class="attach"><svg class="icon"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>
       <span>message…</span></div>
       <button class="send"><svg class="icon"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button></div>
     <p class="dev-note">sender name = header tray inside first bubble of series · avatar on last</p>
