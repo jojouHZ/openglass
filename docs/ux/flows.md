@@ -379,3 +379,7 @@ silent.
   `.sheet` 420px radius 16). Dismissal = X in the top-right corner or
   scrim tap; no dedicated "decline/cancel" button for dismiss-only
   sheets.
+- **Chat-list search**: the search bar sits directly under the header,
+  above folder tabs. On mobile it is hidden by default and revealed by
+  a pull-down gesture on the list (iOS/Android pattern); on desktop it
+  is always visible.

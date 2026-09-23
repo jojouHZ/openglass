@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!-- Screens index — mobile-frame reviewer. Pick a screen, view at 390×844. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpenGlass — screens</title>
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: monospace; display: flex; height: 100vh; background: #f5f5f5; }
+  nav { width: 240px; border-right: 1px solid #ddd; background: #fff;
+    overflow-y: auto; padding: 12px; }
+  nav a { display: block; padding: 6px 10px; border-radius: 6px;
+    color: #181818; text-decoration: none; font-size: 12px; }
+  nav a:hover { background: #f0f0f0; }
+  nav a.on { background: #181818; color: #fff; }
+  main { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .device { width: 390px; height: 844px; border: 1px solid #ccc;
+    border-radius: 24px; overflow: hidden; background: #fff;
+    box-shadow: 0 8px 32px rgba(0,0,0,.08); }
+  iframe { width: 100%; height: 100%; border: none; }
+</style>
+</head>
+<body>
+<nav id="list"></nav>
+<main><div class="device"><iframe id="frame" title="screen"></iframe></div></main>
+<script>
+const screens = [
+  's0-entry.html','s1-invite-email.html','s2-otp.html','s3-profile-setup.html',
+  's4-chat-list-empty.html','s4b-chat-list.html','s5-chat-view.html',
+  's5a-message-menu.html','s5b-pinned-search.html','s5c-chat-offline.html',
+  's5d-composer-states.html','s6-contact-search.html','s7-contact-profile.html',
+  's8-group-creation.html','s9-group-chat.html','s9a-group-management.html',
+  's9b-group-readonly.html','s10-private-invite.html','s11-session-setup.html',
+  's11b-verify.html','s12-private-chat.html','s13-settings.html',
+  's14-security.html','s15-pwa-prompts.html','s16-states.html'
+];
+const list = document.getElementById('list');
+const frame = document.getElementById('frame');
+function pick(name) {
+  frame.src = name;
+  location.hash = name;
+  document.querySelectorAll('nav a').forEach(a =>
+    a.classList.toggle('on', a.dataset.s === name));
+}
+screens.forEach(s => {
+  const a = document.createElement('a');
+  a.href = '#' + s; a.dataset.s = s;
+  a.textContent = s.replace('.html','');
+  a.onclick = e => { e.preventDefault(); pick(s); };
+  list.appendChild(a);
+});
+pick(location.hash.slice(1) || screens[0]);
+</script>
+</body>
+</html>

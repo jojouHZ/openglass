@@ -16,11 +16,13 @@
 <body>
   <main class="screen auth">
     <div class="status-bar"><span>9:41</span><span>signal · wifi · batt</span></div>
-    <div class="content center-wrap" style="padding-top:0">
-      <button class="nav-back btn-ghost" style="width:44px;height:44px;padding:0;justify-content:flex-start">←</button>
+    <div class="content center-wrap" style="padding-top:24px">
+      <button class="nav-back" aria-label="back">
+        <svg viewBox="0 0 24 24" class="icon"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      </button>
       <h1 class="screen-title">Set up profile</h1>
       <div class="avatar-pick">
-        <svg class="icon"><circle cx="11" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 12 0v2"/></svg>
+        <svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 12 0v2"/></svg>
       </div>
       <span class="hint">add photo · optional</span>
       <div class="field">
@@ -32,7 +34,7 @@
         <input class="input" id="tag" value="name#0000" readonly>
       </div>
       <span class="hint">tag is unique and immutable · display name can change later</span>
-      <button class="btn btn-primary" style="width:342px">Continue</button>
+      <button class="btn btn-primary" style="width:100%">Continue</button>
     </div>
     <p class="dev-note">data: display_name, avatar? → POST /profile/setup → tag issued</p>
   </main>

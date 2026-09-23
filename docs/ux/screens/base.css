@@ -41,11 +41,13 @@ button, input { font: inherit; }
 /* ── shell ─────────────────────────────────────────────── */
 .screen {
   width: 390px; min-height: 100dvh; margin: 0 auto; background: var(--bg);
-  display: grid; grid-template-rows: auto 1fr auto auto;
+  display: flex; flex-direction: column;
 }
-.screen > .scroll { overflow-y: auto; overscroll-behavior: contain; }
+.screen > .scroll, .pane-list > .scroll, .pane-chat > .scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  overscroll-behavior: contain; display: flex; flex-direction: column; }
 .status-bar {
-  height: 44px; padding-top: var(--sat); padding-inline: 24px;
+  height: calc(44px + var(--sat)); padding-top: var(--sat); padding-inline: 24px;
   display: flex; align-items: center; justify-content: space-between;
   font-size: 13px; background: var(--soft);
 }
@@ -279,7 +281,8 @@ input.input::placeholder, .input .ph { color: var(--muted2); }
 
 /* ── bottom nav ────────────────────────────────────────── */
 .bottom-nav {
-  height: 80px; border-top: 1px solid var(--line); background: var(--bg);
+  height: calc(80px + var(--sab)); border-top: 1px solid var(--line);
+  background: var(--bg);
   display: flex; justify-content: space-around; align-items: center;
   padding-bottom: var(--sab);
 }
@@ -330,10 +333,10 @@ input.input::placeholder, .input .ph { color: var(--muted2); }
 .center-wrap { display: flex; flex-direction: column; align-items: flex-start;
   gap: 16px; width: 342px; margin: 0 auto; padding-top: 96px; }
 .screen-title { font-size: 24px; }
-.otp-row { display: flex; gap: 8px; }
-.otp-cell { width: 48px; height: 60px; border: 1.5px solid var(--line);
+.otp-row { display: flex; gap: 8px; align-self: center; }
+.otp-cell { width: 34px; height: 44px; border: 1.5px solid var(--line);
   border-radius: 8px; display: flex; align-items: center; justify-content: center;
-  font-size: 20px; }
+  font-size: 15px; text-align: center; }
 .profile-head { display: flex; flex-direction: column; align-items: center;
   gap: 8px; padding: 24px 0; }
 .profile-head .name { font-size: 15px; }
@@ -413,7 +416,7 @@ input.input::placeholder, .input .ph { color: var(--muted2); }
 
 /* ── empty-state (spec: 56 ring + title 15 + hint 11 + sm CTA) ── */
 .empty-state { display: flex; flex-direction: column; align-items: center;
-  gap: 12px; padding-top: 96px; }
+  justify-content: center; gap: 12px; flex: 1; }
 .empty-state .e-icon { width: 56px; height: 56px; border-radius: 50%;
   background: var(--soft); color: var(--muted);
   display: flex; align-items: center; justify-content: center; }
@@ -496,5 +499,8 @@ input.input::placeholder, .input .ph { color: var(--muted2); }
     padding-bottom: 24px; }
 }
 @media (max-width: 1023px) {
-  .screen.app .pane-list { display: none; }
+  /* mobile: list pane IS the screen; chat placeholder hidden */
+  .screen.app .pane-list { display: flex; flex-direction: column;
+    flex: 1; min-height: 0; }
+  .screen.app .pane-chat { display: none; }
 }
