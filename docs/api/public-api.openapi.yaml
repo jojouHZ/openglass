@@ -14,6 +14,9 @@ info:
 
     Conventions:
     - All endpoints are under `/api/v1`.
+    - Invite issuance is an **ops-side operation** (server CLI / admin
+      tooling on the instance host), deliberately not part of the public
+      client API — there is no "create invite" endpoint here.
     - Auth uses `Authorization: Bearer <access_token>` (JWT, short-lived)
       plus a refresh token cookie/body flow.
     - Error envelope and codes: `docs/api/errors.md`.
@@ -641,7 +644,7 @@ paths:
           description: |
             Jump-to-message (search results, pinned messages, replies):
             returns a window of `limit` messages centered on this message's
-            seq. Mutually exclusive with `q`.
+            seq. Mutually exclusive with `q` and `pinned`.
       responses:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '200':
