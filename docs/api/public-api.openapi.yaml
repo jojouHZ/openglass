@@ -284,6 +284,9 @@ paths:
     post:
       tags: [auth]
       summary: Revoke the current device session
+      description: |
+        Revokes this device's session; Web Push subscriptions bound to it
+        are removed with it.
       operationId: logout
       security: [{ bearerAuth: [] }]
       responses:
@@ -330,14 +333,19 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Current user
+          description: Current user + private fields
           content:
             application/json:
               schema:
                 type: object
-                required: [user]
+                required: [user, email]
                 properties:
                   user: { $ref: '#/components/schemas/User' }
+                  email:
+                    type: string
+                    format: email
+                    description: Own login email — private, never exposed
+                      on the public `User` object or to other users
         '401': { $ref: '#/components/responses/Unauthorized' }
     patch:
       tags: [users]
@@ -410,6 +418,14 @@ paths:
                 required: [user, relationship]
                 properties:
                   user: { $ref: '#/components/schemas/User' }
+                  verifiedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: |
+                      Last identity verification of this contact (US-2.5
+                      "verified" mark on the profile card). Always null
+                      until the private module ships.
                   relationship:
                     type: string
                     enum: [none, contact_incoming, contact_outgoing, contact_mutual, self]
@@ -601,6 +617,11 @@ paths:
           description: Opaque cursor from `nextCursor` of a previous page
             (older messages). Server implements it over the per-chat `seq`;
             clients must treat it as opaque.
+        - name: after
+          in: query
+          schema: { type: string }
+          description: Opaque cursor from `newerCursor` — paginates toward
+            newer messages (forward scroll after an `around` jump).
         - name: limit
           in: query
           schema: { type: integer, default: 50, maximum: 100 }
@@ -629,7 +650,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [messages, nextCursor]
+                required: [messages, nextCursor, newerCursor]
                 properties:
                   messages:
                     type: array
@@ -637,7 +658,15 @@ paths:
                   nextCursor:
                     type: string
                     nullable: true
-                    description: null when no more history
+                    description: Cursor toward older messages; null at history start
+                  newerCursor:
+                    type: string
+                    nullable: true
+                    description: |
+                      Cursor toward newer messages — only non-null after an
+                      `around` jump, letting the client scroll forward from
+                      the jumped position; pass it in the `after` param.
+                      null when already at the latest.
     post:
       tags: [messages]
       summary: Send a message (S5)

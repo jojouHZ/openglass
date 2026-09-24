@@ -73,7 +73,7 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 |------|------|-------|
 | `presence.snapshot` | `{ "onlineUserIds": [uuid] }` | **first event after `auth.ok`** — who is online right now, so the client can paint presence without waiting for deltas. Mutual contacts only |
 | `typing` | `{ "chatId": uuid, "userId": uuid, "until": ts }` | show indicator until `until` (~5 s); no explicit stop event required |
-| `receipt.read` | `{ "chatId": uuid, "userId": uuid, "upToSeq": int }` | peer's read cursor — drives ✓✓ states |
+| `receipt.read` | `{ "chatId": uuid, "userId": uuid, "upToSeq": int }` | read cursor — emitted to **all sessions of both parties**: peers see ✓✓, the reader's own other devices sync unread state |
 | `presence` | `{ "userId": uuid, "status": "online" \| "offline" }` | only for mutual contacts; offline is emitted after the disconnect grace window |
 
 ### Contacts / profile changes
