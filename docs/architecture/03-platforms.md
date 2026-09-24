@@ -29,6 +29,13 @@ The private-hosting deployment host always lives in a separate repository.
 **The PWA exclusion is architectural**: the private module simply is not served
 to it. This is the security boundary, not a config flag.
 
+**Exception — internal demo host.** During MVP there are no native shells and
+only two test users, so an internal `pwa-dev` host **does** load the private
+module for real private-layer E2E testing and demos. It is a separate build and
+separate deployment — never the MVP build, never public — and its UI still
+shows the honest (server-trusted) security tier. See
+`docs/dev/frontend-first-development.md`.
+
 ## Security Tier Indicator
 
 Every platform displays its protection level in the UI — honest transparency
