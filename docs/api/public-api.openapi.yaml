@@ -1,0 +1,963 @@
+openapi: 3.0.3
+info:
+  title: OpenGlass Public API
+  version: 0.1.0
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+  description: |
+    REST contract for the OpenGlass public layer (MVP scope).
+
+    Source of truth for both `MockApiClient` and the Go backend — see
+    `docs/dev/frontend-first-development.md`. No invented wire fields:
+    additions require amending this file first.
+
+    Conventions:
+    - All endpoints are under `/api/v1`.
+    - Auth uses `Authorization: Bearer <access_token>` (JWT, short-lived)
+      plus a refresh token cookie/body flow.
+    - Error envelope and codes: `docs/api/errors.md`.
+    - Realtime events are out of scope here — see `docs/api/ws-events.md`.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+    description: Invite → OTP → profile registration, tokens, device sessions
+  - name: users
+    description: User search and profile cards
+  - name: contacts
+    description: Mutual contact relationships
+  - name: chats
+    description: Chat list and details (direct + group)
+  - name: messages
+    description: History, send, edit, delete, attachments, read cursors
+  - name: groups
+    description: Group management — party/raid rights model
+  - name: reports
+    description: User reports to the instance owner
+
+paths:
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      summary: Request an OTP (S1 → S2)
+      security: []
+      operationId: requestOtp
+      description: |
+        Validates the invite code and sends a one-time code to the email.
+        Rate-limited; resend cooldown is a contract constant
+        (`OTP_RESEND_COOLDOWN_S = 60`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inviteCode, email]
+              properties:
+                inviteCode: { type: string, example: "GLS-9F2K-71" }
+                email: { type: string, format: email }
+      responses:
+        '202':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpExpiresInS, resendAvailableInS]
+                properties:
+                  otpExpiresInS: { type: integer, example: 600 }
+                  resendAvailableInS: { type: integer, example: 60 }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403':
+          description: Invite code invalid or already consumed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { code: invite_invalid, message: "Invite code is invalid or already used" }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/otp/verify:
+    post:
+      tags: [auth]
+      summary: Verify OTP (S2 → S3 or straight to S4 for existing users)
+      security: []
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code, deviceName]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+                deviceName: { type: string, example: "Pixel 8 — Chrome PWA" }
+      responses:
+        '200':
+          description: |
+            Verified. `needsProfile=true` for first login (client shows S3);
+            `false` for returning users (client goes to S4).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [needsProfile, accessToken, accessTokenExpiresInS, refreshToken, user]
+                properties:
+                  needsProfile: { type: boolean }
+                  accessToken: { type: string }
+                  accessTokenExpiresInS: { type: integer, example: 900 }
+                  refreshToken: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403':
+          description: Code invalid or expired
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                invalid:
+                  value: { error: { code: otp_invalid, message: "Wrong code" } }
+                expired:
+                  value: { error: { code: otp_expired, message: "Code expired, request a new one" } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/profile:
+    post:
+      tags: [auth]
+      summary: Complete profile setup (S3 → S4)
+      operationId: completeProfile
+      description: |
+        Sets the display name and binds the immutable unique tag
+        `name#NNNN`. Requires `needsProfile` session. If the requested tag
+        prefix is taken, `tagSuggestions` are returned instead.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 64, example: "jojou" }
+                requestedTag:
+                  type: string
+                  description: Optional explicit tag attempt (e.g. "Jojou13245" from suggestions)
+      responses:
+        '200':
+          description: Profile created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '409':
+          description: Tag taken — returns suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, tagSuggestions]
+                properties:
+                  error: { $ref: '#/components/schemas/ErrorBody' }
+                  tagSuggestions:
+                    type: array
+                    items: { type: string }
+                    example: ["Jojou13245", "Jojou48127", "jojou#9031"]
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate access + refresh tokens
+      security: []
+      operationId: refreshTokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken, accessTokenExpiresInS, refreshToken]
+                properties:
+                  accessToken: { type: string }
+                  accessTokenExpiresInS: { type: integer }
+                  refreshToken: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current device session
+      operationId: logout
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Session revoked }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/sessions:
+    get:
+      tags: [auth]
+      summary: List device sessions (S14)
+      operationId: listSessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeviceSession' }
+
+  /auth/sessions/{sessionId}:
+    delete:
+      tags: [auth]
+      summary: Revoke a specific device session (S14)
+      operationId: revokeSession
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/SessionId' }
+      responses:
+        '204': { description: Revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/search:
+    get:
+      tags: [users]
+      summary: Search users by display name or tag (S6)
+      operationId: searchUsers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+          description: Display-name substring or exact `name#NNNN` tag
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+
+  /users/{userId}:
+    get:
+      tags: [users]
+      summary: User profile card (S7)
+      operationId: getUser
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, relationship]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  relationship:
+                    type: string
+                    enum: [none, contact_outgoing, contact_mutual, self]
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /contacts:
+    get:
+      tags: [contacts]
+      summary: Contact list
+      operationId: listContacts
+      security: [{ bearerAuth: [] }]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contacts]
+                properties:
+                  contacts:
+                    type: array
+                    items: { $ref: '#/components/schemas/Contact' }
+    post:
+      tags: [contacts]
+      summary: Add contact (S7)
+      operationId: addContact
+      description: |
+        Creates a one-directional contact entry. When both users have added
+        each other the relation becomes `mutual` — required for 1-1 chat
+        creation and private-session invites.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: '#/components/schemas/Contact' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Already in contacts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /contacts/{userId}:
+    delete:
+      tags: [contacts]
+      summary: Remove contact
+      operationId: removeContact
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats:
+    get:
+      tags: [chats]
+      summary: Chat list (S4)
+      operationId: listChats
+      description: Ordered by last activity; includes 1-1 chats and groups.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chats]
+                properties:
+                  chats:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatSummary' }
+    post:
+      tags: [chats]
+      summary: Open or create a 1-1 chat with a mutual contact (S7 → S5)
+      operationId: openDirectChat
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Existing chat returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '201':
+          description: New chat created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '403':
+          description: Not mutual contacts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /chats/{chatId}:
+    get:
+      tags: [chats]
+      summary: Chat details (S5 header / S7 actions)
+      operationId: getChat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats/{chatId}/messages:
+    get:
+      tags: [messages]
+      summary: Message history, cursor-paginated (S5)
+      operationId: listMessages
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+        - name: before
+          in: query
+          schema: { type: string }
+          description: Cursor from a previous page (older messages)
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages, nextCursor]
+                properties:
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/Message' }
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: null when no more history
+    post:
+      tags: [messages]
+      summary: Send a message (S5)
+      operationId: sendMessage
+      description: |
+        Server assigns `id`, `seq`, `sentAt`. Delivery to online members
+        happens via `message.new` WS event — see `docs/api/ws-events.md`.
+        Optimistic-UI/outbox semantics are defined by the contract: client
+        sends `clientNonce`; server echoes it in the response and the WS
+        event for dedup.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientNonce]
+              properties:
+                clientNonce:
+                  type: string
+                  description: Client-generated idempotency key (uuid)
+                text: { type: string, maxLength: 8192 }
+                attachmentIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  maxItems: 10
+                replyToMessageId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /messages/{messageId}:
+    patch:
+      tags: [messages]
+      summary: Edit own message
+      operationId: editMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/MessageId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 8192 }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [messages]
+      summary: Delete a message
+      operationId: deleteMessage
+      description: Own messages; in groups also users with `delete_messages` right.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/MessageId' }
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats/{chatId}/attachments:
+    post:
+      tags: [messages]
+      summary: Upload an attachment (photo/file)
+      operationId: uploadAttachment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attachment]
+                properties:
+                  attachment: { $ref: '#/components/schemas/Attachment' }
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /chats/{chatId}/read:
+    post:
+      tags: [messages]
+      summary: Mark chat read up to a message (read receipts)
+      operationId: markRead
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upToSeq]
+              properties:
+                upToSeq: { type: integer }
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '204': { description: Recorded }
+
+  /groups:
+    post:
+      tags: [groups]
+      summary: Create group (S8)
+      operationId: createGroup
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, memberIds]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 128 }
+                memberIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+
+  /groups/{chatId}:
+    patch:
+      tags: [groups]
+      summary: Edit group info (S9a, requires `edit_info`)
+      operationId: editGroup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /groups/{chatId}/members:
+    post:
+      tags: [groups]
+      summary: Add members (requires `invite_members` or owner)
+      operationId: addGroupMembers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberIds]
+              properties:
+                memberIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '204': { description: Added }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /groups/{chatId}/members/{userId}:
+    delete:
+      tags: [groups]
+      summary: Remove member (requires `remove_members` or owner; members can remove themselves)
+      operationId: removeGroupMember
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '204': { description: Removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [groups]
+      summary: Grant/revoke member rights (owner only, party/raid model)
+      operationId: setMemberRights
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+        - { $ref: '#/components/parameters/UserId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rights]
+              properties:
+                rights: { $ref: '#/components/schemas/MemberRights' }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [member]
+                properties:
+                  member: { $ref: '#/components/schemas/GroupMember' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /groups/{chatId}/ownership:
+    post:
+      tags: [groups]
+      summary: Transfer ownership (owner only)
+      operationId: transferOwnership
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newOwnerId]
+              properties:
+                newOwnerId: { type: string, format: uuid }
+      responses:
+        '204': { description: Transferred }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports:
+    post:
+      tags: [reports]
+      summary: Report a user to the instance owner (US-2.4)
+      operationId: reportUser
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, reason]
+              properties:
+                userId: { type: string, format: uuid }
+                reason: { type: string, maxLength: 1024 }
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '202': { description: Report accepted }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ChatId:
+      name: chatId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Missing/expired token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: unauthorized, message: "Token expired" } }
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Rate limit hit
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: rate_limited, message: "Too many requests" } }
+
+  schemas:
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+
+    User:
+      type: object
+      required: [id, displayName, tag, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        displayName:
+          type: string
+          description: Free-form, changeable, NOT unique
+        tag:
+          type: string
+          description: Immutable unique handle `name#NNNN`; `#1` reserved for instance owner
+          example: "jojou#1042"
+        avatarUrl: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    DeviceSession:
+      type: object
+      required: [id, deviceName, createdAt, lastSeenAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        deviceName: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        current: { type: boolean }
+
+    Contact:
+      type: object
+      required: [user, mutual, addedAt]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        mutual:
+          type: boolean
+          description: Both parties added each other
+        addedAt: { type: string, format: date-time }
+
+    Chat:
+      type: object
+      required: [id, type, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [direct, group] }
+        title:
+          type: string
+          nullable: true
+          description: Group title; null for direct chats
+        peer: { $ref: '#/components/schemas/User' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMember' }
+        createdAt: { type: string, format: date-time }
+
+    ChatSummary:
+      type: object
+      required: [id, type, lastActivityAt, unreadCount]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [direct, group] }
+        title: { type: string, nullable: true }
+        peer: { $ref: '#/components/schemas/User' }
+        lastMessage: { $ref: '#/components/schemas/Message' }
+        lastActivityAt: { type: string, format: date-time }
+        unreadCount: { type: integer }
+        pinned: { type: boolean }
+
+    MemberRights:
+      type: object
+      description: Party/raid model — owner grants specific rights per member
+      properties:
+        inviteMembers: { type: boolean, default: false }
+        removeMembers: { type: boolean, default: false }
+        editInfo: { type: boolean, default: false }
+        pinMessages: { type: boolean, default: false }
+        deleteMessages: { type: boolean, default: false }
+
+    GroupMember:
+      type: object
+      required: [user, role, rights, joinedAt]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        role: { type: string, enum: [owner, member] }
+        rights: { $ref: '#/components/schemas/MemberRights' }
+        joinedAt: { type: string, format: date-time }
+
+    Attachment:
+      type: object
+      required: [id, kind, mimeType, sizeBytes, url]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [photo, file] }
+        mimeType: { type: string }
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        url: { type: string }
+        thumbnailUrl: { type: string, nullable: true }
+
+    Message:
+      type: object
+      required: [id, chatId, seq, senderId, sentAt, clientNonce]
+      properties:
+        id: { type: string, format: uuid }
+        chatId: { type: string, format: uuid }
+        seq:
+          type: integer
+          description: Per-chat monotonic sequence — ordering + read cursors
+        senderId: { type: string, format: uuid }
+        text: { type: string, nullable: true }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        replyToMessageId: { type: string, format: uuid, nullable: true }
+        clientNonce:
+          type: string
+          description: Echoed for optimistic-UI dedup
+        sentAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
+        pinned: { type: boolean }
