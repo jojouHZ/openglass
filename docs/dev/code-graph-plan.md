@@ -77,7 +77,7 @@ service → repo → DB model; WS event → producer/consumer pairs.
   symbols, broken edges, untested symbols.
 - Testing — coverage map: symbols without `tests` edges.
 
-## Current implementation (milestone 1)
+## Current implementation (milestones 1–2)
 
 `cmd/codegraph` + `internal/codegraph` (local-only per `.gitignore`):
 
@@ -88,7 +88,16 @@ codegraph find   '%Send%'          # symbol.find equivalent
 codegraph refs   'sym:<pkg>.<Fn>'  # incoming edges (symbol.refs)
 codegraph deps   'file:<path>'     # outgoing edges
 codegraph export -out file.json
+codegraph serve                    # MCP stdio server (openglass-graph)
 ```
+
+MCP server (`serve` subcommand) speaks newline-delimited JSON-RPC 2.0
+on stdio and exposes six tools: `symbol.find`, `symbol.refs`,
+`symbol.deps`, `contract.trace` (call-chain BFS, up/downstream),
+`impact.of` (reverse reachability), `module.deps` (dir-level import
+aggregation). Registered for Devin in `.devin/mcp_config.json`
+(stdio via `wsl -e .codegraph/codegraph serve`). Rebuild the binary
+after changes: `go build -o .codegraph/codegraph ./cmd/codegraph`.
 
 Go extractor covers: packages, imports (internal resolved to files,
 external kept as `ext:` stub nodes), functions, methods (receiver-
@@ -101,7 +110,8 @@ Edges: `defines`, `imports`, `calls`. Artifacts live in `.codegraph/`
 ## Milestones
 
 1. ~~Indexer MVP: Go backend only → symbols/imports/calls into SQLite.~~ ✅
-2. MCP server with `symbol.find` + `symbol.refs` + `contract.trace`.
+2. ~~MCP server with `symbol.find` + `symbol.refs` + `contract.trace`~~ ✅
+   (also `symbol.deps`, `impact.of`, `module.deps`)
 3. Vue/TS indexer (components, props, emits, stores, routes).
 4. `graph.diff` for code review + `impact.of` for orchestrator.
 5. CI: graph freshness check; optional Neo4j migration.
