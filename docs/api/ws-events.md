@@ -36,11 +36,15 @@ All frames are JSON text frames:
 ```
 
 - `type` — event name (catalog below)
-- `seq` — **per-connection** monotonic sequence assigned by the server.
-  On reconnect the client passes `?last_seq=<N>` (see Endpoint); the
-  server replays missed events where still buffered, else answers
-  `resync.required`.
+- `seq` — **per-session** monotonic sequence assigned by the server. It is
+  scoped to the device session and **survives reconnects** — a new socket
+  for the same session continues numbering where the previous one ended.
+  This is what makes `?last_seq=<N>` replay meaningful. The sequence
+  resets only when the device session itself is created anew (re-login).
 - `ts` — server timestamp (informational; ordering is by `seq`, not `ts`)
+
+`seq` and `ts` exist **only on server→client frames**. Client→server
+frames carry just `{ "type", "data" }` — the `auth` frame included.
 
 ## Client → Server
 

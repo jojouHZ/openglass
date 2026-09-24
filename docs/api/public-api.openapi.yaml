@@ -198,7 +198,12 @@ paths:
       description: |
         Sets the display name and binds the immutable unique tag
         `name#NNNN`. Requires `needsProfile` session. If the requested tag
-        prefix is taken, `tagSuggestions` are returned instead.
+        prefix is taken, `tagSuggestions` are returned instead. One-shot:
+        on an account that already has a profile this returns
+        `conflict` — use `PATCH /users/me` for later display-name changes
+        (the tag never changes). When `requestedTag` is omitted the
+        display-name prefix is attempted; a collision also yields
+        `tag_taken` + suggestions.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -227,17 +232,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-              example:
-                error:
-                  code: tag_taken
-                  message: "Tag is taken, pick a suggestion"
-                  details:
-                    tagSuggestions: ["Jojou13245", "Jojou48127", "jojou#9031"]
+              examples:
+                tag_taken:
+                  value:
+                    error:
+                      code: tag_taken
+                      message: "Tag is taken, pick a suggestion"
+                      details:
+                        tagSuggestions: ["Jojou13245", "Jojou48127", "jojou#9031"]
+                conflict:
+                  value:
+                    error:
+                      code: conflict
+                      message: "Profile already exists"
 
   /auth/refresh:
     post:
       tags: [auth]
       summary: Rotate access + refresh tokens
+      description: |
+        Refresh tokens rotate on every use — the presented token is
+        invalidated and a new pair is issued. Presenting an already-used
+        refresh token (reuse detected, possible theft) revokes the entire
+        device session: client gets `unauthorized` and must log in again.
       security: []
       operationId: refreshTokens
       requestBody:
@@ -593,6 +610,10 @@ paths:
           description: Full-text search within this chat (S5b). When set,
             results are matching messages ordered by seq desc; `before`
             cursor paginates further matches.
+        - name: pinned
+          in: query
+          schema: { type: boolean }
+          description: When true, returns only pinned messages (S5b pinned view)
         - name: around
           in: query
           schema: { type: string, format: uuid }
@@ -656,7 +677,10 @@ paths:
                     reference an attachment uploaded to this chat
                     (`POST /chats/{chatId}/attachments`), else
                     `validation_failed`.
-                replyToMessageId: { type: string, format: uuid }
+                replyToMessageId:
+                  type: string
+                  format: uuid
+                  description: Must reference a message in this chat
       responses:
         '200':
           description: Idempotent replay — `clientNonce` was already used,
@@ -719,6 +743,40 @@ paths:
         - { $ref: '#/components/parameters/MessageId' }
       responses:
         '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /messages/{messageId}/pin:
+    post:
+      tags: [messages]
+      summary: Pin/unpin a message (S5b pinned view)
+      description: |
+        Direct chats: either party. Groups: requires `pin_messages`
+        right or owner.
+      operationId: setMessagePinned
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/MessageId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -941,6 +999,10 @@ paths:
     post:
       tags: [auth]
       summary: Register a Web Push subscription for this device (S15)
+      description: |
+        Idempotent per `endpoint`: re-subscribing an existing endpoint
+        updates keys and returns `200` with the existing id instead of
+        creating a duplicate.
       operationId: createPushSubscription
       security: [{ bearerAuth: [] }]
       requestBody:
@@ -959,6 +1021,15 @@ paths:
                     p256dh: { type: string }
                     auth: { type: string }
       responses:
+        '200':
+          description: Existing subscription updated (same endpoint)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
         '201':
           description: Subscription stored (bound to the current device session)
           content:
