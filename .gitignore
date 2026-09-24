@@ -20,6 +20,10 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Code graph artifacts (local-only, rebuilt by `go run ./cmd/codegraph index`)
+.codegraph/
+/codegraph
+
 # === Internal development infrastructure (local-only, never committed) ===
 .devin/
 AGENTS.md

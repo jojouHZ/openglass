@@ -1,7 +1,7 @@
 # Code Graph Integration Plan (graphify)
 
-Status: proposed · Owner: Knowledge Agent · Scope: pre-development
-infrastructure, alongside Qdrant.
+Status: in progress (milestone 1 done) · Owner: Knowledge Agent ·
+Scope: pre-development infrastructure, alongside Qdrant.
 
 ## Goal
 
@@ -77,9 +77,30 @@ service → repo → DB model; WS event → producer/consumer pairs.
   symbols, broken edges, untested symbols.
 - Testing — coverage map: symbols without `tests` edges.
 
+## Current implementation (milestone 1)
+
+`cmd/codegraph` + `internal/codegraph` (local-only per `.gitignore`):
+
+```
+codegraph index  -root . -json .codegraph/codegraph.json
+codegraph stats                    # node/edge counts by kind
+codegraph find   '%Send%'          # symbol.find equivalent
+codegraph refs   'sym:<pkg>.<Fn>'  # incoming edges (symbol.refs)
+codegraph deps   'file:<path>'     # outgoing edges
+codegraph export -out file.json
+```
+
+Go extractor covers: packages, imports (internal resolved to files,
+external kept as `ext:` stub nodes), functions, methods (receiver-
+qualified ids), types/interfaces, vars/consts, test entrypoints
+(`*_test.go` + Test/Benchmark/Example/Fuzz), and call sites resolved
+through a package-level symbol table. Nodes: `file`, `symbol`.
+Edges: `defines`, `imports`, `calls`. Artifacts live in `.codegraph/`
+(SQLite db + JSON export), gitignored.
+
 ## Milestones
 
-1. Indexer MVP: Go backend only → symbols/imports/calls into SQLite.
+1. ~~Indexer MVP: Go backend only → symbols/imports/calls into SQLite.~~ ✅
 2. MCP server with `symbol.find` + `symbol.refs` + `contract.trace`.
 3. Vue/TS indexer (components, props, emits, stores, routes).
 4. `graph.diff` for code review + `impact.of` for orchestrator.
