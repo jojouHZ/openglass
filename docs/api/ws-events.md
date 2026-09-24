@@ -22,6 +22,8 @@ WSS /api/v1/ws?last_seq=<N>   (reconnect with replay cursor)
   Server replies `auth.ok` (or `auth.fail` + close `4401`). No other
   client frame is accepted before `auth.ok`. Expired token
   mid-connection → close `4401`; client refreshes and reconnects.
+  No `auth` frame within 5 s → close `4408` (auth timeout) — distinct
+  from `4401` so clients can tell "bad token" from "never sent auth".
 - **Reconnect**: repeat the URL with `?last_seq=<last received frame seq>`.
   The server replays missed buffered events, else sends `resync.required`.
 - One connection per device session. A second connect on the same session
@@ -84,6 +86,7 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 | `contact.removed` | `{ "userId": uuid }` | someone removed you — mutual degrades to `contact_outgoing` on your side |
 | `user.updated` | `{ "user": User }` | a mutual contact's profile changed (displayName, avatar) — refresh caches |
 | `chat.updated` | `{ "chat": Chat }` | group info changed (title, members, rights) for a chat you're in |
+| `chat.new` | `{ "chat": Chat }` | a chat appeared that you're now in: someone opened a direct chat with you or added you to a group. Emitted **before** that chat's first `message.new` (session `seq` order guarantees it) |
 
 ### Session / infra
 

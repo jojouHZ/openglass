@@ -48,8 +48,9 @@ Realtime channel uses standard WS close codes plus:
 
 | code | meaning | client action |
 |-----:|---------|---------------|
-| `4401` | access token expired | refresh token, reconnect |
+| `4401` | access token expired / invalid | refresh token, reconnect |
 | `4403` | session revoked | log out to S1 |
+| `4408` | no `auth` frame within 5 s | reconnect and send auth promptly |
 | `4429` | connection rate-limited | exponential backoff |
 
 ## Constants
