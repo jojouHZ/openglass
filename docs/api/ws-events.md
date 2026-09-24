@@ -71,7 +71,7 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 
 | type | data | notes |
 |------|------|-------|
-| `presence.snapshot` | `{ "onlineUserIds": [uuid] }` | **first event after connect** — who is online right now, so the client can paint presence without waiting for deltas. Mutual contacts only |
+| `presence.snapshot` | `{ "onlineUserIds": [uuid] }` | **first event after `auth.ok`** — who is online right now, so the client can paint presence without waiting for deltas. Mutual contacts only |
 | `typing` | `{ "chatId": uuid, "userId": uuid, "until": ts }` | show indicator until `until` (~5 s); no explicit stop event required |
 | `receipt.read` | `{ "chatId": uuid, "userId": uuid, "upToSeq": int }` | peer's read cursor — drives ✓✓ states |
 | `presence` | `{ "userId": uuid, "status": "online" \| "offline" }` | only for mutual contacts; offline is emitted after the disconnect grace window |
@@ -81,6 +81,7 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 | type | data | notes |
 |------|------|-------|
 | `contact.added` | `{ "user": User }` | someone added you — relationship becomes `contact_incoming` until you add back (mutual) |
+| `contact.removed` | `{ "userId": uuid }` | someone removed you — mutual degrades to `contact_outgoing` on your side |
 | `user.updated` | `{ "user": User }` | a mutual contact's profile changed (displayName, avatar) — refresh caches |
 | `chat.updated` | `{ "chat": Chat }` | group info changed (title, members, rights) for a chat you're in |
 

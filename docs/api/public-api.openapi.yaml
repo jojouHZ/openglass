@@ -1222,8 +1222,16 @@ components:
         peer: { $ref: '#/components/schemas/User' }
         lastMessage: { $ref: '#/components/schemas/Message' }
         lastActivityAt: { type: string, format: date-time }
-        unreadCount: { type: integer }
-        pinned: { type: boolean }
+        unreadCount:
+          type: integer
+          description: Per-user, synced across the user's devices
+        memberCount:
+          type: integer
+          description: Group chats only — for the "N members" row in S4
+        pinned:
+          type: boolean
+          description: User-side pin; pinned chats sort before unpinned,
+            then by lastActivityAt desc
 
     MemberRights:
       type: object
@@ -1253,7 +1261,10 @@ components:
         mimeType: { type: string }
         fileName: { type: string }
         sizeBytes: { type: integer }
-        url: { type: string }
+        url:
+          type: string
+          description: Authorized URL — requires the same bearer token,
+            not a public link (server-trusted, not public internet)
         thumbnailUrl: { type: string, nullable: true }
 
     Message:
