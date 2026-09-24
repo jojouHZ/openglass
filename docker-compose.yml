@@ -22,8 +22,34 @@ services:
     command: --model-id BAAI/bge-large-en-v1.5 --port 80
     restart: unless-stopped
 
+  postgres:
+    image: postgres:17-alpine
+    container_name: openglass-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=openglass
+      - POSTGRES_USER=openglass
+      - POSTGRES_PASSWORD=openglass_dev
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: openglass-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
   qdrant_storage:
     driver: local
   tei_models:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
     driver: local
