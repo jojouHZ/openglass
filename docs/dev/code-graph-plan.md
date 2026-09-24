@@ -1,6 +1,6 @@
 # Code Graph Integration Plan (graphify)
 
-Status: in progress (milestone 1 done) · Owner: Knowledge Agent ·
+Status: in progress (milestones 1–4 done) · Owner: Knowledge Agent ·
 Scope: pre-development infrastructure, alongside Qdrant.
 
 ## Goal
@@ -77,7 +77,7 @@ service → repo → DB model; WS event → producer/consumer pairs.
   symbols, broken edges, untested symbols.
 - Testing — coverage map: symbols without `tests` edges.
 
-## Current implementation (milestones 1–2)
+## Current implementation (milestones 1–4)
 
 `cmd/codegraph` + `internal/codegraph` (local-only per `.gitignore`):
 
@@ -112,9 +112,15 @@ Edges: `defines`, `imports`, `calls`. Artifacts live in `.codegraph/`
 1. ~~Indexer MVP: Go backend only → symbols/imports/calls into SQLite.~~ ✅
 2. ~~MCP server with `symbol.find` + `symbol.refs` + `contract.trace`~~ ✅
    (also `symbol.deps`, `impact.of`, `module.deps`)
-3. Vue/TS indexer (components, props, emits, stores, routes).
-4. `graph.diff` for code review + `impact.of` for orchestrator.
+3. ~~Vue/TS indexer~~ ✅ — tree-sitter-typescript (functions, classes,
+   interfaces, type aliases, consts/arrow funcs, imports, calls) +
+   Vue SFC split (script → TS, template → `renders` edges on
+   component nodes). Covered by `index_test.go` + `testdata/` fixtures.
+4. ~~`graph.diff`~~ ✅ — stored graph vs fresh build, CLI + MCP tool.
+   `impact.of` shipped in milestone 2.
 5. CI: graph freshness check; optional Neo4j migration.
+   Qdrant sync: graph snapshot → `code_map` category in openglass_docs
+   (pending — needs graph stabilize first).
 
 ## Open questions
 
