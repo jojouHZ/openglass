@@ -28,6 +28,7 @@ Every non-2xx response body is:
 | code | HTTP | meaning | typical UI handling |
 |------|-----:|---------|---------------------|
 | `validation_failed` | 400 | field-level validation failed; `details.fields` lists them | inline form errors |
+| `invite_required` | 403 | email unknown and no invite supplied — invite gates account *creation*, returning users log in without one | S1 show invite field |
 | `invite_invalid` | 403 | invite code wrong or consumed | S1 inline error |
 | `otp_invalid` | 403 | wrong code | S2 inline error, attempts counter |
 | `otp_expired` | 403 | code expired | S2 resend prompt |

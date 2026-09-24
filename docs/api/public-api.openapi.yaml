@@ -87,9 +87,16 @@ paths:
           application/json:
             schema:
               type: object
-              required: [inviteCode, email]
+              required: [email]
               properties:
-                inviteCode: { type: string, example: "GLS-9F2K-71" }
+                inviteCode:
+                  type: string
+                  example: "GLS-9F2K-71"
+                  description: |
+                    Required for first registration only. Returning users
+                    re-login with email + OTP alone — the invite gates
+                    account creation, not every sign-in. Omitting it for an
+                    unknown email → `invite_required`.
                 email: { type: string, format: email }
       responses:
         '202':
@@ -103,14 +110,31 @@ paths:
                   otpExpiresInS: { type: integer, example: 600 }
                   resendAvailableInS: { type: integer, example: 60 }
         '400': { $ref: '#/components/responses/ValidationFailed' }
-        '403':
-          description: Invite code invalid or already consumed
+        '429':
+          description: Resend cooldown active (`otp_cooldown`)
+          headers:
+            Retry-After:
+              schema: { type: integer }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               example:
-                error: { code: invite_invalid, message: "Invite code is invalid or already used" }
-        '429': { $ref: '#/components/responses/RateLimited' }
+                error:
+                  code: otp_cooldown
+                  message: "Wait before requesting a new code"
+                  details: { resendAvailableInS: 42 }
+        '403':
+          description: |
+            `invite_required` — email unknown and no invite supplied;
+            `invite_invalid` — invite supplied but wrong/consumed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                required:
+                  value: { error: { code: invite_required, message: "Invite code required to register" } }
+                invalid:
+                  value: { error: { code: invite_invalid, message: "Invite code is invalid or already used" } }
 
   /auth/otp/verify:
     post:
@@ -138,13 +162,19 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [needsProfile, accessToken, accessTokenExpiresInS, refreshToken, user]
+                required: [needsProfile, accessToken, accessTokenExpiresInS, refreshToken]
                 properties:
                   needsProfile: { type: boolean }
                   accessToken: { type: string }
                   accessTokenExpiresInS: { type: integer, example: 900 }
                   refreshToken: { type: string }
-                  user: { $ref: '#/components/schemas/User' }
+                  user:
+                    type: object
+                    nullable: true
+                    description: |
+                      `User` object, present only when `needsProfile=false`.
+                      First login has no displayName/tag yet — profile is
+                      created via `POST /auth/profile` (S3).
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '403':
           description: Code invalid or expired
@@ -559,6 +589,13 @@ paths:
           description: Full-text search within this chat (S5b). When set,
             results are matching messages ordered by seq desc; `before`
             cursor paginates further matches.
+        - name: around
+          in: query
+          schema: { type: string, format: uuid }
+          description: |
+            Jump-to-message (search results, pinned messages, replies):
+            returns a window of `limit` messages centered on this message's
+            seq. Mutually exclusive with `q`.
       responses:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '200':
@@ -602,11 +639,15 @@ paths:
                 clientNonce:
                   type: string
                   description: Client-generated idempotency key (uuid)
-                text: { type: string, maxLength: 8192 }
+                text:
+                  type: string
+                  maxLength: 8192
+                  description: Required unless `attachmentIds` is non-empty
                 attachmentIds:
                   type: array
                   items: { type: string, format: uuid }
                   maxItems: 10
+                  description: Required unless `text` is non-empty
                 replyToMessageId: { type: string, format: uuid }
       responses:
         '200':
