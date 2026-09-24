@@ -96,7 +96,9 @@ paths:
                     Required for first registration only. Returning users
                     re-login with email + OTP alone — the invite gates
                     account creation, not every sign-in. Omitting it for an
-                    unknown email → `invite_required`.
+                    unknown email → `invite_required`. The invite is
+                    consumed at successful `verifyOtp`, not at this step —
+                    a failed OTP attempt does not burn it.
                 email: { type: string, format: email }
       responses:
         '202':
@@ -221,18 +223,16 @@ paths:
                 properties:
                   user: { $ref: '#/components/schemas/User' }
         '409':
-          description: Tag taken — returns suggestions
+          description: Tag taken — suggestions in `error.details.tagSuggestions`
           content:
             application/json:
-              schema:
-                type: object
-                required: [error, tagSuggestions]
-                properties:
-                  error: { $ref: '#/components/schemas/ErrorBody' }
-                  tagSuggestions:
-                    type: array
-                    items: { type: string }
-                    example: ["Jojou13245", "Jojou48127", "jojou#9031"]
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error:
+                  code: tag_taken
+                  message: "Tag is taken, pick a suggestion"
+                  details:
+                    tagSuggestions: ["Jojou13245", "Jojou48127", "jojou#9031"]
 
   /auth/refresh:
     post:
@@ -395,7 +395,11 @@ paths:
                   user: { $ref: '#/components/schemas/User' }
                   relationship:
                     type: string
-                    enum: [none, contact_outgoing, contact_mutual, self]
+                    enum: [none, contact_incoming, contact_outgoing, contact_mutual, self]
+                    description: |
+                      none — strangers; contact_incoming — they added you,
+                      you haven't (drives "add back?" prompt); contact_outgoing —
+                      you added them; contact_mutual — both added; self.
         '404': { $ref: '#/components/responses/NotFound' }
 
   /contacts:
@@ -647,7 +651,11 @@ paths:
                   type: array
                   items: { type: string, format: uuid }
                   maxItems: 10
-                  description: Required unless `text` is non-empty
+                  description: |
+                    Required unless `text` is non-empty. Each id must
+                    reference an attachment uploaded to this chat
+                    (`POST /chats/{chatId}/attachments`), else
+                    `validation_failed`.
                 replyToMessageId: { type: string, format: uuid }
       responses:
         '200':

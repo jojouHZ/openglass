@@ -7,12 +7,23 @@ as scripted fixtures; the Go hub implements them for real.
 ## Endpoint
 
 ```
-WSS /api/v1/ws?access_token=<jwt>
+WSS /api/v1/ws
+WSS /api/v1/ws?last_seq=<N>   (reconnect with replay cursor)
 ```
 
-- Auth: short-lived access JWT passed as `access_token` query param
-  (browser WebSocket cannot set headers). Expired token mid-connection →
-  server closes with code `4401`; client reconnects with a fresh token.
+- **Auth is the first frame, not the URL.** Tokens in query strings leak
+  into proxy/server logs — connect without credentials, then the client
+  must send an `auth` frame within 5 s:
+
+  ```json
+  { "type": "auth", "data": { "accessToken": "<jwt>" } }
+  ```
+
+  Server replies `auth.ok` (or `auth.fail` + close `4401`). No other
+  client frame is accepted before `auth.ok`. Expired token
+  mid-connection → close `4401`; client refreshes and reconnects.
+- **Reconnect**: repeat the URL with `?last_seq=<last received frame seq>`.
+  The server replays missed buffered events, else sends `resync.required`.
 - One connection per device session. A second connect on the same session
   is allowed (multi-tab PWA) — events are duplicated per connection.
 
@@ -26,14 +37,16 @@ All frames are JSON text frames:
 
 - `type` — event name (catalog below)
 - `seq` — **per-connection** monotonic sequence assigned by the server.
-  On reconnect the client sends `Last-Event-Seq`; the server replays
-  missed events where still buffered, else answers `resync.required`.
+  On reconnect the client passes `?last_seq=<N>` (see Endpoint); the
+  server replays missed events where still buffered, else answers
+  `resync.required`.
 - `ts` — server timestamp (informational; ordering is by `seq`, not `ts`)
 
 ## Client → Server
 
 | type | data | notes |
 |------|------|-------|
+| `auth` | `{ "accessToken": jwt }` | **mandatory first frame** within 5 s of connect |
 | `typing.start` | `{ "chatId": uuid }` | throttled server-side to 1/3s per chat |
 | `typing.stop` | `{ "chatId": uuid }` | |
 | `receipt.read` | `{ "chatId": uuid, "upToSeq": int }` | same semantics as `POST /chats/{id}/read` |
@@ -59,11 +72,21 @@ All frames are JSON text frames:
 | `receipt.read` | `{ "chatId": uuid, "userId": uuid, "upToSeq": int }` | peer's read cursor — drives ✓✓ states |
 | `presence` | `{ "userId": uuid, "status": "online" \| "offline" }` | only for mutual contacts; offline is emitted after the disconnect grace window |
 
+### Contacts / profile changes
+
+| type | data | notes |
+|------|------|-------|
+| `contact.added` | `{ "user": User }` | someone added you — relationship becomes `contact_incoming` until you add back (mutual) |
+| `user.updated` | `{ "user": User }` | a mutual contact's profile changed (displayName, avatar) — refresh caches |
+| `chat.updated` | `{ "chat": Chat }` | group info changed (title, members, rights) for a chat you're in |
+
 ### Session / infra
 
 | type | data | notes |
 |------|------|-------|
 | `pong` | `{}` | reply to `ping` |
+| `auth.ok` | `{ "resumedFromSeq": int \| null }` | auth accepted; `resumedFromSeq` = replayed up to this frame seq when `last_seq` was honored, else null |
+| `auth.fail` | `{ "code": "unauthorized" }` | bad/expired token — server then closes `4401` |
 | `resync.required` | `{ "reason": "gap" \| "evicted" }` | client must refetch via REST (chat list + affected histories) |
 | `session.revoked` | `{ "sessionId": uuid }` | this device session was revoked — client logs out |
 
