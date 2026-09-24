@@ -11,7 +11,8 @@ message row:   edge→bubble 12px · text pad 12h/8v · avatar↔bubble 6px
                opposite inset 70px · avatar only on last of user group
                gap 4px in-group / 8px between groups
 reply:         2px capsule accent bar + quoted text 12 muted, reduced opacity
-receipt/time:  inside bubble bottom-right; own status icon may sit outside
+receipt/time:  inside bubble bottom-right, inline with last text line;
+               status icons ONLY on own messages, never on incoming
 composer:      bar minHeight 48, radius 18 · send = 48 circle OUTSIDE bar
                attach button 36 inside-left · horizontal margin 12
 attachment:    card ~200×92, radius 14, hairline border
@@ -105,7 +106,10 @@ Consecutive same-sender messages form a series:
 - `avatar 28` sits OUTSIDE the bubble, bottom corner of the LAST
   bubble of the series: left for incoming, right for own. Never next
   to every bubble.
-- Every bubble: `[time][status icon]` bottom-right.
+- Every bubble: `[time]` bottom-right, floated into the last text line
+  (never a dedicated row). `status icon` appended only on OWN bubbles —
+  incoming bubbles carry time alone; the user never sees receipts on
+  messages they received.
 - Alignment: mobile = own bubbles right (24 inset), others left;
   desktop = ALL bubbles left-aligned.
 
@@ -144,8 +148,13 @@ state when composing.
 lists.
 `unread badge` — h18 min-w18 `ink` pill, mono 9 white count, caps at
 `99+`; muted chats: `line` fill.
-`receipts` — 14px icons in own bubble right of time: `check` sent ·
-`check-check` muted delivered · `check-check` accent read.
+`receipts` — 12px icons in OWN bubble only, right of time: `check` sent ·
+`check-check` muted delivered · `check-check` accent read. Incoming
+bubbles never show status icons — time only.
+`react-bar` — quick-reaction pill shown ABOVE the message context menu
+(6 default emojis + `⌄` button for the full picker); tap = react+close.
+`reaction-tray` — counter pill inside the bubble, bottom-left, opposite
+the time/status meta.
 `typing` — three 5px dots gap 4, pulse; replaces preview text in list.
 `progress-ring` — 24px, `soft` track + `danger` arc; burn hold 1–2s.
 `status dot` — 9px `accent` online / `muted` offline.
