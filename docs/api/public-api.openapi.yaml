@@ -37,6 +37,40 @@ tags:
     description: User reports to the instance owner
 
 paths:
+  /healthz:
+    get:
+      tags: [auth]
+      summary: Liveness/readiness probe for compose healthchecks and deploy smoke
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  postgres: { type: string, enum: [up, down] }
+                  redis: { type: string, enum: [up, down] }
+        '503':
+          description: Service unhealthy — dependency down
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [degraded] }
+                  postgres: { type: string, enum: [up, down] }
+                  redis: { type: string, enum: [up, down] }
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /auth/otp/request:
     post:
       tags: [auth]
@@ -241,6 +275,50 @@ paths:
         '204': { description: Revoked }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /users/me:
+    get:
+      tags: [users]
+      summary: Own profile (app cold start, S4)
+      operationId: getMe
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [users]
+      summary: Update own profile (S13 — display name is changeable anytime)
+      operationId: updateMe
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 64 }
+                avatarUrl: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Updated profile. `tag` never changes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /users/search:
     get:
       tags: [users]
@@ -435,6 +513,29 @@ paths:
                   chat: { $ref: '#/components/schemas/Chat' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /chats/{chatId}/pin:
+    post:
+      tags: [chats]
+      summary: Pin/unpin chat in own chat list (S4 ordering)
+      operationId: setChatPinned
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned: { type: boolean }
+      responses:
+        '204':
+          description: Updated
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /chats/{chatId}/messages:
     get:
       tags: [messages]
@@ -446,10 +547,18 @@ paths:
         - name: before
           in: query
           schema: { type: string }
-          description: Cursor from a previous page (older messages)
+          description: Opaque cursor from `nextCursor` of a previous page
+            (older messages). Server implements it over the per-chat `seq`;
+            clients must treat it as opaque.
         - name: limit
           in: query
           schema: { type: integer, default: 50, maximum: 100 }
+        - name: q
+          in: query
+          schema: { type: string, minLength: 2 }
+          description: Full-text search within this chat (S5b). When set,
+            results are matching messages ordered by seq desc; `before`
+            cursor paginates further matches.
       responses:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '200':
@@ -476,7 +585,9 @@ paths:
         happens via `message.new` WS event — see `docs/api/ws-events.md`.
         Optimistic-UI/outbox semantics are defined by the contract: client
         sends `clientNonce`; server echoes it in the response and the WS
-        event for dedup.
+        event for dedup. The pair `(senderId, clientNonce)` is unique:
+        retrying a send with the same nonce returns the already-created
+        message with `200` (never a duplicate), so outbox flush is safe.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/ChatId' }
@@ -498,6 +609,16 @@ paths:
                   maxItems: 10
                 replyToMessageId: { type: string, format: uuid }
       responses:
+        '200':
+          description: Idempotent replay — `clientNonce` was already used,
+            returns the existing message
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
         '201':
           description: Created
           content:
@@ -749,6 +870,74 @@ paths:
         '204': { description: Transferred }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /push/vapid-key:
+    get:
+      tags: [auth]
+      summary: VAPID public key for Web Push subscription (S15)
+      operationId: getVapidKey
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: VAPID public key (applicationServerKey)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /push/subscriptions:
+    post:
+      tags: [auth]
+      summary: Register a Web Push subscription for this device (S15)
+      operationId: createPushSubscription
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string, format: uri }
+                keys:
+                  type: object
+                  required: [p256dh, auth]
+                  properties:
+                    p256dh: { type: string }
+                    auth: { type: string }
+      responses:
+        '201':
+          description: Subscription stored (bound to the current device session)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /push/subscriptions/{subscriptionId}:
+    delete:
+      tags: [auth]
+      summary: Remove a Web Push subscription
+      operationId: deletePushSubscription
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Removed
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /reports:
     post:
       tags: [reports]
@@ -878,6 +1067,14 @@ components:
           type: boolean
           description: Both parties added each other
         addedAt: { type: string, format: date-time }
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Last identity verification of this contact (US-2.5/2.6).
+            Written by the private layer; always null until the private
+            module ships. Drives the optional freshness reminder.
 
     Chat:
       type: object
