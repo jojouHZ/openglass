@@ -17,15 +17,24 @@ import markdown
 from bs4 import BeautifulSoup
 
 try:
-    from sentence_transformers import SentenceTransformer
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 except ImportError:
     print("Installing required packages...")
-    os.system("pip install sentence-transformers qdrant-client beautifulsoup4 markdown")
-    from sentence_transformers import SentenceTransformer
+    os.system("pip install qdrant-client beautifulsoup4 markdown")
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+
+
+def _load_sentence_transformer():
+    """Import sentence-transformers lazily — skipped in TEI mode."""
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        print("Installing sentence-transformers...")
+        os.system("pip install sentence-transformers")
+        from sentence_transformers import SentenceTransformer
+    return SentenceTransformer
 
 
 class MarkdownChunker:
@@ -149,15 +158,24 @@ class MarkdownChunker:
 class DocumentationVectorizor:
     """Main vectorization pipeline for OpenGlass documentation."""
     
-    def __init__(self, qdrant_url: str = "localhost", qdrant_port: int = 6333):
+    def __init__(self, qdrant_url: str = "localhost", qdrant_port: int = 6333,
+                 tei_url: str = None):
         self.qdrant_client = QdrantClient(host=qdrant_url, port=qdrant_port)
         self.chunker = MarkdownChunker()
-        
-        # Use BGE-large for 1024-dimensional embeddings
-        print("Loading BGE-large model (1024-dimensional)...")
-        self.model = SentenceTransformer('BAAI/bge-large-en-v1.5')
-        print("Model loaded successfully!")
-        
+        self.tei_url = tei_url
+
+        if tei_url:
+            # TEI (text-embeddings-inference) mode: embeddings via HTTP,
+            # no local torch/sentence-transformers needed.
+            print(f"Using TEI embedder at {tei_url}")
+            self.model = None
+        else:
+            # Use BGE-large locally for 1024-dimensional embeddings
+            print("Loading BGE-large model (1024-dimensional)...")
+            SentenceTransformer = _load_sentence_transformer()
+            self.model = SentenceTransformer('BAAI/bge-large-en-v1.5')
+            print("Model loaded successfully!")
+
         self.collection_name = "openglass_docs"
         
     def determine_case_type(self, file_path: str) -> str:
@@ -203,10 +221,28 @@ class DocumentationVectorizor:
         return chunks
     
     def create_embeddings(self, chunks: List[Dict[str, Any]]) -> List[List[float]]:
-        """Create embeddings for chunks using BGE-large."""
+        """Create embeddings for chunks using BGE-large (local or TEI)."""
         texts = [chunk['text'] for chunk in chunks]
+        if self.tei_url:
+            return self._tei_embed(texts)
         embeddings = self.model.encode(texts, show_progress_bar=True)
         return embeddings.tolist()
+
+    def _tei_embed(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+        """Embed texts via a text-embeddings-inference HTTP endpoint."""
+        import json as _json
+        import urllib.request
+        out: List[List[float]] = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            req = urllib.request.Request(
+                f"{self.tei_url.rstrip('/')}/embed",
+                data=_json.dumps({"inputs": batch}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            out.extend(_json.load(urllib.request.urlopen(req)))
+            print(f"  TEI embedded {min(i + batch_size, len(texts))}/{len(texts)}")
+        return out
     
     def setup_qdrant_collection(self):
         """Setup Qdrant collection with 1024-dimensional vectors."""
@@ -317,7 +353,10 @@ class DocumentationVectorizor:
                       case_filter: str = None) -> List[Dict[str, Any]]:
         """Search for similar documentation."""
         # Create embedding for query
-        query_embedding = self.model.encode(query).tolist()
+        if self.tei_url:
+            query_embedding = self._tei_embed([query])[0]
+        else:
+            query_embedding = self.model.encode(query).tolist()
         
         # Build filter if case filter is specified
         search_filter = None
@@ -369,13 +408,17 @@ def main():
                        help='Qdrant server URL')
     parser.add_argument('--qdrant-port', type=int, default=6333, 
                        help='Qdrant server port (REST)')
+    parser.add_argument('--tei-url', default=os.environ.get('TEI_URL'),
+                       help='TEI embedder URL (e.g. http://localhost:8080); '
+                            'skips local sentence-transformers')
     
     args = parser.parse_args()
     
     # Initialize vectorizor
     vectorizor = DocumentationVectorizor(
         qdrant_url=args.qdrant_url,
-        qdrant_port=args.qdrant_port
+        qdrant_port=args.qdrant_port,
+        tei_url=args.tei_url
     )
     
     # Setup Qdrant collection
