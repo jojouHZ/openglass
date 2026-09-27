@@ -23,7 +23,7 @@ describe("createApiClient", () => {
 
 describe("createMockNodeApiClient", () => {
   it("returns a working client + interceptor server", async () => {
-    const ctx = createMockNodeApiClient(base);
+    const ctx = createMockNodeApiClient({ ...base, mode: "mock" });
     try {
       const health = await ctx.api.system.healthz();
       expect(health.status).toBe("ok");
