@@ -104,7 +104,8 @@ export function createHandlers(state: MockState) {
       await delay(LATENCY_MS);
       const g = guard(request);
       if (g) return g;
-      if (state.session?.user) return err(409, "conflict", "Profile already completed");
+      if (!state.session) return err(401, "unauthorized", "No session — verify OTP first");
+      if (state.session.user) return err(409, "conflict", "Profile already completed");
       const { displayName, requestedTag } = (await request.json()) as {
         displayName: string;
         requestedTag?: string;
@@ -314,22 +315,41 @@ export function createHandlers(state: MockState) {
       if (g) return g;
       await delay(LATENCY_MS);
       const url = new URL(request.url);
-      const limit = Math.min(Number(url.searchParams.get("limit") ?? 30) || 30, 100);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 100);
       const q = url.searchParams.get("q")?.toLowerCase();
       const pinnedOnly = url.searchParams.get("pinned") === "true";
       const around = url.searchParams.get("around");
       const before = decodeCursor(url.searchParams.get("before"));
       const after = decodeCursor(url.searchParams.get("after"));
 
-      let list = [...(state.messages.get(String(params.chatId)) ?? [])].filter(
+      const chatId = String(params.chatId);
+      if (!state.chats.has(chatId)) return err(404, "not_found", "Chat not found");
+      if (q !== null && q !== undefined && q.length < 2)
+        return err(400, "validation_failed", "q must be at least 2 characters");
+
+      let list = [...(state.messages.get(chatId) ?? [])].filter(
         (m) => !m.deletedAt,
       );
-      if (q) list = list.filter((m) => m.text?.toLowerCase().includes(q));
       if (pinnedOnly) list = list.filter((m) => m.pinned);
+
+      if (q) {
+        // contract: matches ordered seq desc; `before` = older matches
+        const matches = list
+          .filter((m) => m.text?.toLowerCase().includes(q))
+          .sort((a, b) => b.seq - a.seq);
+        const older = before === null ? matches : matches.filter((m) => m.seq < before);
+        const page = older.slice(0, limit);
+        return ok({
+          messages: page,
+          nextCursor: older.length > page.length ? encodeCursor(page.at(-1)!.seq) : null,
+          newerCursor: null,
+        });
+      }
 
       let page: Message[];
       if (around !== null) {
-        const idx = list.findIndex((m) => String(m.seq) === around || m.id === around);
+        // contract: `around` is a message UUID
+        const idx = list.findIndex((m) => m.id === around);
         const center = idx === -1 ? list.length : idx;
         const half = Math.floor(limit / 2);
         page = list.slice(Math.max(0, center - half), center + half + 1);
@@ -431,14 +451,15 @@ export function createHandlers(state: MockState) {
       await delay(LATENCY_MS);
       const fd = await request.formData();
       const file = fd.get("file");
+      const id = freshId();
       const attachment = {
         ...demoAttachment,
-        id: freshId(),
+        id,
         fileName: file instanceof File ? file.name : "file.bin",
         mimeType: file instanceof File ? file.type || "application/octet-stream" : "application/octet-stream",
         sizeBytes: file instanceof File ? file.size : 0,
         kind: file instanceof File && file.type.startsWith("image/") ? ("photo" as const) : ("file" as const),
-        url: `/api/v1/attachments/${freshId()}`,
+        url: `/api/v1/attachments/${id}`,
       };
       return ok({ attachment }, 201);
     }),

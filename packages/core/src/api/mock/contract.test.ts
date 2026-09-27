@@ -107,6 +107,43 @@ describe("contract: chats & messages", () => {
       (e) => e instanceof ApiRequestError && e.apiError.code === "validation_failed",
     );
   });
+
+  it("404s on messages of an unknown chat", async () => {
+    await expect(
+      api.messages.list("00000000-0000-4000-8000-0000000000ff"),
+    ).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.apiError.code === "not_found",
+    );
+  });
+
+  it("search results come back seq-desc", async () => {
+    const { messages } = await api.messages.list(
+      "c0000000-0000-4000-8000-000000000001",
+      { q: "fixture" },
+    );
+    expect(messages.length).toBeGreaterThan(1);
+    for (let i = 1; i < messages.length; i++) {
+      expect(messages[i - 1]!.seq).toBeGreaterThan(messages[i]!.seq);
+    }
+  });
+
+  it("completeProfile on a finished profile returns conflict", async () => {
+    await expect(
+      api.auth.completeProfile({ displayName: "again" }),
+    ).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.apiError.code === "conflict",
+    );
+  });
+
+  it("completeProfile after logout returns 401, not a 500", async () => {
+    const c = await authedClient("anna@openglass.demo");
+    await c.auth.logout();
+    await expect(
+      c.auth.completeProfile({ displayName: "x" }),
+    ).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.status === 401,
+    );
+  });
 });
 
 describe("contract: contacts & users", () => {
