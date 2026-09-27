@@ -4,23 +4,31 @@
 import { describe, expect, it } from "vitest";
 
 import { createApiClient } from "./factory";
+import { createMockNodeApiClient } from "./mock/node";
 
-// Scaffold-level tests: the mode seam exists and unimplemented
-// transports fail loudly instead of silently misbehaving.
-// Real contract tests land with the MockApiClient (#9).
+const base = { baseUrl: "/api/v1", wsUrl: "/api/v1/ws" };
 
 describe("createApiClient", () => {
-  const base = { baseUrl: "/api/v1", wsUrl: "/api/v1/ws" };
-
-  it("mock mode resolves to the MockApiClient boundary (#9 stub)", async () => {
-    await expect(
-      createApiClient({ ...base, mode: "mock" }),
-    ).rejects.toThrow(/not implemented yet/i);
+  it("live mode returns the HttpApiClient", async () => {
+    const api = await createApiClient({ ...base, mode: "live" });
+    expect(api.constructor.name).toBe("HttpApiClient");
   });
 
-  it("live mode resolves to the HttpApiClient boundary (#12 stub)", async () => {
-    await expect(
-      createApiClient({ ...base, mode: "live" }),
-    ).rejects.toThrow(/not implemented yet/i);
+  it("mock mode is browser-only (node uses mock/node entry)", async () => {
+    await expect(createApiClient({ ...base, mode: "mock" })).rejects.toThrow(
+      /browser-only/,
+    );
+  });
+});
+
+describe("createMockNodeApiClient", () => {
+  it("returns a working client + interceptor server", async () => {
+    const ctx = createMockNodeApiClient(base);
+    try {
+      const health = await ctx.api.system.healthz();
+      expect(health.status).toBe("ok");
+    } finally {
+      ctx.server.close();
+    }
   });
 });

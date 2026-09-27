@@ -15,5 +15,8 @@
   "devDependencies": {
     "typescript": "^5.9.0",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "msw": "^2.15.0"
   }
 }

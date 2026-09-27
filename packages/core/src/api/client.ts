@@ -109,6 +109,8 @@ export interface ApiEvents {
 }
 
 export interface ApiClient {
+  /** Inject the current access token (after verifyOtp/refresh). */
+  setAccessToken(token: string | null): void;
   auth: {
     requestOtp(body: OtpRequestBody): Promise<OtpRequestResult>;
     verifyOtp(body: {

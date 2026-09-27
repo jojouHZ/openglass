@@ -5,5 +5,7 @@ packages:
 # Build scripts these deps may run (esbuild is required by vite).
 onlyBuiltDependencies:
   - esbuild
+  - msw
 allowBuilds:
   esbuild: true
+  msw: true
