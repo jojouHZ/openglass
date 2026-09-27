@@ -173,5 +173,13 @@ export interface ApiClient {
   reports: {
     report(body: { userId: string; reason: string }): Promise<void>;
   };
+  system: {
+    /** Liveness/readiness probe — also usable for connection-state UI. */
+    healthz(): Promise<{
+      status: "ok";
+      postgres?: "up" | "down";
+      redis?: "up" | "down";
+    }>;
+  };
   events: ApiEvents;
 }
