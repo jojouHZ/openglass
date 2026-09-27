@@ -96,6 +96,38 @@ Constraints on `pwa-dev`:
 - Private-layer mocks remain forbidden even here: `pwa-dev` talks to the
   real relay only.
 
+## Code Structure Decision
+
+The frontend uses **Vue 3 Composition API + pragmatic domain folders** —
+**not Feature-Sliced Design (FSD)**. Owner decision, 2026-09-24.
+
+Rationale:
+
+- FSD pays off at 50+ screens with a large team where layer boundaries
+  prevent chaos; OpenGlass has ~16 screens and a single implementer.
+- Our layering already exists — by package: `packages/core` (api/state/
+  composables, the MFE core) vs `apps/pwa` and future shells (thin).
+  FSD layers would duplicate that boundary inside every shell.
+- FSD ceremony (public `index.ts` per slice, cross-slice import bans)
+  is per-commit friction with zero payoff at this scale.
+- The legacy failure mode (outbox logic leaking into UI in glass-next)
+  is prevented by the `ApiClient` seam, not by folder conventions.
+
+Structure:
+
+```
+packages/core/src/
+  api/           # ApiClient, generated types, ws events
+  stores/        # pinia: session, chats, messages
+  composables/
+apps/pwa/src/
+  views/         # one per screen (S*)
+  components/    # shared UI by domain: chat/, contact/, settings/
+```
+
+Migration note: this layout maps onto FSD slices cleanly, so adopting
+FSD later is cheap if the screen count ever justifies it.
+
 ## Build Order
 
 1. **API contract slice** — `docs/api/` (REST spec + WS catalog + errors).
