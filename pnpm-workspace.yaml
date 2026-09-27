@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# Build scripts these deps may run (esbuild is required by vite).
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true

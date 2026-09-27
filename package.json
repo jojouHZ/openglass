@@ -1,0 +1,13 @@
+{
+  "name": "openglass",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "pnpm --filter @openglass/pwa dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "api:types": "openapi-typescript docs/api/public-api.openapi.yaml -o packages/core/src/api/schema.gen.ts"
+  }
+}

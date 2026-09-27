@@ -1,0 +1,87 @@
+/* Copyright (C) 2025 OpenGlass contributors */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Design tokens — generated mapping of docs/ux/design-tokens.md.
+   Tailwind v4 CSS-first config: tokens live in @theme, utilities
+   like bg-bg, text-ink, rounded-card resolve from here. */
+
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-ink: #181818;
+  --color-body: #3c3c43;
+  --color-muted: #666666;
+  --color-line: #c4c4c4;
+  --color-soft: #dedede;
+  --color-bg: #ffffff;
+  --color-bg-private: #0e0e10;
+  --color-accent: #3d6b99;
+  --color-bubble-own: #181818;
+  --color-bubble-in: #f1f1f4;
+  --color-danger: #b00000;
+  --color-canvas: #f8f8f8;
+  --color-burn: #e03131;
+
+  /* Typography — Source Code Pro only, weight-flat 400 */
+  --font-mono: "Source Code Pro", ui-monospace, monospace;
+  --text-screen-title: 24px;
+  --text-header: 19px;
+  --text-name: 15px;
+  --text-body: 14px;
+  --text-msg: 13px;
+  --text-meta: 12px;
+  --text-sub: 11px;
+  --text-sender: 10px;
+  --text-micro: 9px;
+
+  /* Radius */
+  --radius-input: 8px;
+  --radius-nav: 10px;
+  --radius-pill: 13px;
+  --radius-tooltip: 15px;
+  --radius-card: 16px;
+  --radius-search: 24px;
+  --radius-round: 32px;
+  --radius-logo: 6px;
+
+  /* Spacing — 8pt grid scale */
+  --spacing-4: 4px;
+  --spacing-6: 6px;
+  --spacing-8: 8px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-48: 48px;
+  --spacing-70: 70px;
+}
+
+/* Base layer */
+@layer base {
+  html {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    color: var(--color-ink);
+    background: var(--color-bg);
+  }
+
+  body {
+    margin: 0;
+    /* 100dvh full-height, never fixed 100vh under iOS Safari */
+    min-height: 100dvh;
+  }
+
+  #app {
+    min-height: 100dvh;
+  }
+
+  /* Private-mode inversion — applied on a scoped root, never globally */
+  .private-mode {
+    --color-bg: #0e0e10;
+    --color-bubble-in: #3c3c43;
+    --color-bubble-own: #c4c4c4;
+    --color-ink: #ffffff;
+  }
+}
