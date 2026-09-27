@@ -1,0 +1,11 @@
+{
+  "name": "OpenGlass",
+  "short_name": "OpenGlass",
+  "description": "Self-hosted secure messenger for closed communities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": []
+}

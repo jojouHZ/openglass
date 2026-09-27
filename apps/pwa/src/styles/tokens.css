@@ -45,17 +45,11 @@
   --radius-round: 32px;
   --radius-logo: 6px;
 
-  /* Spacing — 8pt grid scale */
-  --spacing-4: 4px;
-  --spacing-6: 6px;
-  --spacing-8: 8px;
-  --spacing-12: 12px;
-  --spacing-16: 16px;
-  --spacing-20: 20px;
-  --spacing-24: 24px;
-  --spacing-32: 32px;
-  --spacing-48: 48px;
-  --spacing-70: 70px;
+  /* Spacing — design allows only 4/6/8/12/16/20/24/32/48/70px
+     (8pt grid). Tailwind's default scale (4px base) already encodes
+     it: p-1=4px … p-4=16px … p-12=48px; 6px→p-1.5, 20px→p-5, 70px→p-17.5.
+     No numeric --spacing-* overrides — those would change standard
+     utility semantics (p-4 must stay 16px). */
 }
 
 /* Base layer */
