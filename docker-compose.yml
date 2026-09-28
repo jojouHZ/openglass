@@ -33,6 +33,33 @@ services:
       - POSTGRES_DB=openglass
       - POSTGRES_USER=openglass
       - POSTGRES_PASSWORD=openglass_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openglass"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  server:
+    build: .
+    container_name: openglass-server
+    ports:
+      - "8081:8081"
+    environment:
+      - OPENGLASS_LISTEN=:8081
+      - OPENGLASS_PG_DSN=postgres://openglass:openglass_dev@postgres:5432/openglass
+      - OPENGLASS_REDIS_ADDR=redis:6379
+      - OPENGLASS_DEV_MODE=1 # dev sender logs OTP codes; prod needs a real sender + JWT secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   redis:
