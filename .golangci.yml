@@ -1,0 +1,27 @@
+# Copyright (C) 2025 OpenGlass contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# golangci-lint — minimal profile per team decision:
+# gate on correctness/security, not style noise.
+version: "2"
+
+linters:
+  enable:
+    - errcheck    # unchecked errors
+    - govet       # go vet superset
+    - staticcheck # honnef.co/go/tools
+    - ineffassign # dead assignments
+    - gosec       # SAST: SQLi, weak crypto, hardcoded secrets
+  exclusions:
+    paths:
+      # local-only agent tooling — not part of the shipped backend
+      - internal/codegraph
+      - internal/knowledge
+      - internal/vector
+      - internal/models
+      - cmd/codegraph
+      - cmd/main\.go$
+
+formatters:
+  enable:
+    - gofmt

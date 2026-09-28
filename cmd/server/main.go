@@ -45,7 +45,7 @@ func main() {
 	log.Print("migrations applied")
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	var sender auth.OtpSender = auth.LogSender{}
 	if !cfg.DevMode {
@@ -59,7 +59,11 @@ func main() {
 	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	handler := srv.Handler(ws.Handler(tokens.ParseAccess))
 
-	httpSrv := &http.Server{Addr: cfg.ListenAddr, Handler: handler}
+	httpSrv := &http.Server{
+		Addr:              cfg.ListenAddr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second, // G112 slowloris guard
+	}
 	go func() {
 		log.Printf("openglass server listening on %s", cfg.ListenAddr)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

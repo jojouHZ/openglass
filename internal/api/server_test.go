@@ -53,7 +53,7 @@ func post(t *testing.T, ts *httptest.Server, path, body, bearer string) (int, ma
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out
@@ -69,7 +69,7 @@ func get(t *testing.T, ts *httptest.Server, path, bearer string) (int, map[strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out
@@ -217,7 +217,7 @@ func TestTagTaken_Suggestions(t *testing.T) {
 	ts, st, sender := newServer(t)
 	// existing user holding the 'anna' prefix
 	u, _ := st.CreateUser(t.Context(), "anna@x.io")
-	st.CompleteProfile(t.Context(), u.ID, "Anna", "anna#0001")
+	_, _ = st.CompleteProfile(t.Context(), u.ID, "Anna", "anna#0001")
 
 	post(t, ts, "/api/v1/auth/otp/request", `{"email":"n2@x.io","inviteCode":"GLS-DEMO"}`, "")
 	otp := sender.Codes["n2@x.io"]
@@ -263,7 +263,7 @@ func TestLogout_RevokedSessionKillsAccessToken(t *testing.T) {
 	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/auth/logout", nil)
 	req.Header.Set("Authorization", "Bearer "+access)
 	resp, _ := http.DefaultClient.Do(req)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 204 {
 		t.Fatalf("logout: %d", resp.StatusCode)
 	}

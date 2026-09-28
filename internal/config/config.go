@@ -35,6 +35,8 @@ func FromEnv() (*Config, error) {
 		if !dev {
 			return nil, fmt.Errorf("OPENGLASS_JWT_SECRET is required (or set OPENGLASS_DEV_MODE=1)")
 		}
+		// #nosec G101 — dev-mode fallback secret, gated on OPENGLASS_DEV_MODE=1
+		// (production path returns an error above)
 		secret = "dev-only-insecure-secret"
 	}
 	return &Config{

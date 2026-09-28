@@ -50,7 +50,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return // upgrade already replied
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_ = r.URL.Query().Get("last_seq") // replay lands with messaging slices
 
