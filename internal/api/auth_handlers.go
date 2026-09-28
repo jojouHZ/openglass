@@ -34,7 +34,12 @@ func (s *Server) requestOtp(w http.ResponseWriter, r *http.Request) {
 
 	// unknown email → invite gates account creation (contract: invite is
 	// validated here but consumed only at successful verifyOtp)
-	if _, err := s.store.UserByEmail(r.Context(), email); errors.Is(err, store.ErrNotFound) {
+	_, uerr := s.store.UserByEmail(r.Context(), email)
+	if uerr != nil && !errors.Is(uerr, store.ErrNotFound) {
+		writeErrorFromErr(w, uerr) // store failure must not bypass the invite gate
+		return
+	}
+	if errors.Is(uerr, store.ErrNotFound) {
 		if body.InviteCode == "" {
 			writeErr(w, http.StatusForbidden, "invite_required",
 				"Invite code required to register", nil)
@@ -118,6 +123,14 @@ func (s *Server) verifyOtp(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeErrorFromErr(w, err)
+		return
+	}
+	if rec.AttemptsLeft <= 0 {
+		// exhausted — force a fresh request rather than reporting
+		// attemptsLeft:-1 through otp_invalid
+		_ = s.store.DeleteOtp(r.Context(), email)
+		writeErr(w, http.StatusForbidden, "otp_expired",
+			"Too many attempts, request a new code", nil)
 		return
 	}
 	if !auth.Verify(body.Code, rec.CodeHash) {

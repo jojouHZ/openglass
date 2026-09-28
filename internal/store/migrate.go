@@ -25,6 +25,14 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
+	// version table must exist before we can read it
+	if _, err := pool.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS schema_migrations (
+		   version int PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now()
+		 )`); err != nil {
+		return fmt.Errorf("schema_migrations: %w", err)
+	}
+
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		names = append(names, e.Name())
@@ -38,10 +46,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, ver,
 		).Scan(&applied)
 		if err != nil {
-			// table may not exist yet on a fresh DB — that's version 0
-			if !strings.Contains(err.Error(), "schema_migrations") {
-				return fmt.Errorf("check migration %d: %w", ver, err)
-			}
+			return fmt.Errorf("check migration %d: %w", ver, err)
 		}
 		if applied {
 			continue
@@ -52,6 +57,10 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 		if _, err := pool.Exec(ctx, string(sql)); err != nil {
 			return fmt.Errorf("apply migration %s: %w", name, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO schema_migrations (version) VALUES ($1)`, ver); err != nil {
+			return fmt.Errorf("record migration %d: %w", ver, err)
 		}
 	}
 	return nil

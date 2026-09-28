@@ -40,6 +40,12 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			unauthorized(w)
 			return
 		}
+		// revoked session → its access tokens die too, not after expiry
+		active, err := s.store.SessionActive(r.Context(), sid)
+		if err != nil || !active {
+			unauthorized(w)
+			return
+		}
 		ctx := context.WithValue(r.Context(), ctxUserID, uid)
 		ctx = context.WithValue(ctx, ctxSessionID, sid)
 		next(w, r.WithContext(ctx))

@@ -70,21 +70,16 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	token, _ := frame.Data["accessToken"].(string)
 	userID, _, err := h.validate(token)
-	if err != nil || userID == "" {
-		seq := 1
-		_ = conn.WriteJSON(Frame{
-			Type: "auth.fail", Seq: seq, Ts: nowTS(),
-			Data: map[string]any{"code": "unauthorized"},
-		})
-		_ = conn.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(4401, "unauthorized"))
-		return
-	}
-
-	seq := 1
+	seq := 0
 	send := func(t string, data map[string]any) error {
 		seq++
 		return conn.WriteJSON(Frame{Type: t, Seq: seq, Ts: nowTS(), Data: data})
+	}
+	if err != nil || userID == "" {
+		_ = send("auth.fail", map[string]any{"code": "unauthorized"})
+		_ = conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(4401, "unauthorized"))
+		return
 	}
 	if err := send("auth.ok", map[string]any{"resumedFromSeq": nil}); err != nil {
 		return

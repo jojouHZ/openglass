@@ -75,5 +75,7 @@ type AuthStore interface {
 	SessionByRefreshHash(ctx context.Context, hash []byte) (*Session, bool /*revoked*/, error)
 	RotateSessionRefresh(ctx context.Context, sessionID string, newHash []byte) error
 	RevokeSession(ctx context.Context, sessionID string) error
+	// SessionActive — false when revoked or absent (middleware gate).
+	SessionActive(ctx context.Context, sessionID string) (bool, error)
 	ListSessions(ctx context.Context, userID, currentID string) ([]Session, error)
 }

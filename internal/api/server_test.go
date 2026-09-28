@@ -253,6 +253,25 @@ func TestStubsAre501_NotSilent(t *testing.T) {
 	}
 }
 
+func TestLogout_RevokedSessionKillsAccessToken(t *testing.T) {
+	ts, _, sender := newServer(t)
+	post(t, ts, "/api/v1/auth/otp/request", `{"email":"rv@x.io","inviteCode":"GLS-DEMO"}`, "")
+	_, v := post(t, ts, "/api/v1/auth/otp/verify",
+		`{"email":"rv@x.io","code":"`+sender.Codes["rv@x.io"]+`","deviceName":"t"}`, "")
+	access := v["accessToken"].(string)
+
+	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+access)
+	resp, _ := http.DefaultClient.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != 204 {
+		t.Fatalf("logout: %d", resp.StatusCode)
+	}
+	if c, _ := get(t, ts, "/api/v1/users/me", access); c != 401 {
+		t.Fatalf("revoked session access token still works: %d", c)
+	}
+}
+
 func TestHealthz_DegradedWithoutDeps(t *testing.T) {
 	ts, _, _ := newServer(t)
 	code, body := get(t, ts, "/api/v1/healthz", "")

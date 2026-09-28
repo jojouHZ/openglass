@@ -247,6 +247,14 @@ func (p *PG) RevokeSession(ctx context.Context, sessionID string) error {
 	return nil
 }
 
+func (p *PG) SessionActive(ctx context.Context, sessionID string) (bool, error) {
+	var active bool
+	err := p.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM sessions WHERE id = $1 AND revoked_at IS NULL)`,
+		sessionID).Scan(&active)
+	return active, err
+}
+
 func (p *PG) ListSessions(ctx context.Context, userID, currentID string) ([]Session, error) {
 	rows, err := p.pool.Query(ctx,
 		`SELECT id, user_id, device_name, created_at, last_seen_at

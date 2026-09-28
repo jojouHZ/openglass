@@ -270,6 +270,13 @@ func (m *Mem) RevokeSession(_ context.Context, sessionID string) error {
 	return nil
 }
 
+func (m *Mem) SessionActive(_ context.Context, sessionID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[sessionID]
+	return ok && s.revokedAt == nil, nil
+}
+
 func (m *Mem) ListSessions(_ context.Context, userID, _ string) ([]Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
