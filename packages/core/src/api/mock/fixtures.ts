@@ -85,6 +85,8 @@ export const sessions: DeviceSession[] = [
 
 export const directChatId = "c0000000-0000-4000-8000-000000000001";
 export const groupChatId = "c0000000-0000-4000-8000-000000000002";
+/** Saved Messages — a direct chat where peer === self (S4 top row). */
+export const savedChatId = "c0000000-0000-4000-8000-000000000003";
 
 const msg = (
   seq: number,
@@ -103,7 +105,8 @@ const msg = (
   ...extra,
 });
 
-/** ~30-message history in the direct chat, oldest → newest. */
+/** ~60-message history in the direct chat, oldest → newest.
+    >50 so cursor pagination is exercisable from the mock. */
 export function buildDirectHistory(): Message[] {
   const seed: Array<[number, string, string]> = [
     [1, wife.id, "hi! testing openglass"],
@@ -115,7 +118,7 @@ export function buildDirectHistory(): Message[] {
   const msgs = seed.map(([seq, sender, text]) =>
     msg(seq, sender, text, seq === 5 ? { pinned: true } : {}),
   );
-  for (let seq = 6; seq <= 30; seq++) {
+  for (let seq = 6; seq <= 60; seq++) {
     const sender = seq % 2 === 0 ? selfUser.id : wife.id;
     msgs.push(msg(seq, sender, `fixture message ${seq}`));
   }
@@ -170,11 +173,34 @@ export const groupMembers: GroupMember[] = [
   },
 ];
 
+export function buildSavedHistory(): Message[] {
+  return [
+    {
+      id: "m0000000-0000-4000-8000-0000000000a1",
+      chatId: savedChatId,
+      seq: 1,
+      senderId: selfUser.id,
+      text: "draft: deploy checklist",
+      clientNonce: "fixture-s1",
+      sentAt: iso(-90),
+      pinned: false,
+    },
+  ];
+}
+
 export function buildChats(
   directHistory: Message[],
   groupHistory: Message[],
+  savedHistory: Message[],
 ): { chats: Chat[]; summaries: ChatSummary[] } {
   const chats: Chat[] = [
+    {
+      id: savedChatId,
+      type: "direct",
+      title: null,
+      peer: selfUser,
+      createdAt: iso(-60 * 24 * 7),
+    },
     {
       id: directChatId,
       type: "direct",
@@ -191,6 +217,16 @@ export function buildChats(
     },
   ];
   const summaries: ChatSummary[] = [
+    {
+      id: savedChatId,
+      type: "direct",
+      title: null,
+      peer: selfUser,
+      lastMessage: savedHistory.at(-1),
+      lastActivityAt: savedHistory.at(-1)!.sentAt,
+      unreadCount: 0,
+      pinned: true, // always top — saved messages
+    },
     {
       id: groupChatId,
       type: "group",

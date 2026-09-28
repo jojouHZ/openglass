@@ -21,7 +21,13 @@ export type ServerEvent =
       data: { chatId: string; messageId: string; seq: number };
     }
   | {
-      type: "message.pinned" | "message.unpinned";
+      type: "message.pinned";
+      seq: number;
+      ts: string;
+      data: { chatId: string; messageId: string };
+    }
+  | {
+      type: "message.unpinned";
       seq: number;
       ts: string;
       data: { chatId: string; messageId: string };

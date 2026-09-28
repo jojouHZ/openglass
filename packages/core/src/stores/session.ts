@@ -17,7 +17,8 @@ export function bindApiClient(api: ApiClient): void {
   apiRef = api;
 }
 
-function api(): ApiClient {
+/** The bound ApiClient — shared by all core stores. */
+export function api(): ApiClient {
   if (!apiRef) throw new Error("api client not bound — call bindApiClient()");
   return apiRef;
 }

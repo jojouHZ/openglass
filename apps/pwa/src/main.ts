@@ -22,6 +22,14 @@ async function bootstrap() {
 
   const app = createApp(App);
   app.use(pinia);
+
+  // Restored session → reopen realtime (fresh sessions connect on S4 mount)
+  const { useSessionStore, useChatsStore } = await import("@openglass/core");
+  const session = useSessionStore(pinia);
+  session.hydrate();
+  if (session.authed) {
+    void useChatsStore(pinia).connectRealtime().catch(() => undefined);
+  }
   app.use(createAppRouter());
   app.provide(ApiClientKey, api);
   app.mount("#app");

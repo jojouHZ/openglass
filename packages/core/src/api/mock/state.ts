@@ -54,9 +54,11 @@ export class MockState {
 
     const direct = fx.buildDirectHistory();
     const group = fx.buildGroupHistory();
+    const saved = fx.buildSavedHistory();
     this.messages.set(fx.directChatId, direct);
     this.messages.set(fx.groupChatId, group);
-    const { chats, summaries } = fx.buildChats(direct, group);
+    this.messages.set(fx.savedChatId, saved);
+    const { chats, summaries } = fx.buildChats(direct, group, saved);
     for (const c of chats) this.chats.set(c.id, c);
     for (const s of summaries) this.chatSummaries.set(s.id, s);
     this.chatPinned.set(fx.groupChatId, true);

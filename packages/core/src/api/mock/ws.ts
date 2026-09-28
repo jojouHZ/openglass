@@ -35,7 +35,7 @@ export function demoScenario(state: MockState, chatId: string): ScenarioStep[] {
     pinned: false,
   };
   return [
-    { at: 1500, type: "typing", data: { chatId, userId: wife.id, until: ts() } },
+    { at: 1500, type: "typing", data: { chatId, userId: wife.id, until: new Date(Date.now() + 4000).toISOString() } },
     { at: 3000, type: "message.new", data: msg },
     { at: 4500, type: "receipt.read", data: { chatId, userId: wife.id, upToSeq: seq } },
   ];
