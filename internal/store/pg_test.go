@@ -9,8 +9,10 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jojouHZ/openglass/internal/store"
 )
@@ -60,8 +62,17 @@ func TestPG_AuthRoundtrip(t *testing.T) {
 	if !exists {
 		t.Fatal("tag not visible")
 	}
-	if _, err := pg.CompleteProfile(ctx, u.ID, "X", tag); err == nil {
-		t.Fatal("expected conflict on duplicate tag")
+	// same-user re-complete with own tag is idempotent, not a conflict
+	if _, err := pg.CompleteProfile(ctx, u.ID, "X", tag); err != nil {
+		t.Fatalf("own-tag re-complete should succeed: %v", err)
+	}
+	// but a different user cannot take the tag
+	u2, err := pg.CreateUser(ctx, "pgtest2-"+store_testID(t)+"@x.io")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pg.CompleteProfile(ctx, u2.ID, "Other", tag); err != store.ErrConflict {
+		t.Fatalf("expected ErrConflict on duplicate tag, got %v", err)
 	}
 
 	sess, err := pg.CreateSession(ctx, u.ID, "pg-test", []byte{1, 2, 3})
@@ -87,6 +98,7 @@ func TestPG_AuthRoundtrip(t *testing.T) {
 }
 
 func store_testID(t *testing.T) string {
-	// unique-ish suffix per test run for repeatable DBs
-	return t.Name()[7:13]
+	// unique suffix per run — the dev DB is persistent across test runs
+	n := time.Now().UnixNano() % 0xffffff
+	return fmt.Sprintf("%s%x", t.Name()[7:11], n)
 }
