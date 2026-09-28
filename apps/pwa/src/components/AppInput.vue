@@ -19,8 +19,8 @@ const model = defineModel<string>();
 </script>
 
 <template>
-  <div class="flex flex-col gap-2">
-    <label class="text-sender text-muted uppercase tracking-wide">{{ label }}</label>
+  <label class="flex flex-col gap-2">
+    <span class="text-sender text-muted uppercase tracking-wide">{{ label }}</span>
     <input
       v-model="model"
       :type="type ?? 'text'"
@@ -30,6 +30,6 @@ const model = defineModel<string>();
       class="h-11 w-full rounded-input border px-3 text-body outline-none transition-colors focus-visible:border-accent"
       :class="error ? 'border-danger' : 'border-line'"
     />
-    <p v-if="error" class="text-meta text-danger">{{ error }}</p>
-  </div>
+  </label>
+  <p v-if="error" class="text-meta text-danger">{{ error }}</p>
 </template>

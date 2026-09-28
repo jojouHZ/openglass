@@ -119,13 +119,22 @@ export function createHandlers(state: MockState) {
 
       let tag: string;
       if (requestedTag) {
-        // client picked a suggestion/explicit tag — full-tag check
-        if (taken(requestedTag)) {
+        if (!requestedTag.includes("#")) {
+          // suggestion chips can be prefix-style ("Jojou13245") —
+          // normalize to the contract's name#NNNN form
+          if (prefixTaken(requestedTag)) {
+            return err(409, "tag_taken", "Requested tag is taken", {
+              tagSuggestions: [`${requestedTag}${rand4()}`, `${slug}#${rand4()}`],
+            });
+          }
+          tag = `${requestedTag}#${rand4()}`;
+        } else if (taken(requestedTag)) {
           return err(409, "tag_taken", "Requested tag is taken", {
             tagSuggestions: [`${slug}${rand4()}${rand4()}`, `${slug}#${rand4()}`],
           });
+        } else {
+          tag = requestedTag;
         }
-        tag = requestedTag;
       } else if (prefixTaken(slug)) {
         // contract: collision on the display-name prefix → suggestions
         return err(409, "tag_taken", "Tag prefix is taken", {

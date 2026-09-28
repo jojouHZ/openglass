@@ -85,7 +85,8 @@ describe("S3 profile setup", () => {
     await flush();
 
     expect(session().authed).toBe(true);
-    expect(session().user?.tag).toBe(chips[0]!.text());
+    // prefix-style suggestions normalize to name#NNNN
+    expect(session().user?.tag).toContain(chips[0]!.text());
     expect(router.currentRoute.value.name).toBe("s4-chat-list");
   });
 });

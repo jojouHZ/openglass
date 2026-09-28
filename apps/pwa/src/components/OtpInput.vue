@@ -4,7 +4,7 @@
 <!-- 6-cell OTP input: auto-advance, backspace to previous, full paste. -->
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 const props = defineProps<{ length?: number; disabled?: boolean }>();
 const emit = defineEmits<{ complete: [code: string] }>();
@@ -13,6 +13,12 @@ const model = defineModel<string>({ default: "" });
 const len = props.length ?? 6;
 const cells = ref<string[]>(Array.from({ length: len }, () => ""));
 const inputs = ref<HTMLInputElement[]>([]);
+
+// External reset (e.g. after a failed verify) must clear the cells —
+// defineModel syncs parent←cells, so mirror parent→cells here.
+watch(model, (v) => {
+  if (v === "") cells.value = Array.from({ length: len }, () => "");
+});
 
 function sync() {
   model.value = cells.value.join("");
