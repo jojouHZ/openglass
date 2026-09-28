@@ -38,7 +38,14 @@ AGENTS.md
 scripts/test_agents.py
 scripts/test_structure.py
 docs/PROJECT_CHECKUP.md
-cmd/
-internal/
-go.mod
-go.sum
+# agent tooling lives under cmd//internal/ too — only the product
+# backend paths are committed (issue #12+)
+cmd/*
+!cmd/server/
+internal/*
+!internal/api/
+!internal/auth/
+!internal/config/
+!internal/store/
+!internal/ws/
+# go.mod/go.sum are required to build the committed backend
