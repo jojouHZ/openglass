@@ -112,11 +112,31 @@ export function createHandlers(state: MockState) {
       };
       const taken = (t: string) =>
         [...state.users.values()].some((u) => u.tag.toLowerCase() === t.toLowerCase());
-      let tag = requestedTag ?? `${displayName.toLowerCase().replace(/\W+/g, "")}#${1000 + Math.floor(Math.random() * 9000)}`;
-      if (taken(tag)) {
-        return err(409, "tag_taken", "Requested tag is taken", {
-          tagSuggestions: [`${tag.slice(0, -4)}${1000 + Math.floor(Math.random() * 9000)}`],
+      const prefixTaken = (p: string) =>
+        [...state.users.values()].some((u) => u.tag.split("#")[0] === p);
+      const rand4 = () => 1000 + Math.floor(Math.random() * 9000);
+      const slug = displayName.toLowerCase().replace(/\W+/g, "") || "user";
+
+      let tag: string;
+      if (requestedTag) {
+        // client picked a suggestion/explicit tag — full-tag check
+        if (taken(requestedTag)) {
+          return err(409, "tag_taken", "Requested tag is taken", {
+            tagSuggestions: [`${slug}${rand4()}${rand4()}`, `${slug}#${rand4()}`],
+          });
+        }
+        tag = requestedTag;
+      } else if (prefixTaken(slug)) {
+        // contract: collision on the display-name prefix → suggestions
+        return err(409, "tag_taken", "Tag prefix is taken", {
+          tagSuggestions: [
+            `${slug}${10000 + Math.floor(Math.random() * 90000)}`,
+            `${slug}${10000 + Math.floor(Math.random() * 90000)}`,
+            `${slug}#${rand4()}`,
+          ],
         });
+      } else {
+        tag = `${slug}#${rand4()}`;
       }
       const user: User = {
         id: freshId(),
