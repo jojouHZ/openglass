@@ -222,13 +222,26 @@ function fmtDay(iso: string) {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-onMounted(async () => {
+async function enterChat() {
   await chats.refreshChats().catch(() => undefined);
   await chats.connectRealtime().catch(() => undefined);
   await chats.openChat(chatId.value);
   pinned.value = await chats.pinnedMessages(chatId.value).catch(() => []);
   await scrollToBottom();
   initialScrollDone.value = true;
+}
+
+onMounted(enterChat);
+
+// same component instance is reused when chatId changes — reset + reload
+watch(chatId, async () => {
+  cancelStrip();
+  headMenu.value = false;
+  searchOpen.value = false;
+  searchResults.value = [];
+  highlightId.value = null;
+  pinnedBarHidden.value = false;
+  await enterChat();
 });
 
 onBeforeUnmount(() => chats.closeChat());
@@ -255,7 +268,7 @@ watch(
 </script>
 
 <template>
-  <main class="flex min-h-dvh flex-col">
+  <main class="relative flex min-h-dvh flex-col">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line px-6 pb-3 pt-8">
       <button class="text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">

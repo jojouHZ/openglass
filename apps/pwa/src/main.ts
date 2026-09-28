@@ -3,7 +3,12 @@
 
 import { createApp } from "vue";
 
-import { bindApiClient, createApiClient } from "@openglass/core";
+import {
+  bindApiClient,
+  createApiClient,
+  useChatsStore,
+  useSessionStore,
+} from "@openglass/core";
 
 import App from "./App.vue";
 import { pinia } from "./pinia";
@@ -24,7 +29,6 @@ async function bootstrap() {
   app.use(pinia);
 
   // Restored session → reopen realtime (fresh sessions connect on S4 mount)
-  const { useSessionStore, useChatsStore } = await import("@openglass/core");
   const session = useSessionStore(pinia);
   session.hydrate();
   if (session.authed) {

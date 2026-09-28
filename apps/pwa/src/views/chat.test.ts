@@ -103,6 +103,26 @@ describe("S5 chat view", () => {
     const incoming = bubbles.find((b) => !b.find(".bg-bubble-own").exists())!;
     await incoming.trigger("contextmenu", { clientX: 10, clientY: 10 });
     expect(document.querySelector('[data-testid="mi-edit"]')).toBeFalsy();
+
+    // reply on an incoming message → reply strip shows
+    document.querySelector('[data-testid="mi-reply"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    await flush(50);
+    expect(w.find('[data-testid="strip-reply"]').exists()).toBe(true);
+    w.unmount();
+  });
+
+  it("offline state shows the banner and disables the composer", async () => {
+    chats().connState = "offline";
+    const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush(300);
+    expect(w.find('[data-testid="offline-banner"]').exists()).toBe(true);
+    expect(
+      (w.find('[data-testid="composer-input"]').element as HTMLInputElement)
+        .disabled,
+    ).toBe(true);
+    chats().connState = "online";
     w.unmount();
   });
 });

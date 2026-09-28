@@ -294,8 +294,9 @@ export const useChatsStore = defineStore("chats", {
     onMessageNew(message: Message) {
       const w = this.windows[message.chatId];
       if (w && !w.messages.some((m) => m.id === message.id)) {
+        // window mode (after an `around` jump): keep newerCursor intact —
+        // the "jump to latest" affordance stays reachable.
         if (w.atTail) w.messages.push(message);
-        else w.newerCursor = null; // window mode — refetch tail policy stays simple
       }
       this.bumpSummary(message.chatId, message);
     },
