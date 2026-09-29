@@ -202,6 +202,13 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 	if newer != nil || next != nil {
 		t.Fatalf("full window should have no cursors: %v %v", next, newer)
 	}
+	// unknown around id → window centered past the tail (mock parity):
+	// limit=2 → half=1 → only the last message fits
+	msgs, _, _, _ = pg.ListMessages(ctx, chat.ID, store.MessageQuery{
+		AroundID: "00000000-0000-0000-0000-000000000000", Limit: 2})
+	if len(msgs) != 1 || msgs[0].Seq != 2 {
+		t.Fatalf("around unknown: %v", msgs)
+	}
 
 	// pinned + search + delete
 	if _, err := pg.SetMessagePinned(ctx, m.ID, true); err != nil {
@@ -217,6 +224,10 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 	}
 	if _, err := pg.EditMessage(ctx, m2.ID, a.ID, "nope"); err != store.ErrForbidden {
 		t.Fatalf("foreign edit: %v", err)
+	}
+	// the rejected edit must not have mutated the row
+	if got, _ := pg.MessageByID(ctx, m2.ID); *got.Text != "yo" {
+		t.Fatalf("foreign edit leaked: %q", *got.Text)
 	}
 	if err := pg.DeleteMessage(ctx, m.ID, b.ID); err != store.ErrForbidden {
 		t.Fatalf("foreign delete: %v", err)

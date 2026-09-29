@@ -393,7 +393,7 @@ func (p *PG) ListMessages(ctx context.Context, chatID string, q MessageQuery) ([
 		if e := p.pool.QueryRow(ctx,
 			`SELECT seq FROM messages WHERE id=$1 AND chat_id=$2 AND deleted_at IS NULL`,
 			q.AroundID, chatID).Scan(&center); e != nil {
-			center = maxSeq
+			center = maxSeq + 1 // mock parity: unknown id centers past the tail
 		}
 		half := limit / 2
 		rows, err = p.pool.Query(ctx,

@@ -346,7 +346,12 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "text is required (1..8192)", map[string]any{"text": "minLength"})
 		return
 	}
-	m, err := s.chats.EditMessage(r.Context(), r.PathValue("messageId"), userID(r), in.Text)
+	// invisible to non-members — 404, not 403 (existence must not leak)
+	m, _ := s.msgForMember(w, r)
+	if m == nil {
+		return
+	}
+	m, err := s.chats.EditMessage(r.Context(), m.ID, userID(r), in.Text)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
@@ -359,8 +364,36 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// msgForMember resolves a messageId only for a member of its chat.
+// Writes the error response and returns nil otherwise.
+func (s *Server) msgForMember(w http.ResponseWriter, r *http.Request) (*store.Message, error) {
+	msg, err := s.chats.MessageByID(r.Context(), r.PathValue("messageId"))
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return nil, err
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return nil, err
+	}
+	member, err := s.chats.IsChatMember(r.Context(), msg.ChatID, userID(r))
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return nil, err
+	}
+	if !member {
+		notFound(w)
+		return nil, store.ErrNotFound
+	}
+	return msg, nil
+}
+
 func (s *Server) deleteMessage(w http.ResponseWriter, r *http.Request) {
-	err := s.chats.DeleteMessage(r.Context(), r.PathValue("messageId"), userID(r))
+	msg, _ := s.msgForMember(w, r)
+	if msg == nil {
+		return
+	}
+	err := s.chats.DeleteMessage(r.Context(), msg.ID, userID(r))
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
@@ -381,18 +414,8 @@ func (s *Server) setMessagePinned(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "pinned is required", nil)
 		return
 	}
-	msg, err := s.chats.MessageByID(r.Context(), r.PathValue("messageId"))
-	if errors.Is(err, store.ErrNotFound) {
-		notFound(w)
-		return
-	}
-	if err != nil {
-		writeErrorFromErr(w, err)
-		return
-	}
-	member, err := s.chats.IsChatMember(r.Context(), msg.ChatID, userID(r))
-	if err != nil || !member {
-		notFound(w)
+	msg, _ := s.msgForMember(w, r)
+	if msg == nil {
 		return
 	}
 	got, err := s.chats.SetMessagePinned(r.Context(), msg.ID, in.Pinned)
