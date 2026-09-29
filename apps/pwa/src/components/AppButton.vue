@@ -11,9 +11,17 @@ defineProps<{ disabled?: boolean; loading?: boolean }>();
   <button
     type="submit"
     :disabled="disabled || loading"
-    class="h-11 w-full rounded-input bg-ink text-body text-bg transition-opacity disabled:opacity-40"
+    class="btn h-11 w-full rounded-input bg-ink text-bg transition-opacity disabled:opacity-40"
   >
     <slot v-if="!loading" />
     <span v-else>…</span>
   </button>
 </template>
+
+<style scoped>
+/* text-body would collide: --color-body also emits .text-body and its
+   color wins over text-bg — set the size via the token directly. */
+.btn {
+  font-size: var(--text-body);
+}
+</style>

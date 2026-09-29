@@ -88,7 +88,6 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
       >
         work
       </button>
-      <span class="text-muted">+ new</span>
     </div>
 
     <div class="flex-1 overflow-y-auto">

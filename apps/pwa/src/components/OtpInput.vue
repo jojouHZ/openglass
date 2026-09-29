@@ -39,6 +39,17 @@ function onInput(i: number, e: Event) {
   sync();
 }
 
+// maxlength=1 truncates pasted text before `input` fires — distribute
+// the clipboard ourselves so a 6-digit paste fills all cells.
+function onPaste(i: number, e: ClipboardEvent) {
+  const digits = (e.clipboardData?.getData("text") ?? "").replace(/\D/g, "");
+  if (!digits) return;
+  e.preventDefault();
+  digits.slice(0, len - i).split("").forEach((ch, k) => (cells.value[i + k] = ch));
+  inputs.value[Math.min(i + digits.length, len - 1)]?.focus();
+  sync();
+}
+
 function onKeydown(i: number, e: KeyboardEvent) {
   if (e.key === "Backspace" && !cells.value[i] && i > 0) {
     cells.value[i - 1] = "";
@@ -61,6 +72,7 @@ function onKeydown(i: number, e: KeyboardEvent) {
       class="h-12 w-10 rounded-input border border-line text-center text-header outline-none focus-visible:border-accent"
       @input="onInput(i, $event)"
       @keydown="onKeydown(i, $event)"
+      @paste="onPaste(i, $event)"
     />
   </div>
 </template>
