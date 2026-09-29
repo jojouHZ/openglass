@@ -21,6 +21,7 @@ import (
 type Server struct {
 	cfg    *config.Config
 	store  store.AuthStore
+	chats  store.ChatStore
 	tokens *auth.Tokens
 	sender auth.OtpSender
 
@@ -36,10 +37,11 @@ func WithRedisPing(fn func(context.Context) error) Option {
 	return func(s *Server) { s.redisPing = fn }
 }
 
-func New(cfg *config.Config, st store.AuthStore, sender auth.OtpSender, opts ...Option) *Server {
+func New(cfg *config.Config, st store.Store, sender auth.OtpSender, opts ...Option) *Server {
 	s := &Server{
 		cfg:    cfg,
 		store:  st,
+		chats:  st,
 		tokens: auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL),
 		sender: sender,
 	}
@@ -78,18 +80,32 @@ func (s *Server) Handler(ws http.HandlerFunc) http.Handler {
 	// ws — upgrade + first-frame auth inside
 	v1.HandleFunc("GET /ws", ws)
 
+	// contacts — bearer
+	v1.HandleFunc("GET /contacts", s.requireAuth(s.listContacts))
+	v1.HandleFunc("POST /contacts", s.requireAuth(s.addContact))
+	v1.HandleFunc("DELETE /contacts/{userId}", s.requireAuth(s.removeContact))
+
+	// chats — bearer
+	v1.HandleFunc("GET /chats", s.requireAuth(s.listChats))
+	v1.HandleFunc("POST /chats", s.requireAuth(s.openDirectChat))
+	v1.HandleFunc("GET /chats/{chatId}", s.requireAuth(s.getChat))
+	v1.HandleFunc("POST /chats/{chatId}/pin", s.requireAuth(s.setChatPinned))
+
+	// messages — bearer
+	v1.HandleFunc("GET /chats/{chatId}/messages", s.requireAuth(s.listMessages))
+	v1.HandleFunc("POST /chats/{chatId}/messages", s.requireAuth(s.sendMessage))
+	v1.HandleFunc("PATCH /messages/{messageId}", s.requireAuth(s.editMessage))
+	v1.HandleFunc("DELETE /messages/{messageId}", s.requireAuth(s.deleteMessage))
+	v1.HandleFunc("POST /messages/{messageId}/pin", s.requireAuth(s.setMessagePinned))
+	v1.HandleFunc("POST /chats/{chatId}/read", s.requireAuth(s.markRead))
+
 	// contracted-but-unimplemented slices → honest 501, not 404/silence
 	stub := s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) })
 	for _, r := range []string{
-		"GET /contacts", "POST /contacts", "DELETE /contacts/{userId}",
-		"GET /chats", "POST /chats", "GET /chats/{chatId}", "PATCH /chats/{chatId}",
-		"POST /chats/{chatId}/pin",
-		"GET /chats/{chatId}/messages", "POST /chats/{chatId}/messages",
-		"PATCH /messages/{messageId}", "DELETE /messages/{messageId}",
-		"POST /messages/{messageId}/pin",
-		"POST /chats/{chatId}/attachments", "POST /chats/{chatId}/read",
+		"POST /chats/{chatId}/attachments",
 		"POST /groups", "PATCH /groups/{chatId}",
 		"POST /groups/{chatId}/members", "DELETE /groups/{chatId}/members/{userId}",
+		"PATCH /groups/{chatId}/members/{userId}",
 		"POST /groups/{chatId}/ownership",
 		"GET /push/vapid-key", "GET /push/subscriptions", "POST /push/subscriptions",
 		"DELETE /push/subscriptions/{subscriptionId}",

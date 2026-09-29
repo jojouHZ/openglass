@@ -23,6 +23,9 @@ type Mem struct {
 	invites  map[string]*invite
 	otps     map[string]*OtpRecord
 	sessions map[string]*memSession
+
+	chatOnce sync.Once
+	chats    *memChats // messaging slice — mem_chats.go
 }
 
 type invite struct {

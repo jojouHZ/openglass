@@ -43,9 +43,10 @@ type Session struct {
 }
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrConflict = errors.New("conflict")
-	ErrConsumed = errors.New("invite consumed")
+	ErrNotFound  = errors.New("not found")
+	ErrConflict  = errors.New("conflict")
+	ErrConsumed  = errors.New("invite consumed")
+	ErrForbidden = errors.New("forbidden")
 )
 
 // AuthStore — the persistence surface the API layer needs.
@@ -78,4 +79,116 @@ type AuthStore interface {
 	// SessionActive — false when revoked or absent (middleware gate).
 	SessionActive(ctx context.Context, sessionID string) (bool, error)
 	ListSessions(ctx context.Context, userID, currentID string) ([]Session, error)
+}
+
+// ---- Messaging domain (phase B) ----
+
+type Contact struct {
+	User       User
+	Mutual     bool
+	AddedAt    time.Time
+	VerifiedAt *time.Time // private layer writes; always nil for now
+}
+
+type MemberRights struct {
+	InviteMembers  bool `json:"inviteMembers,omitempty"`
+	RemoveMembers  bool `json:"removeMembers,omitempty"`
+	EditInfo       bool `json:"editInfo,omitempty"`
+	PinMessages    bool `json:"pinMessages,omitempty"`
+	DeleteMessages bool `json:"deleteMessages,omitempty"`
+}
+
+type GroupMember struct {
+	User     User
+	Role     string // owner|member
+	Rights   MemberRights
+	JoinedAt time.Time
+}
+
+type Chat struct {
+	ID        string
+	Type      string // direct|group
+	Title     *string
+	Peer      *User         // direct chats only
+	Members   []GroupMember // group chats only
+	CreatedAt time.Time
+}
+
+type ChatSummary struct {
+	Chat
+	LastMessage    *Message
+	LastActivityAt time.Time
+	UnreadCount    int
+	MemberCount    int
+	Pinned         bool // viewer-side pin
+}
+
+type Attachment struct {
+	ID          string
+	ChatID      string
+	UploaderID  string
+	Kind        string // photo|file
+	MimeType    string
+	FileName    string
+	SizeBytes   int64
+	StoragePath string // "" until uploaded (#16)
+	CreatedAt   time.Time
+}
+
+type Message struct {
+	ID               string
+	ChatID           string
+	Seq              int64
+	SenderID         string
+	Text             *string
+	Attachments      []Attachment
+	ReplyToMessageID *string
+	ClientNonce      string
+	SentAt           time.Time
+	EditedAt         *time.Time
+	DeletedAt        *time.Time
+	Pinned           bool
+}
+
+// MessageQuery — cursor semantics per openapi listMessages.
+type MessageQuery struct {
+	Limit    int
+	Before   *int64 // opaque cursor = seq boundary toward older
+	After    *int64 // toward newer (after `around` jump)
+	AroundID string // message uuid — window centered on its seq
+	Q        string // full-text, min 2 chars; results seq desc
+	Pinned   bool   // pinned-only view
+}
+
+// ChatStore — messaging persistence surface.
+// Convention: ErrNotFound also means "chat exists but caller is not a
+// member" — existence of foreign chats is never leaked (contract 404).
+type ChatStore interface {
+	// contacts
+	ListContacts(ctx context.Context, userID string) ([]Contact, error)
+	AddContact(ctx context.Context, userID, contactID string) (*Contact, error) // ErrConflict dup, ErrNotFound user
+	RemoveContact(ctx context.Context, userID, contactID string) error          // ErrNotFound
+	AreMutual(ctx context.Context, a, b string) (bool, error)
+
+	// chats
+	ListChatSummaries(ctx context.Context, userID string) ([]ChatSummary, error)
+	ChatByID(ctx context.Context, chatID, userID string) (*Chat, error) // member-view
+	OpenDirectChat(ctx context.Context, me, peerID string) (*Chat, bool /*created*/, error)
+	SetChatPinned(ctx context.Context, chatID, userID string, pinned bool) error // ErrNotFound non-member
+	IsChatMember(ctx context.Context, chatID, userID string) (bool, error)
+
+	// messages
+	ListMessages(ctx context.Context, chatID string, q MessageQuery) (msgs []Message, nextCursor, newerCursor *int64, err error)
+	SendMessage(ctx context.Context, m *Message) (*Message, bool /*created*/, error) // created=false on nonce replay
+	MessageByID(ctx context.Context, messageID string) (*Message, error)
+	EditMessage(ctx context.Context, messageID, editorID, text string) (*Message, error) // ErrForbidden not own
+	DeleteMessage(ctx context.Context, messageID, userID string) error                   // own only until #15 rights
+	SetMessagePinned(ctx context.Context, messageID string, pinned bool) (*Message, error)
+	MarkRead(ctx context.Context, chatID, userID string, upToSeq int64) error
+}
+
+// Store — full persistence surface. PG and Mem both implement it.
+type Store interface {
+	AuthStore
+	ChatStore
 }
