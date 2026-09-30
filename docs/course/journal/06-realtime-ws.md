@@ -1,4 +1,4 @@
-# Journal 03 — Realtime: WebSocket hub, replay, resync (issue #14, B2)
+# Journal 06 — Realtime: WebSocket hub, replay, resync (issue #14, B2)
 
 **Phase:** `internal/ws/hub.go` + frontend reconnect/resync wiring.
 

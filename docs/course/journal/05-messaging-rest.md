@@ -1,4 +1,4 @@
-# Journal 02 — Messaging REST: contacts, chats, messages (issue #13, B1 phase)
+# Journal 05 — Messaging REST: contacts, chats, messages (issue #13, B1 phase)
 
 **Phase:** contacts + direct chats + full message lifecycle on a shared
 `store.Store` interface with Mem and PostgreSQL implementations.

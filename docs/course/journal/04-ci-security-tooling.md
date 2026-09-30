@@ -1,4 +1,4 @@
-# Journal 03 — CI pipeline and security tooling (Phase C)
+# Journal 04 — CI pipeline and security tooling (Phase C)
 
 **Phase:** the agreed order was C→B→A — tooling before more features.
 

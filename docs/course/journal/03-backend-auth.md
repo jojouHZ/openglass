@@ -1,4 +1,4 @@
-# Journal 02 — Backend skeleton and authentication (issue #12)
+# Journal 03 — Backend skeleton and authentication (issue #12)
 
 **Phase:** first Go code. Monolith skeleton, config, migrations, the
 full auth surface against both Mem and PostgreSQL stores.

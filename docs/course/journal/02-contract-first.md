@@ -1,4 +1,4 @@
-# Journal 01 — Contract-first development (issues #8–#11)
+# Journal 02 — Contract-first development (issues #8–#11)
 
 **Phase:** API contract (8 revision rounds), MFE core scaffold (#8),
 MSW mock layer (#9), onboarding S1–S3 (#10), chat S4–S5 (#11).

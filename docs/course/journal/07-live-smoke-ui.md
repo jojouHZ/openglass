@@ -1,4 +1,4 @@
-# Journal 06 — First live smoke: UI bugs only a real backend reveals
+# Journal 07 — First live smoke: UI bugs only a real backend reveals
 
 **Phase:** manual owner walkthrough of S1–S5 against the real Go
 backend + PostgreSQL + Redis in Docker.
