@@ -9,8 +9,9 @@
 import { defineStore } from "pinia";
 
 import { ApiRequestError, type ApiClient } from "../api/client";
-import type { Chat, ChatSummary, Message } from "../api/client";
+import type { Chat, ChatSummary, Message, User } from "../api/client";
 import type { Unsubscribe } from "../api/client";
+import { useContactsStore } from "./contacts";
 import { api, useSessionStore } from "./session";
 
 export interface LocalMessage extends Message {
@@ -293,6 +294,12 @@ export const useChatsStore = defineStore("chats", {
           this.details[e.data.chat.id] = e.data.chat;
           void this.refreshChats();
         }),
+        ev.on("contact.added", (e) => useContactsStore().onContactAdded(e.data.user)),
+        ev.on("contact.removed", (e) => useContactsStore().onContactRemoved(e.data.userId)),
+        ev.on("user.updated", (e) => {
+          useContactsStore().onUserUpdated(e.data.user);
+          this.onUserUpdated(e.data.user);
+        }),
         ev.on("resync.required", () => void this.resyncFromServer()),
         ev.on("session.revoked", () => void this.handleSessionRevoked()),
       );
@@ -314,6 +321,8 @@ export const useChatsStore = defineStore("chats", {
     async resyncFromServer() {
       this.windows = {};
       await this.refreshChats();
+      const contacts = useContactsStore();
+      if (contacts.loaded) await contacts.refresh().catch(() => undefined);
       if (this.activeChatId) {
         const id = this.activeChatId;
         this.activeChatId = null;
@@ -321,9 +330,38 @@ export const useChatsStore = defineStore("chats", {
       }
     },
 
+    /**
+     * Profile edit by a known user — patch every cached User reference
+     * (direct-chat peers, group rosters). Message rows hold senderId
+     * only, nothing to rewrite there.
+     */
+    onUserUpdated(user: User) {
+      for (const s of this.chats) {
+        if (s.peer?.id === user.id) s.peer = user;
+      }
+      for (const d of Object.values(this.details)) {
+        if (d.peer?.id === user.id) d.peer = user;
+        for (const m of d.members ?? []) {
+          if (m.user.id === user.id) m.user = user;
+        }
+      }
+    },
+
+    /**
+     * Full local teardown — drop every cached slice (chats, windows,
+     * rosters, contacts) before the session itself resets. Logout and
+     * session.revoked both route here so a second account on the same
+     * page never sees the previous owner's data.
+     */
+    teardown() {
+      this.disconnectRealtime();
+      useContactsStore().$reset();
+      this.$reset();
+    },
+
     /** The server killed this session — local logout (REST would 401). */
     async handleSessionRevoked() {
-      this.disconnectRealtime();
+      this.teardown();
       await useSessionStore()
         .logout()
         .catch(() => undefined);

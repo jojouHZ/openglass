@@ -6,3 +6,4 @@ export * from "./api/events";
 export * from "./api/factory";
 export * from "./stores/session";
 export * from "./stores/chats";
+export * from "./stores/contacts";
