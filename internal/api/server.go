@@ -15,6 +15,7 @@ import (
 	"github.com/jojouHZ/openglass/internal/auth"
 	"github.com/jojouHZ/openglass/internal/config"
 	"github.com/jojouHZ/openglass/internal/store"
+	"github.com/jojouHZ/openglass/internal/ws"
 )
 
 // Server — handler set + its dependencies.
@@ -24,6 +25,7 @@ type Server struct {
 	chats  store.ChatStore
 	tokens *auth.Tokens
 	sender auth.OtpSender
+	hub    *ws.Hub // nil in tests that don't exercise realtime
 
 	// optional probes for /healthz — nil dep reports "down"
 	pgPing    func(context.Context) error
@@ -35,6 +37,24 @@ type Option func(*Server)
 func WithPgPing(fn func(context.Context) error) Option { return func(s *Server) { s.pgPing = fn } }
 func WithRedisPing(fn func(context.Context) error) Option {
 	return func(s *Server) { s.redisPing = fn }
+}
+func WithHub(h *ws.Hub) Option { return func(s *Server) { s.hub = h } }
+
+// nil-safe emit wrappers — REST mutates, the hub notifies.
+func (s *Server) emitToUsers(userIDs []string, typ string, data map[string]any) {
+	if s.hub != nil {
+		s.hub.EmitToUsers(userIDs, typ, data)
+	}
+}
+func (s *Server) emitToChat(ctx context.Context, chatID, typ string, data map[string]any) {
+	if s.hub != nil {
+		s.hub.EmitToChat(ctx, chatID, typ, data)
+	}
+}
+func (s *Server) revokeSessionConns(sessionID string) {
+	if s.hub != nil {
+		s.hub.Revoke(sessionID)
+	}
 }
 
 func New(cfg *config.Config, st store.Store, sender auth.OtpSender, opts ...Option) *Server {
@@ -52,7 +72,7 @@ func New(cfg *config.Config, st store.Store, sender auth.OtpSender, opts ...Opti
 }
 
 // Handler — the whole HTTP surface (mounted at server root; /api/v1 inside).
-func (s *Server) Handler(ws http.HandlerFunc) http.Handler {
+func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	mux := http.NewServeMux()
 	v1 := http.NewServeMux()
 
@@ -78,7 +98,7 @@ func (s *Server) Handler(ws http.HandlerFunc) http.Handler {
 	v1.HandleFunc("GET /users/{userId}", s.requireAuth(s.getUser))
 
 	// ws — upgrade + first-frame auth inside
-	v1.HandleFunc("GET /ws", ws)
+	v1.HandleFunc("GET /ws", wsHandler)
 
 	// contacts — bearer
 	v1.HandleFunc("GET /contacts", s.requireAuth(s.listContacts))

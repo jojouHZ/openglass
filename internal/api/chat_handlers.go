@@ -54,18 +54,26 @@ func (s *Server) addContact(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		// tell the added side someone added them (payload: the adder)
+		if me, err := s.store.UserByID(r.Context(), userID(r)); err == nil {
+			s.emitToUsers([]string{in.UserID}, "contact.added",
+				map[string]any{"user": userJSON(me)})
+		}
 		writeJSON(w, http.StatusCreated, map[string]any{"contact": contactJSON(c)})
 	}
 }
 
 func (s *Server) removeContact(w http.ResponseWriter, r *http.Request) {
-	err := s.chats.RemoveContact(r.Context(), userID(r), r.PathValue("userId"))
+	peerID := r.PathValue("userId")
+	err := s.chats.RemoveContact(r.Context(), userID(r), peerID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		s.emitToUsers([]string{peerID}, "contact.removed",
+			map[string]any{"userId": userID(r)})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -184,6 +192,10 @@ func (s *Server) openDirectChat(w http.ResponseWriter, r *http.Request) {
 		code := http.StatusOK
 		if created {
 			code = http.StatusCreated
+			// contract: chat.new lands on every member's sessions before
+			// that chat's first message.new (same-session seq ordering)
+			s.emitToChat(r.Context(), c.ID, "chat.new",
+				map[string]any{"chat": chatJSON(c)})
 		}
 		writeJSON(w, code, map[string]any{"chat": chatJSON(c)})
 	}
@@ -330,6 +342,9 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		if created {
+			s.emitToChat(r.Context(), chatID, "message.new", messageJSON(got))
+		}
 		code := http.StatusOK // contract: nonce replay → 200, create → 201
 		if created {
 			code = http.StatusCreated
@@ -360,6 +375,7 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		s.emitToChat(r.Context(), m.ChatID, "message.edited", messageJSON(m))
 		writeJSON(w, http.StatusOK, map[string]any{"message": messageJSON(m)})
 	}
 }
@@ -402,6 +418,9 @@ func (s *Server) deleteMessage(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		s.emitToChat(r.Context(), msg.ChatID, "message.deleted", map[string]any{
+			"chatId": msg.ChatID, "messageId": msg.ID, "seq": msg.Seq,
+		})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -423,6 +442,13 @@ func (s *Server) setMessagePinned(w http.ResponseWriter, r *http.Request) {
 		writeErrorFromErr(w, err)
 		return
 	}
+	typ := "message.unpinned"
+	if in.Pinned {
+		typ = "message.pinned"
+	}
+	s.emitToChat(r.Context(), msg.ChatID, typ, map[string]any{
+		"chatId": msg.ChatID, "messageId": msg.ID,
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"message": messageJSON(got)})
 }
 
@@ -434,13 +460,17 @@ func (s *Server) markRead(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "upToSeq is required", nil)
 		return
 	}
-	err := s.chats.MarkRead(r.Context(), r.PathValue("chatId"), userID(r), in.UpToSeq)
+	chatID := r.PathValue("chatId")
+	err := s.chats.MarkRead(r.Context(), chatID, userID(r), in.UpToSeq)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
+		s.emitToChat(r.Context(), chatID, "receipt.read", map[string]any{
+			"chatId": chatID, "userId": userID(r), "upToSeq": in.UpToSeq,
+		})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

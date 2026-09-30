@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"net/http"
@@ -251,7 +252,17 @@ func (s *Server) completeProfile(w http.ResponseWriter, r *http.Request) {
 		writeErrorFromErr(w, err)
 		return
 	}
+	s.emitUserUpdated(r.Context(), user)
 	writeJSON(w, http.StatusOK, map[string]any{"user": userJSON(user)})
+}
+
+// emitUserUpdated — profile change is broadcast to mutual contacts only
+// (contract: user.updated refreshes their caches; strangers never learn).
+func (s *Server) emitUserUpdated(ctx context.Context, u *store.User) {
+	mutuals, err := s.chats.MutualContactIDs(ctx, u.ID)
+	if err == nil && len(mutuals) > 0 {
+		s.emitToUsers(mutuals, "user.updated", map[string]any{"user": userJSON(u)})
+	}
 }
 
 type refreshBody struct {
@@ -295,6 +306,7 @@ func (s *Server) refreshTokens(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	_ = s.store.RevokeSession(r.Context(), sessionID(r))
+	s.revokeSessionConns(sessionID(r)) // live conns get session.revoked + close
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -340,6 +352,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
+	s.revokeSessionConns(sid)
 	w.WriteHeader(http.StatusNoContent)
 }
 

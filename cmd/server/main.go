@@ -52,12 +52,16 @@ func main() {
 		log.Fatal("no production OTP sender yet — set OPENGLASS_DEV_MODE=1")
 	}
 
+	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	hub := ws.NewHub(tokens.ParseAccess, pg)
+	defer hub.Close()
+
 	srv := api.New(cfg, pg, sender,
 		api.WithPgPing(pg.Ping),
 		api.WithRedisPing(func(ctx context.Context) error { return rdb.Ping(ctx).Err() }),
+		api.WithHub(hub),
 	)
-	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
-	handler := srv.Handler(ws.Handler(tokens.ParseAccess))
+	handler := srv.Handler(hub.ServeHTTP)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

@@ -68,14 +68,16 @@ func (t *Tokens) NewPair(userID, sessionID string) (*TokenPair, error) {
 // RefreshExpiry — store-side expiry cutoff for refresh tokens.
 func (t *Tokens) RefreshExpiry() time.Duration { return t.refreshTTL }
 
-// ParseAccess — validate an access token, return (userID, sessionID).
-func (t *Tokens) ParseAccess(token string) (userID, sessionID string, err error) {
+// ParseAccess — validate an access token, return (userID, sessionID, exp).
+// exp feeds the ws watchdog: a connection is dropped (4401) the moment its
+// token expires instead of living until the next read.
+func (t *Tokens) ParseAccess(token string) (userID, sessionID string, exp time.Time, err error) {
 	claims := &accessClaims{}
 	_, err = jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
 		return t.secret, nil
 	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
-		return "", "", fmt.Errorf("invalid token: %w", err)
+		return "", "", time.Time{}, fmt.Errorf("invalid token: %w", err)
 	}
-	return claims.Subject, claims.SessionID, nil
+	return claims.Subject, claims.SessionID, claims.ExpiresAt.Time, nil
 }

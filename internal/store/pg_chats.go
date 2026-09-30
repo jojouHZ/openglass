@@ -89,6 +89,45 @@ func (p *PG) IsChatMember(ctx context.Context, chatID, userID string) (bool, err
 	return ok, err
 }
 
+func (p *PG) MutualContactIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT c.contact_id FROM contacts c
+		 WHERE c.owner_id=$1
+		   AND EXISTS(SELECT 1 FROM contacts r WHERE r.owner_id=c.contact_id AND r.contact_id=$1)`,
+		userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func (p *PG) ChatMemberIDs(ctx context.Context, chatID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT user_id FROM chat_members WHERE chat_id=$1`, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func (p *PG) ListChatSummaries(ctx context.Context, userID string) ([]ChatSummary, error) {
 	rows, err := p.pool.Query(ctx,
 		`SELECT c.id, c.type, c.title, c.created_at, mm.pinned,

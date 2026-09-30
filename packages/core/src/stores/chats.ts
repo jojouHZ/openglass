@@ -8,7 +8,7 @@
 
 import { defineStore } from "pinia";
 
-import type { ApiClient } from "../api/client";
+import { ApiRequestError, type ApiClient } from "../api/client";
 import type { Chat, ChatSummary, Message } from "../api/client";
 import type { Unsubscribe } from "../api/client";
 import { api, useSessionStore } from "./session";
@@ -53,6 +53,8 @@ export const useChatsStore = defineStore("chats", {
     connState: "offline" as "connecting" | "online" | "offline",
     wsConnected: false,
     unsubs: [] as Unsubscribe[],
+    reconnectTimer: null as ReturnType<typeof setTimeout> | null,
+    reconnectAttempt: 0,
     /** Chat the user is looking at — suppresses its unread bumps. */
     activeChatId: null as string | null,
   }),
@@ -245,7 +247,11 @@ export const useChatsStore = defineStore("chats", {
       this.wsConnected = true;
       const ev = api().events;
       this.unsubs.push(
-        ev.onStateChange((s) => (this.connState = s)),
+        ev.onStateChange((s) => {
+          this.connState = s;
+          if (s === "online") this.reconnectAttempt = 0;
+          if (s === "offline" && this.wsConnected) this.scheduleReconnect();
+        }),
         ev.on("presence.snapshot", (e) => {
           for (const id of e.data.onlineUserIds) this.online[id] = true;
         }),
@@ -280,15 +286,72 @@ export const useChatsStore = defineStore("chats", {
           this.details[e.data.chat.id] = e.data.chat;
           void this.refreshChats();
         }),
+        ev.on("resync.required", () => void this.resyncFromServer()),
+        ev.on("session.revoked", () => void this.handleSessionRevoked()),
       );
       await ev.connect(session.accessToken);
     },
 
     disconnectRealtime() {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
       for (const u of this.unsubs) u();
       this.unsubs = [];
       api().events.disconnect();
       this.wsConnected = false;
+    },
+
+    /** Replay gap / evicted history: drop local windows, refetch truth. */
+    async resyncFromServer() {
+      this.windows = {};
+      await this.refreshChats();
+      if (this.activeChatId) {
+        const id = this.activeChatId;
+        this.activeChatId = null;
+        await this.openChat(id).catch(() => undefined);
+      }
+    },
+
+    /** The server killed this session — local logout (REST would 401). */
+    async handleSessionRevoked() {
+      this.disconnectRealtime();
+      await useSessionStore()
+        .logout()
+        .catch(() => undefined);
+    },
+
+    scheduleReconnect() {
+      if (this.reconnectTimer || !this.wsConnected) return;
+      const delay = Math.min(1000 * 2 ** this.reconnectAttempt, 15_000);
+      this.reconnectAttempt += 1;
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        void this.attemptReconnect();
+      }, delay);
+    },
+
+    async attemptReconnect() {
+      const session = useSessionStore();
+      if (!this.wsConnected || !session.accessToken) return;
+      try {
+        await api().events.connect(session.accessToken);
+        return;
+      } catch {
+        // expired access token — rotate the pair, then dial once more
+      }
+      try {
+        await session.refreshTokens();
+        await api().events.connect(session.accessToken);
+      } catch (e) {
+        // refresh token rejected → the whole session is dead, stop retrying
+        if (e instanceof ApiRequestError && e.status === 401) {
+          await this.handleSessionRevoked();
+          return;
+        }
+        this.scheduleReconnect();
+      }
     },
 
     onMessageNew(message: Message) {

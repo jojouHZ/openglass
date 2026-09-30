@@ -126,6 +126,24 @@ export const useSessionStore = defineStore("session", {
       return user;
     },
 
+    /** Rotate the token pair — WS reconnect and future 401-retry use this. */
+    async refreshTokens() {
+      if (!this.refreshToken) throw new Error("no refresh token");
+      const r = await api().auth.refresh(this.refreshToken);
+      this.accessToken = r.accessToken;
+      this.refreshToken = r.refreshToken;
+      api().setAccessToken(r.accessToken);
+      if (this.user && this.email) {
+        savePersisted({
+          accessToken: r.accessToken,
+          refreshToken: r.refreshToken,
+          user: this.user,
+          email: this.email,
+        });
+      }
+      return r;
+    },
+
     async logout() {
       try {
         await api().auth.logout();

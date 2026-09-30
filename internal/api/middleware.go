@@ -35,7 +35,7 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			unauthorized(w)
 			return
 		}
-		uid, sid, err := s.tokens.ParseAccess(token)
+		uid, sid, _, err := s.tokens.ParseAccess(token)
 		if err != nil {
 			unauthorized(w)
 			return

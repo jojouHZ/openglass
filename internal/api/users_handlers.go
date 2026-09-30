@@ -44,6 +44,7 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 		writeErrorFromErr(w, err)
 		return
 	}
+	s.emitUserUpdated(r.Context(), u)
 	writeJSON(w, http.StatusOK, map[string]any{"user": userJSON(u)})
 }
 

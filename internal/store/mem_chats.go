@@ -121,6 +121,30 @@ func (m *Mem) IsChatMember(_ context.Context, chatID, userID string) (bool, erro
 	return ok, nil
 }
 
+func (m *Mem) MutualContactIDs(_ context.Context, userID string) ([]string, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	var out []string
+	for cid := range cs.contacts[userID] {
+		if _, back := cs.contacts[cid][userID]; back {
+			out = append(out, cid)
+		}
+	}
+	return out, nil
+}
+
+func (m *Mem) ChatMemberIDs(_ context.Context, chatID string) ([]string, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	out := make([]string, 0, len(cs.members[chatID]))
+	for uid := range cs.members[chatID] {
+		out = append(out, uid)
+	}
+	return out, nil
+}
+
 // summary builds a member-view ChatSummary — the ordering for List.
 func (m *Mem) summary(cs *memChats, c *memChat, userID string) ChatSummary {
 	mm := cs.members[c.ID][userID]

@@ -169,6 +169,7 @@ type ChatStore interface {
 	AddContact(ctx context.Context, userID, contactID string) (*Contact, error) // ErrConflict dup, ErrNotFound user
 	RemoveContact(ctx context.Context, userID, contactID string) error          // ErrNotFound
 	AreMutual(ctx context.Context, a, b string) (bool, error)
+	MutualContactIDs(ctx context.Context, userID string) ([]string, error) // presence scope (ws)
 
 	// chats
 	ListChatSummaries(ctx context.Context, userID string) ([]ChatSummary, error)
@@ -176,6 +177,7 @@ type ChatStore interface {
 	OpenDirectChat(ctx context.Context, me, peerID string) (*Chat, bool /*created*/, error)
 	SetChatPinned(ctx context.Context, chatID, userID string, pinned bool) error // ErrNotFound non-member
 	IsChatMember(ctx context.Context, chatID, userID string) (bool, error)
+	ChatMemberIDs(ctx context.Context, chatID string) ([]string, error) // fan-out (ws)
 
 	// messages
 	ListMessages(ctx context.Context, chatID string, q MessageQuery) (msgs []Message, nextCursor, newerCursor *int64, err error)
