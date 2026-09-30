@@ -1,6 +1,18 @@
-# Journal 01 — Contract-first development (issues #9–#11)
+# Journal 01 — Contract-first development (issues #8–#11)
 
-**Phase:** MFE core scaffold, MSW mock layer, onboarding S1–S3, chat S4–S5.
+**Phase:** API contract (8 revision rounds), MFE core scaffold (#8),
+MSW mock layer (#9), onboarding S1–S3 (#10), chat S4–S5 (#11).
+
+## Eight rounds before code
+
+The OpenAPI spec and the WebSocket event catalog went through **eight
+dedicated review rounds** before implementation began — invite issuance
+scope, param exclusivity, forward pagination, event symmetry, nullable
+verify-user, session-scoped WS seq, message pinning, first-frame auth,
+mutual-contact completion, re-login flow, idempotency. Each round was a
+commit; none of them touched code. The contract is the cheapest place
+to find design bugs — every round removed a change that would have cost
+days later.
 
 ## What was built
 
