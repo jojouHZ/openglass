@@ -77,8 +77,8 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rel := "none"
-	switch me := userID(r); {
-	case u.ID == me:
+	switch me := userID(r); u.ID {
+	case me:
 		rel = "self"
 	default:
 		out, in, err := s.chats.ContactEdges(r.Context(), me, u.ID)
