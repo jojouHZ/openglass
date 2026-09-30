@@ -23,11 +23,19 @@ export class WsClient implements ApiEvents {
   private listeners = new Map<string, Set<(ev: ServerEvent) => void>>();
   private stateCbs = new Set<(s: ConnState) => void>();
   private lastSeq = 0;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly wsUrl: string) {}
 
   connect(accessToken: string, lastSeq?: number): Promise<void> {
-    this.disconnect();
+    // silent teardown — a stale ws.onclose must not flip us to offline
+    // while a fresh socket is dialing
+    const old = this.ws;
+    this.ws = null;
+    if (old) {
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      old.close();
+    }
     this.setState("connecting");
 
     const url = new URL(
@@ -49,6 +57,8 @@ export class WsClient implements ApiEvents {
         const frame = JSON.parse(String(e.data)) as ServerEvent;
         if (frame.type === "auth.ok") {
           this.setState("online");
+          // contract: ping every 30 s — server drops sockets idle 90 s
+          this.heartbeat ??= setInterval(() => this.ping(), 30_000);
           resolve();
           return;
         }
@@ -62,6 +72,7 @@ export class WsClient implements ApiEvents {
         this.dispatch(frame);
       };
       ws.onclose = () => {
+        this.stopHeartbeat();
         this.setState("offline");
         reject(new Error("ws closed before auth"));
       };
@@ -72,9 +83,21 @@ export class WsClient implements ApiEvents {
   }
 
   disconnect(): void {
-    this.ws?.close();
+    this.stopHeartbeat();
+    const ws = this.ws;
     this.ws = null;
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      ws.close();
+    }
     this.setState("offline");
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
   }
 
   onStateChange(cb: (s: ConnState) => void): Unsubscribe {

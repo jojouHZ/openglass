@@ -92,6 +92,33 @@ describe("send", () => {
     expect(w().messages.filter((m) => m.clientNonce === last.clientNonce)).toHaveLength(1);
   });
 
+  it("ws message.new before the REST response upgrades the optimistic bubble — no dup", async () => {
+    const w = () => chats.window(DIRECT);
+    // hold the REST response open so the WS event wins the race
+    const orig = ctx.api.messages.send;
+    let resolveSend!: (v: Awaited<ReturnType<typeof orig>>) => void;
+    ctx.api.messages.send = () =>
+      new Promise((r) => {
+        resolveSend = r;
+      });
+    try {
+      const pending = chats.send(DIRECT, { text: "race condition" });
+      await Promise.resolve(); // let the optimistic bubble land
+      const opt = w().messages.at(-1)!;
+      expect(opt.id.startsWith("local-")).toBe(true);
+      const real = { ...opt, id: "99999999-9999-4999-8999-999999999999" };
+      delete (real as { pending?: boolean }).pending;
+      chats.onMessageNew(real); // WS delivers the real row first
+      resolveSend({ message: real });
+      await pending;
+      const byNonce = w().messages.filter((m) => m.clientNonce === opt.clientNonce);
+      expect(byNonce).toHaveLength(1);
+      expect(byNonce[0]!.id).toBe(real.id);
+    } finally {
+      ctx.api.messages.send = orig;
+    }
+  });
+
   it("search finds the sent text, pinned lists pinned", async () => {
     const hits = await chats.search(DIRECT, "store test");
     expect(hits.some((m) => m.text === "store test ping")).toBe(true);

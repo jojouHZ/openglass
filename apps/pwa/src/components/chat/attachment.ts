@@ -6,7 +6,8 @@ export interface StagedAttachment {
   sizeBytes: number;
   /** set once uploadAttachment resolves */
   attachmentId?: string;
-  error?: boolean;
+  /** user-facing reason — size rejection or upload failure */
+  error?: string;
 }
 
 /** Contract limit: 25 MiB (docs/api/errors.md → upload_attachment). */

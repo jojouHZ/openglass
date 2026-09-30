@@ -12,7 +12,7 @@ const chats = useChatsStore();
 const session = useSessionStore();
 const router = useRouter();
 
-const folder = ref<"all" | "groups" | "private" | "work">("all");
+const folder = ref<"all" | "groups" | "private">("all");
 const privateModule = import.meta.env.VITE_PRIVATE_MODULE === "1";
 
 const filtered = computed(() => {
@@ -41,14 +41,6 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
   <main class="flex min-h-dvh flex-col">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
-        class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
-        data-testid="avatar-to-settings"
-        @click="router.push({ name: 's13-settings' })"
-      >
-        {{ session.user?.displayName?.slice(0, 1) ?? "?" }}
-      </button>
-      <h1 class="flex-1 text-header text-ink">Chats</h1>
-      <button
         class="grid size-10 place-items-center text-ink"
         aria-label="new chat"
         @click="router.push({ name: 's6-contact-search' })"
@@ -57,6 +49,14 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
           <path d="M5 12h14" />
           <path d="M12 5v14" />
         </svg>
+      </button>
+      <h1 class="flex-1 text-center text-header text-ink">Chats</h1>
+      <button
+        class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
+        data-testid="avatar-to-settings"
+        @click="router.push({ name: 's13-settings' })"
+      >
+        {{ session.user?.displayName?.slice(0, 1) ?? "?" }}
       </button>
     </div>
 
@@ -81,12 +81,6 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
         @click="folder = 'groups'"
       >
         groups
-      </button>
-      <button
-        :class="folder === 'work' ? 'text-ink underline underline-offset-4' : 'text-muted'"
-        @click="folder = 'work'"
-      >
-        work
       </button>
     </div>
 

@@ -190,7 +190,7 @@ export const useChatsStore = defineStore("chats", {
         const { message } = await api().messages.send(chatId, { clientNonce: nonce, ...body });
         const i = w.messages.findIndex((m) => m.clientNonce === nonce);
         if (i !== -1) w.messages[i] = message;
-        else w.messages.push(message);
+        else if (!w.messages.some((m) => m.id === message.id)) w.messages.push(message);
         this.bumpSummary(chatId, message);
       } catch (e) {
         const m = w.messages.find((x) => x.clientNonce === nonce);
@@ -249,7 +249,14 @@ export const useChatsStore = defineStore("chats", {
       this.unsubs.push(
         ev.onStateChange((s) => {
           this.connState = s;
-          if (s === "online") this.reconnectAttempt = 0;
+          if (s === "online") {
+            this.reconnectAttempt = 0;
+            // a pending timer must not tear down the fresh connection
+            if (this.reconnectTimer) {
+              clearTimeout(this.reconnectTimer);
+              this.reconnectTimer = null;
+            }
+          }
           if (s === "offline" && this.wsConnected) this.scheduleReconnect();
         }),
         ev.on("presence.snapshot", (e) => {
@@ -356,10 +363,20 @@ export const useChatsStore = defineStore("chats", {
 
     onMessageNew(message: Message) {
       const w = this.windows[message.chatId];
-      if (w && !w.messages.some((m) => m.id === message.id)) {
-        // window mode (after an `around` jump): keep newerCursor intact —
-        // the "jump to latest" affordance stays reachable.
-        if (w.atTail) w.messages.push(message);
+      if (w) {
+        // own send: WS can beat the REST response — the optimistic
+        // local-<nonce> bubble shares clientNonce, upgrade it in place
+        // instead of appending a duplicate
+        const byNonce =
+          message.clientNonce != null &&
+          w.messages.findIndex((m) => m.clientNonce === message.clientNonce);
+        if (typeof byNonce === "number" && byNonce !== -1) {
+          w.messages[byNonce] = message;
+        } else if (w.atTail && !w.messages.some((m) => m.id === message.id)) {
+          // window mode (after an `around` jump): keep newerCursor intact —
+          // the "jump to latest" affordance stays reachable.
+          w.messages.push(message);
+        }
       }
       this.bumpSummary(message.chatId, message);
     },

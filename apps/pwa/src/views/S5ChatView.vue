@@ -7,6 +7,7 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocalMessage } from "@openglass/core";
 import {
   api,
+  ApiRequestError,
   dayChanged,
   toSeries,
   useChatsStore,
@@ -92,15 +93,27 @@ const sendError = ref("");
 
 async function stageFile(f: File) {
   if (f.size > MAX_ATTACHMENT) {
-    staged.value = { fileName: f.name, sizeBytes: f.size, error: true };
+    staged.value = {
+      fileName: f.name,
+      sizeBytes: f.size,
+      error: "exceeds 25 mb limit",
+    };
     return;
   }
   staged.value = { fileName: f.name, sizeBytes: f.size };
   try {
     const { attachment } = await api().messages.uploadAttachment(chatId.value, f);
+    if (!staged.value) return; // strip cancelled mid-upload
     staged.value = { ...staged.value, attachmentId: attachment.id };
-  } catch {
-    staged.value = { ...staged.value!, error: true };
+  } catch (e) {
+    if (!staged.value) return;
+    staged.value = {
+      ...staged.value,
+      error:
+        e instanceof ApiRequestError && e.status === 501
+          ? "attachments not supported yet"
+          : "upload failed",
+    };
   }
 }
 

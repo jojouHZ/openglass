@@ -86,7 +86,7 @@ const placeholder = () =>
           {{ staged.fileName }} · {{ Math.max(1, Math.round(staged.sizeBytes / 1024 / 1024)) }} mb
         </div>
         <div class="text-msg text-body">
-          {{ staged.error ? "exceeds 25 mb limit" : staged.attachmentId ? "ready" : "uploading…" }}
+          {{ staged.error ?? (staged.attachmentId ? "ready" : "uploading…") }}
         </div>
       </div>
       <button class="text-muted" aria-label="remove attachment" @click="emit('cancel')">✕</button>
@@ -97,7 +97,7 @@ const placeholder = () =>
         <button
           class="text-muted disabled:opacity-40"
           aria-label="attach"
-          :disabled="offline || !!staged?.error"
+          :disabled="offline || (!!staged && !staged.attachmentId && !staged.error)"
           @click="fileInput?.click()"
         >
           <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">
@@ -126,7 +126,7 @@ const placeholder = () =>
         class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-bg disabled:opacity-40"
         aria-label="send"
         data-testid="send"
-        :disabled="offline || (!!staged && !staged.attachmentId)"
+        :disabled="offline || (!!staged && !staged.attachmentId && !staged.error)"
         @click="submit"
       >
         <!-- edit mode → check icon; otherwise send arrow -->
