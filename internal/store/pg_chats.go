@@ -605,27 +605,61 @@ func (p *PG) EditMessage(ctx context.Context, messageID, editorID, text string) 
 	if !isNoRows(err) {
 		return m, err
 	}
-	// distinguish unknown message from someone else's
-	var sender string
+	// distinguish unknown/foreign message from "someone else's in my chat"
+	var chatID string
 	if e := p.pool.QueryRow(ctx,
-		`SELECT sender_id FROM messages WHERE id=$1`, messageID).Scan(&sender); e != nil {
+		`SELECT chat_id FROM messages WHERE id=$1 AND deleted_at IS NULL`,
+		messageID).Scan(&chatID); e != nil {
 		return nil, ErrNotFound
+	}
+	member, err := p.IsChatMember(ctx, chatID, editorID)
+	if err != nil {
+		return nil, err
+	}
+	if !member {
+		return nil, ErrNotFound // strangers get silence, not Forbidden
 	}
 	return nil, ErrForbidden
 }
 
-func (p *PG) DeleteMessage(ctx context.Context, messageID, userID string) error {
-	var senderID string
+// canModerate — group delete: sender, or a member with owner /
+// delete_messages rights.
+func (p *PG) canDeleteMessage(ctx context.Context, msg *Message, userID string) (bool, error) {
+	if msg.SenderID == userID {
+		return true, nil
+	}
+	var ok bool
 	err := p.pool.QueryRow(ctx,
-		`SELECT sender_id FROM messages WHERE id=$1 AND deleted_at IS NULL`,
-		messageID).Scan(&senderID)
+		`SELECT EXISTS(
+		   SELECT 1 FROM chat_members mm JOIN chats c ON c.id = mm.chat_id
+		   WHERE mm.chat_id=$1 AND mm.user_id=$2 AND c.type='group'
+		     AND (mm.role='owner' OR mm.rights->>'deleteMessages'='true'))`,
+		msg.ChatID, userID).Scan(&ok)
+	return ok, err
+}
+
+func (p *PG) DeleteMessage(ctx context.Context, messageID, userID string) error {
+	msg, err := p.scanMsg(p.pool.QueryRow(ctx,
+		`SELECT `+msgCols+` FROM messages WHERE id=$1 AND deleted_at IS NULL`,
+		messageID))
 	if isNoRows(err) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if senderID != userID {
+	member, err := p.IsChatMember(ctx, msg.ChatID, userID)
+	if err != nil {
+		return err
+	}
+	if !member {
+		return ErrNotFound // strangers get silence, not Forbidden
+	}
+	ok, err := p.canDeleteMessage(ctx, msg, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return ErrForbidden
 	}
 	_, err = p.pool.Exec(ctx,
@@ -633,7 +667,29 @@ func (p *PG) DeleteMessage(ctx context.Context, messageID, userID string) error 
 	return err
 }
 
-func (p *PG) SetMessagePinned(ctx context.Context, messageID string, pinned bool) (*Message, error) {
+func (p *PG) SetMessagePinned(ctx context.Context, messageID, userID string, pinned bool) (*Message, error) {
+	var chatID string
+	if err := p.pool.QueryRow(ctx,
+		`SELECT chat_id FROM messages WHERE id=$1 AND deleted_at IS NULL`,
+		messageID).Scan(&chatID); err != nil {
+		return nil, ErrNotFound
+	}
+	// pin requires membership everywhere; in groups also pin_messages
+	// (or owner)
+	var allowed bool
+	err := p.pool.QueryRow(ctx,
+		`SELECT coalesce(mm.user_id IS NOT NULL AND
+		        (c.type <> 'group' OR mm.role='owner'
+		         OR mm.rights->>'pinMessages'='true'), false)
+		 FROM chats c LEFT JOIN chat_members mm
+		   ON mm.chat_id=c.id AND mm.user_id=$2
+		 WHERE c.id=$1`, chatID, userID).Scan(&allowed)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
 	m, err := p.scanMsg(p.pool.QueryRow(ctx,
 		`UPDATE messages SET pinned=$2 WHERE id=$1 AND deleted_at IS NULL
 		 RETURNING `+msgCols, messageID, pinned))
@@ -641,6 +697,280 @@ func (p *PG) SetMessagePinned(ctx context.Context, messageID string, pinned bool
 		return nil, ErrNotFound
 	}
 	return m, err
+}
+
+// ---- groups (party/raid rights model) ----
+
+func (p *PG) Membership(ctx context.Context, chatID, userID string) (*GroupMember, error) {
+	gm := &GroupMember{}
+	var rights []byte
+	err := p.pool.QueryRow(ctx,
+		`SELECT u.id, u.email::text, coalesce(u.display_name,''), coalesce(u.tag,''),
+		        u.avatar_url, u.created_at, cm.role, cm.rights, cm.joined_at
+		 FROM chat_members cm JOIN users u ON u.id = cm.user_id
+		 WHERE cm.chat_id=$1 AND cm.user_id=$2`, chatID, userID).
+		Scan(&gm.User.ID, &gm.User.Email, &gm.User.DisplayName, &gm.User.Tag,
+			&gm.User.AvatarURL, &gm.User.CreatedAt, &gm.Role, &rights, &gm.JoinedAt)
+	if isNoRows(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(rights, &gm.Rights)
+	return gm, nil
+}
+
+// allContacts — every id must exist as a user and be in the actor's
+// contact list (outgoing edge; mutual not required) — anti-spam gate.
+func (p *PG) allContacts(ctx context.Context, actorID string, ids []string) (bool, error) {
+	for _, id := range ids {
+		if id == actorID {
+			continue
+		}
+		var ok bool
+		err := p.pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2)`,
+			actorID, id).Scan(&ok)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (p *PG) CreateGroup(ctx context.Context, ownerID, title string, memberIDs []string) (*Chat, error) {
+	ok, err := p.allContacts(ctx, ownerID, memberIDs)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrForbidden
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var chatID string
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO chats (type, title) VALUES ('group', $1) RETURNING id`,
+		title).Scan(&chatID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1,$2,'owner')`,
+		chatID, ownerID); err != nil {
+		return nil, err
+	}
+	for _, id := range memberIDs {
+		if id == ownerID {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2)
+			 ON CONFLICT DO NOTHING`, chatID, id); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return p.ChatByID(ctx, chatID, ownerID)
+}
+
+// groupActor — actor must sit in a *group* chat. Missing chat, non-group
+// chat, and non-member actor all collapse to ErrNotFound: group routes
+// never reveal which of the three happened (existence privacy).
+func (p *PG) groupActor(ctx context.Context, chatID, actorID string) (string, MemberRights, error) {
+	var typ, role string
+	var raw []byte
+	err := p.pool.QueryRow(ctx,
+		`SELECT c.type, coalesce(mm.role,''), coalesce(mm.rights,'{}'::jsonb)
+		 FROM chats c LEFT JOIN chat_members mm
+		   ON mm.chat_id=c.id AND mm.user_id=$2
+		 WHERE c.id=$1`, chatID, actorID).Scan(&typ, &role, &raw)
+	if isNoRows(err) || err == nil && (typ != "group" || role == "") {
+		return "", MemberRights{}, ErrNotFound
+	}
+	if err != nil {
+		return "", MemberRights{}, err
+	}
+	var rights MemberRights
+	_ = json.Unmarshal(raw, &rights)
+	return role, rights, nil
+}
+
+func rightSet(r MemberRights, name string) bool {
+	switch name {
+	case "inviteMembers":
+		return r.InviteMembers
+	case "removeMembers":
+		return r.RemoveMembers
+	case "editInfo":
+		return r.EditInfo
+	case "pinMessages":
+		return r.PinMessages
+	case "deleteMessages":
+		return r.DeleteMessages
+	}
+	return false
+}
+
+// memberGate — actor must be a group member with the given right
+// (owner always passes). Returns ErrNotFound for foreign chats.
+func (p *PG) memberGate(ctx context.Context, chatID, actorID, right string) error {
+	role, rights, err := p.groupActor(ctx, chatID, actorID)
+	if err != nil {
+		return err
+	}
+	if role != "owner" && !rightSet(rights, right) {
+		return ErrForbidden
+	}
+	return nil
+}
+
+func (p *PG) SetGroupTitle(ctx context.Context, chatID, actorID, title string) (*Chat, error) {
+	if err := p.memberGate(ctx, chatID, actorID, "editInfo"); err != nil {
+		return nil, err
+	}
+	tag, err := p.pool.Exec(ctx,
+		`UPDATE chats SET title=$2 WHERE id=$1 AND type='group'`, chatID, title)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return p.ChatByID(ctx, chatID, actorID)
+}
+
+func (p *PG) AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) error {
+	if err := p.memberGate(ctx, chatID, actorID, "inviteMembers"); err != nil {
+		return err
+	}
+	// already-members are an idempotent no-op (same as Mem) — filter them
+	// out before the contacts gate so a re-add can't 403 on a non-contact
+	rows, err := p.pool.Query(ctx,
+		`SELECT user_id FROM chat_members WHERE chat_id=$1 AND user_id=ANY($2)`,
+		chatID, memberIDs)
+	if err != nil {
+		return err
+	}
+	existing := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		existing[id] = true
+	}
+	rows.Close()
+	var fresh []string
+	for _, id := range memberIDs {
+		if !existing[id] {
+			fresh = append(fresh, id)
+		}
+	}
+	ok, err := p.allContacts(ctx, actorID, fresh)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrForbidden
+	}
+	for _, id := range fresh {
+		if _, err := p.pool.Exec(ctx,
+			`INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2)`, chatID, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *PG) RemoveGroupMember(ctx context.Context, chatID, actorID, targetID string) error {
+	// actor gate first — a stranger must not learn anything about the
+	// target (membership, ownership) from the status code
+	role, rights, err := p.groupActor(ctx, chatID, actorID)
+	if err != nil {
+		return err
+	}
+	tm, err := p.Membership(ctx, chatID, targetID)
+	if err != nil {
+		return err // ErrNotFound — not a member
+	}
+	if tm.Role == "owner" {
+		return ErrForbidden // owner leaves only via TransferOwnership
+	}
+	if actorID != targetID && role != "owner" && !rights.RemoveMembers {
+		return ErrForbidden
+	}
+	if _, err := p.pool.Exec(ctx,
+		`DELETE FROM chat_members WHERE chat_id=$1 AND user_id=$2`, chatID, targetID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PG) SetMemberRights(ctx context.Context, chatID, ownerID, targetID string, rights MemberRights) (*GroupMember, error) {
+	role, _, err := p.groupActor(ctx, chatID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if role != "owner" || targetID == ownerID {
+		return nil, ErrForbidden // owner only; owner can't edit own rights
+	}
+	tm, err := p.Membership(ctx, chatID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if tm.Role == "owner" {
+		return nil, ErrForbidden
+	}
+	raw, err := json.Marshal(rights)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.pool.Exec(ctx,
+		`UPDATE chat_members SET rights=$3 WHERE chat_id=$1 AND user_id=$2`,
+		chatID, targetID, raw); err != nil {
+		return nil, err
+	}
+	return p.Membership(ctx, chatID, targetID)
+}
+
+func (p *PG) TransferOwnership(ctx context.Context, chatID, ownerID, newOwnerID string) error {
+	role, _, err := p.groupActor(ctx, chatID, ownerID)
+	if err != nil {
+		return err
+	}
+	if role != "owner" {
+		return ErrForbidden
+	}
+	if _, err := p.Membership(ctx, chatID, newOwnerID); err != nil {
+		return err // target must already sit in the group
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx,
+		`UPDATE chat_members SET role='member' WHERE chat_id=$1 AND user_id=$2`,
+		chatID, ownerID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE chat_members SET role='owner' WHERE chat_id=$1 AND user_id=$2`,
+		chatID, newOwnerID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (p *PG) MarkRead(ctx context.Context, chatID, userID string, upToSeq int64) error {

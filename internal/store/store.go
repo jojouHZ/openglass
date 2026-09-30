@@ -178,14 +178,25 @@ type ChatStore interface {
 	SetChatPinned(ctx context.Context, chatID, userID string, pinned bool) error // ErrNotFound non-member
 	IsChatMember(ctx context.Context, chatID, userID string) (bool, error)
 	ChatMemberIDs(ctx context.Context, chatID string) ([]string, error) // fan-out (ws)
+	// Membership returns role+rights for a member — ErrNotFound hides
+	// foreign chats; used for rights-gated operations (groups).
+	Membership(ctx context.Context, chatID, userID string) (*GroupMember, error)
+
+	// groups — party/raid rights model (owner implicit, member via rights)
+	CreateGroup(ctx context.Context, ownerID, title string, memberIDs []string) (*Chat, error)
+	SetGroupTitle(ctx context.Context, chatID, actorID, title string) (*Chat, error)
+	AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) error
+	RemoveGroupMember(ctx context.Context, chatID, actorID, targetID string) error
+	SetMemberRights(ctx context.Context, chatID, ownerID, targetID string, rights MemberRights) (*GroupMember, error)
+	TransferOwnership(ctx context.Context, chatID, ownerID, newOwnerID string) error
 
 	// messages
 	ListMessages(ctx context.Context, chatID string, q MessageQuery) (msgs []Message, nextCursor, newerCursor *int64, err error)
 	SendMessage(ctx context.Context, m *Message) (*Message, bool /*created*/, error) // created=false on nonce replay
 	MessageByID(ctx context.Context, messageID string) (*Message, error)
 	EditMessage(ctx context.Context, messageID, editorID, text string) (*Message, error) // ErrForbidden not own
-	DeleteMessage(ctx context.Context, messageID, userID string) error                   // own only until #15 rights
-	SetMessagePinned(ctx context.Context, messageID string, pinned bool) (*Message, error)
+	DeleteMessage(ctx context.Context, messageID, userID string) error                   // own; groups: also owner/delete_messages
+	SetMessagePinned(ctx context.Context, messageID, userID string, pinned bool) (*Message, error)
 	MarkRead(ctx context.Context, chatID, userID string, upToSeq int64) error
 }
 

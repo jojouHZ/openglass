@@ -14,7 +14,8 @@ accumulate as the phases land.
 | M6 | Private layer: E2EE, zero-knowledge relay without Redis | *not built yet — flagship module* |
 | M7 | One core, three shells: MFE core → PWA, Capacitor, Electron | *post-MVP* |
 | M8 | Security & ops: CI stages, gosec/govulncheck/trivy, review process with real findings | journal/04, 05, 06 |
-| M9 | Messaging domain depth: idempotency, cursors, tombstones, existence privacy, mutual contacts | journal/05 |
-| M10 | Debugging craft: token-collision CSS, test isolation, live-smoke methodology, corrupted-read clients | journal/05, 06, 07 |
+| M9 | Messaging domain depth: idempotency, cursors, tombstones, existence privacy, mutual contacts | journal/05, 08 |
+| M10 | Debugging craft: token-collision CSS, test isolation, live-smoke methodology, corrupted-read clients, LEFT JOIN NULL traps | journal/05, 06, 07, 08 |
+| M11 | Group rights modeling: owner/member + granular rights jsonb, contacts-only invites, atomic ownership transfer | journal/08 |
 
 Each module = theory + the actual repo code/commits as the lab.

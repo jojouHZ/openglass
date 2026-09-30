@@ -437,8 +437,15 @@ func (s *Server) setMessagePinned(w http.ResponseWriter, r *http.Request) {
 	if msg == nil {
 		return
 	}
-	got, err := s.chats.SetMessagePinned(r.Context(), msg.ID, in.Pinned)
-	if err != nil {
+	got, err := s.chats.SetMessagePinned(r.Context(), msg.ID, userID(r), in.Pinned)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		notFound(w)
+		return
+	case errors.Is(err, store.ErrForbidden):
+		writeErr(w, http.StatusForbidden, "forbidden", "Requires pin_messages right", nil)
+		return
+	case err != nil:
 		writeErrorFromErr(w, err)
 		return
 	}

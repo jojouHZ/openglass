@@ -243,12 +243,12 @@ func TestStubsAre501_NotSilent(t *testing.T) {
 		`{"email":"s@x.io","code":"`+sender.Codes["s@x.io"]+`","deviceName":"t"}`, "")
 	access := v["accessToken"].(string)
 
-	code, body := post(t, ts, "/api/v1/groups", `{"title":"x","memberIds":[]}`, access)
+	code, body := post(t, ts, "/api/v1/reports", `{"targetType":"user","targetId":"x","reason":"t"}`, access)
 	if code != 501 || errCode(body) != "not_implemented" {
 		t.Fatalf("got %d %v", code, body)
 	}
 	// unauthorized stub still enforces auth
-	if c, _ := post(t, ts, "/api/v1/groups", `{}`, ""); c != 401 {
+	if c, _ := post(t, ts, "/api/v1/reports", `{}`, ""); c != 401 {
 		t.Fatalf("unauth stub: %d", c)
 	}
 }

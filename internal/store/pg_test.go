@@ -211,7 +211,7 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 	}
 
 	// pinned + search + delete
-	if _, err := pg.SetMessagePinned(ctx, m.ID, true); err != nil {
+	if _, err := pg.SetMessagePinned(ctx, m.ID, a.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	msgs, _, _, _ = pg.ListMessages(ctx, chat.ID, store.MessageQuery{Pinned: true})
@@ -238,6 +238,94 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 	msgs, _, _, _ = pg.ListMessages(ctx, chat.ID, store.MessageQuery{})
 	if len(msgs) != 1 {
 		t.Fatalf("tombstone leaked: %d", len(msgs))
+	}
+}
+
+func TestPG_GroupRoundtrip(t *testing.T) {
+	pg := pgOrSkip(t)
+	ctx := context.Background()
+	sfx := store_testID(t)
+
+	o, _ := pg.CreateUser(ctx, "go-"+sfx+"@x.io")
+	m, _ := pg.CreateUser(ctx, "gm-"+sfx+"@x.io")
+	_, _ = pg.CompleteProfile(ctx, o.ID, "O", "go-"+sfx+"#1")
+	_, _ = pg.CompleteProfile(ctx, m.ID, "M", "gm-"+sfx+"#1")
+
+	// contacts-only gate: no contact → forbidden
+	if _, err := pg.CreateGroup(ctx, o.ID, "g", []string{m.ID}); err != store.ErrForbidden {
+		t.Fatalf("non-contact create: %v", err)
+	}
+	if _, err := pg.AddContact(ctx, o.ID, m.ID); err != nil {
+		t.Fatal(err)
+	}
+	g, err := pg.CreateGroup(ctx, o.ID, "squad", []string{m.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Type != "group" || len(g.Members) != 2 || g.Members[0].Role != "owner" {
+		t.Fatalf("roster: %+v", g.Members)
+	}
+
+	// member without rights is denied; granted rights unlock
+	if _, err := pg.SetGroupTitle(ctx, g.ID, m.ID, "hax"); err != store.ErrForbidden {
+		t.Fatalf("member title: %v", err)
+	}
+	if _, err := pg.SetMemberRights(ctx, g.ID, o.ID, m.ID,
+		store.MemberRights{EditInfo: true, PinMessages: true}); err != nil {
+		t.Fatal(err)
+	}
+	g2, err := pg.SetGroupTitle(ctx, g.ID, m.ID, "renamed")
+	if err != nil || *g2.Title != "renamed" {
+		t.Fatalf("member title after grant: %v", err)
+	}
+
+	// pin right applies to messages in groups
+	msg, _, err := pg.SendMessage(ctx, &store.Message{
+		ChatID: g.ID, SenderID: o.ID, Text: strptr("pin me"), ClientNonce: "p" + sfx,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pg.SetMessagePinned(ctx, msg.ID, m.ID, true); err != nil {
+		t.Fatalf("member pin with right: %v", err)
+	}
+
+	// existence privacy at the store level: a stranger must see
+	// ErrNotFound on every group op — never Forbidden, which would
+	// leak "chat exists / target is a member / target is the owner"
+	s, _ := pg.CreateUser(ctx, "gs-"+sfx+"@x.io")
+	for _, fn := range []func() error{
+		func() error { _, e := pg.SetGroupTitle(ctx, g.ID, s.ID, "x"); return e },
+		func() error { return pg.AddGroupMembers(ctx, g.ID, s.ID, []string{m.ID}) },
+		func() error { return pg.RemoveGroupMember(ctx, g.ID, s.ID, m.ID) },
+		func() error { return pg.RemoveGroupMember(ctx, g.ID, s.ID, o.ID) },
+		func() error { _, e := pg.SetMemberRights(ctx, g.ID, s.ID, m.ID, store.MemberRights{}); return e },
+		func() error { return pg.TransferOwnership(ctx, g.ID, s.ID, m.ID) },
+	} {
+		if err := fn(); err != store.ErrNotFound {
+			t.Fatalf("stranger op must hide existence: %v", err)
+		}
+	}
+	// group ops on a direct chat id are NotFound, not Forbidden
+	_, _ = pg.AddContact(ctx, m.ID, o.ID) // direct chats need mutuality
+	dc, _, _ := pg.OpenDirectChat(ctx, o.ID, m.ID)
+	if _, err := pg.SetGroupTitle(ctx, dc.ID, o.ID, "x"); err != store.ErrNotFound {
+		t.Fatalf("direct-chat group op: %v", err)
+	}
+
+	// owner cannot be removed; transfer then former owner may leave
+	if err := pg.RemoveGroupMember(ctx, g.ID, o.ID, o.ID); err != store.ErrForbidden {
+		t.Fatalf("owner self-remove: %v", err)
+	}
+	if err := pg.TransferOwnership(ctx, g.ID, o.ID, m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pg.RemoveGroupMember(ctx, g.ID, o.ID, o.ID); err != nil {
+		t.Fatalf("former owner leave: %v", err)
+	}
+	gm, _ := pg.Membership(ctx, g.ID, m.ID)
+	if gm.Role != "owner" {
+		t.Fatalf("new owner: %v", gm.Role)
 	}
 }
 

@@ -470,6 +470,9 @@ func (m *Mem) EditMessage(_ context.Context, messageID, editorID, text string) (
 	for _, msgs := range cs.messages {
 		for _, msg := range msgs {
 			if msg.ID == messageID {
+				if msg.DeletedAt != nil || cs.members[msg.ChatID][editorID] == nil {
+					return nil, ErrNotFound // tombstones and strangers → silence
+				}
 				if msg.SenderID != editorID {
 					return nil, ErrForbidden
 				}
@@ -491,25 +494,51 @@ func (m *Mem) DeleteMessage(_ context.Context, messageID, userID string) error {
 	for _, msgs := range cs.messages {
 		for _, msg := range msgs {
 			if msg.ID == messageID {
-				if msg.SenderID != userID {
-					return ErrForbidden
+				if msg.DeletedAt != nil {
+					return ErrNotFound // tombstones are gone (PG parity)
 				}
-				now := time.Now()
-				msg.DeletedAt = &now
-				return nil
+				mm := cs.members[msg.ChatID][userID]
+				if mm == nil {
+					return ErrNotFound // strangers get silence, not Forbidden
+				}
+				if msg.SenderID == userID {
+					now := time.Now()
+					msg.DeletedAt = &now
+					return nil
+				}
+				// groups: owner or delete_messages may remove others' posts
+				if cs.chats[msg.ChatID].Type == "group" &&
+					(mm.Role == "owner" || mm.Rights.DeleteMessages) {
+					now := time.Now()
+					msg.DeletedAt = &now
+					return nil
+				}
+				return ErrForbidden
 			}
 		}
 	}
 	return ErrNotFound
 }
 
-func (m *Mem) SetMessagePinned(_ context.Context, messageID string, pinned bool) (*Message, error) {
+func (m *Mem) SetMessagePinned(_ context.Context, messageID, userID string, pinned bool) (*Message, error) {
 	cs := m.cs()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for _, msgs := range cs.messages {
 		for _, msg := range msgs {
 			if msg.ID == messageID {
+				if msg.DeletedAt != nil {
+					return nil, ErrNotFound // no pinning tombstones (PG parity)
+				}
+				mm := cs.members[msg.ChatID][userID]
+				if mm == nil {
+					return nil, ErrForbidden
+				}
+				// groups: pin requires pin_messages or owner
+				if cs.chats[msg.ChatID].Type == "group" &&
+					mm.Role != "owner" && !mm.Rights.PinMessages {
+					return nil, ErrForbidden
+				}
 				msg.Pinned = pinned
 				cp := *msg
 				return &cp, nil
@@ -517,6 +546,164 @@ func (m *Mem) SetMessagePinned(_ context.Context, messageID string, pinned bool)
 		}
 	}
 	return nil, ErrNotFound
+}
+
+// ---- groups (party/raid rights model) ----
+
+func (m *Mem) Membership(_ context.Context, chatID, userID string) (*GroupMember, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	mm, ok := cs.members[chatID][userID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	gm := mm.GroupMember
+	if u, err := m.UserByID(context.Background(), userID); err == nil {
+		gm.User = *u
+	}
+	return &gm, nil
+}
+
+// isContact — group invites are restricted to the actor's contact list
+// (outgoing edge; mutual not required) — anti-spam decision.
+func isContact(cs *memChats, owner, contact string) bool {
+	_, ok := cs.contacts[owner][contact]
+	return ok
+}
+
+func (m *Mem) CreateGroup(_ context.Context, ownerID, title string, memberIDs []string) (*Chat, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	for _, id := range memberIDs {
+		if id == ownerID {
+			continue
+		}
+		if _, err := m.UserByID(context.Background(), id); err != nil || !isContact(cs, ownerID, id) {
+			return nil, ErrForbidden
+		}
+	}
+	now := time.Now()
+	c := &memChat{Chat: Chat{ID: memID(), Type: "group", Title: &title, CreatedAt: now}}
+	cs.chats[c.ID] = c
+	cs.members[c.ID] = map[string]*memMember{}
+	cs.members[c.ID][ownerID] = &memMember{GroupMember: GroupMember{
+		User: User{ID: ownerID}, Role: "owner", JoinedAt: now}}
+	for _, id := range memberIDs {
+		if id == ownerID {
+			continue
+		}
+		cs.members[c.ID][id] = &memMember{GroupMember: GroupMember{
+			User: User{ID: id}, Role: "member", JoinedAt: now}}
+	}
+	return m.chatView(cs, c, ownerID), nil
+}
+
+func (m *Mem) SetGroupTitle(_ context.Context, chatID, actorID, title string) (*Chat, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	c, ok := cs.chats[chatID]
+	mm := cs.members[chatID][actorID]
+	if !ok || mm == nil || c.Type != "group" {
+		return nil, ErrNotFound
+	}
+	if mm.Role != "owner" && !mm.Rights.EditInfo {
+		return nil, ErrForbidden
+	}
+	c.Title = &title
+	return m.chatView(cs, c, actorID), nil
+}
+
+func (m *Mem) AddGroupMembers(_ context.Context, chatID, actorID string, memberIDs []string) error {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	c, ok := cs.chats[chatID]
+	mm := cs.members[chatID][actorID]
+	if !ok || mm == nil || c.Type != "group" {
+		return ErrNotFound
+	}
+	if mm.Role != "owner" && !mm.Rights.InviteMembers {
+		return ErrForbidden
+	}
+	// validate everything before mutating — a mid-loop rejection must
+	// not leave a partially-applied roster
+	var fresh []string
+	for _, id := range memberIDs {
+		if _, member := cs.members[chatID][id]; member {
+			continue // idempotent re-add
+		}
+		if _, err := m.UserByID(context.Background(), id); err != nil {
+			return ErrForbidden
+		}
+		if !isContact(cs, actorID, id) {
+			return ErrForbidden // contacts-only invites
+		}
+		fresh = append(fresh, id)
+	}
+	for _, id := range fresh {
+		cs.members[chatID][id] = &memMember{GroupMember: GroupMember{
+			User: User{ID: id}, Role: "member", JoinedAt: time.Now()}}
+	}
+	return nil
+}
+
+func (m *Mem) RemoveGroupMember(_ context.Context, chatID, actorID, targetID string) error {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	c, ok := cs.chats[chatID]
+	mm := cs.members[chatID][actorID]
+	tm := cs.members[chatID][targetID]
+	if !ok || mm == nil || tm == nil || c.Type != "group" {
+		return ErrNotFound
+	}
+	if tm.Role == "owner" {
+		return ErrForbidden // owner leaves only via transferOwnership
+	}
+	if actorID != targetID && mm.Role != "owner" && !mm.Rights.RemoveMembers {
+		return ErrForbidden
+	}
+	delete(cs.members[chatID], targetID)
+	return nil
+}
+
+func (m *Mem) SetMemberRights(_ context.Context, chatID, ownerID, targetID string, rights MemberRights) (*GroupMember, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	mm := cs.members[chatID][ownerID]
+	tm := cs.members[chatID][targetID]
+	if mm == nil || tm == nil || cs.chats[chatID].Type != "group" {
+		return nil, ErrNotFound
+	}
+	if mm.Role != "owner" || targetID == ownerID {
+		return nil, ErrForbidden // owner only; owner can't edit own rights
+	}
+	tm.Rights = rights
+	gm := tm.GroupMember
+	if u, err := m.UserByID(context.Background(), targetID); err == nil {
+		gm.User = *u
+	}
+	return &gm, nil
+}
+
+func (m *Mem) TransferOwnership(_ context.Context, chatID, ownerID, newOwnerID string) error {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	mm := cs.members[chatID][ownerID]
+	tm := cs.members[chatID][newOwnerID]
+	if mm == nil || tm == nil || cs.chats[chatID].Type != "group" {
+		return ErrNotFound
+	}
+	if mm.Role != "owner" {
+		return ErrForbidden
+	}
+	mm.Role, tm.Role = "member", "owner"
+	return nil
 }
 
 func (m *Mem) MarkRead(_ context.Context, chatID, userID string, upToSeq int64) error {

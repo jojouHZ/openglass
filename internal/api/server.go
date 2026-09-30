@@ -119,14 +119,18 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("POST /messages/{messageId}/pin", s.requireAuth(s.setMessagePinned))
 	v1.HandleFunc("POST /chats/{chatId}/read", s.requireAuth(s.markRead))
 
+	// groups (B3) — party/raid rights model
+	v1.HandleFunc("POST /groups", s.requireAuth(s.createGroup))
+	v1.HandleFunc("PATCH /groups/{chatId}", s.requireAuth(s.editGroup))
+	v1.HandleFunc("POST /groups/{chatId}/members", s.requireAuth(s.addGroupMembers))
+	v1.HandleFunc("DELETE /groups/{chatId}/members/{userId}", s.requireAuth(s.removeGroupMember))
+	v1.HandleFunc("PATCH /groups/{chatId}/members/{userId}", s.requireAuth(s.setMemberRights))
+	v1.HandleFunc("POST /groups/{chatId}/ownership", s.requireAuth(s.transferOwnership))
+
 	// contracted-but-unimplemented slices → honest 501, not 404/silence
 	stub := s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) })
 	for _, r := range []string{
 		"POST /chats/{chatId}/attachments",
-		"POST /groups", "PATCH /groups/{chatId}",
-		"POST /groups/{chatId}/members", "DELETE /groups/{chatId}/members/{userId}",
-		"PATCH /groups/{chatId}/members/{userId}",
-		"POST /groups/{chatId}/ownership",
 		"GET /push/vapid-key", "GET /push/subscriptions", "POST /push/subscriptions",
 		"DELETE /push/subscriptions/{subscriptionId}",
 		"POST /reports",
