@@ -35,6 +35,8 @@ Thumbs.db
 
 # === Internal development infrastructure (local-only, never committed) ===
 .devin/
+# RU course drafts — local-only (committed docs are English-only)
+docs/course/ru/
 AGENTS.md
 scripts/test_agents.py
 scripts/test_structure.py
