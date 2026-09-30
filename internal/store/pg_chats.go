@@ -81,6 +81,15 @@ func (p *PG) AreMutual(ctx context.Context, a, b string) (bool, error) {
 	return ok, err
 }
 
+func (p *PG) ContactEdges(ctx context.Context, a, b string) (bool, bool, error) {
+	var ab, ba bool
+	err := p.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2),
+		        EXISTS(SELECT 1 FROM contacts WHERE owner_id=$2 AND contact_id=$1)`,
+		a, b).Scan(&ab, &ba)
+	return ab, ba, err
+}
+
 func (p *PG) IsChatMember(ctx context.Context, chatID, userID string) (bool, error) {
 	var ok bool
 	err := p.pool.QueryRow(ctx,

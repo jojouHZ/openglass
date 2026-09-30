@@ -169,6 +169,9 @@ type ChatStore interface {
 	AddContact(ctx context.Context, userID, contactID string) (*Contact, error) // ErrConflict dup, ErrNotFound user
 	RemoveContact(ctx context.Context, userID, contactID string) error          // ErrNotFound
 	AreMutual(ctx context.Context, a, b string) (bool, error)
+	// ContactEdges reports the two directed edges between a and b —
+	// drives the relationship enum on GET /users/{id} (S7).
+	ContactEdges(ctx context.Context, a, b string) (aToB, bToA bool, err error)
 	MutualContactIDs(ctx context.Context, userID string) ([]string, error) // presence scope (ws)
 
 	// chats

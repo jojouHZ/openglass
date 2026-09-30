@@ -579,6 +579,38 @@ func TestMutual_Lifecycle(t *testing.T) {
 	}
 }
 
+func TestUserRelationship_ProfileEnum(t *testing.T) {
+	ts, _, _, aTok, aID, bTok, bID := setupTwoUsers(t)
+
+	rel := func(tok, id string) string {
+		c, b := get(t, ts, "/api/v1/users/"+id, tok)
+		if c != 200 {
+			t.Fatalf("getUser: %d", c)
+		}
+		return b["relationship"].(string)
+	}
+
+	// strangers, then one-way, then mutual — plus self
+	if rel(aTok, bID) != "none" || rel(bTok, aID) != "none" {
+		t.Fatal("strangers must see none")
+	}
+	if rel(aTok, aID) != "self" {
+		t.Fatal("own profile must be self")
+	}
+	post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, bID), aTok)
+	if rel(aTok, bID) != "contact_outgoing" || rel(bTok, aID) != "contact_incoming" {
+		t.Fatal("one-way edge must be outgoing/incoming")
+	}
+	post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, aID), bTok)
+	if rel(aTok, bID) != "contact_mutual" || rel(bTok, aID) != "contact_mutual" {
+		t.Fatal("two-way must be contact_mutual")
+	}
+	del(t, ts, "/api/v1/contacts/"+aID, bTok)
+	if rel(bTok, aID) != "contact_incoming" || rel(aTok, bID) != "contact_outgoing" {
+		t.Fatal("after remove: remover sees incoming, removed sees outgoing")
+	}
+}
+
 func TestSecurity_ForeignMessageInvisible(t *testing.T) {
 	ts, st, sender, aTok, aID, bTok, bID := setupTwoUsers(t)
 	befriend(t, ts, aTok, bTok, aID, bID)

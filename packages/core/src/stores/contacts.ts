@@ -32,6 +32,22 @@ export const useContactsStore = defineStore("contacts", {
     contactIds: (s) => s.list.map((c) => c.user.id),
     /** Mutuals can open direct chats — the S8 member picker feed. */
     mutualContacts: (s) => s.list.filter((c) => c.mutual),
+    /**
+     * Local filter for the S6 "contacts" section — substring match on
+     * displayName or tag, case-insensitive. The "global" section is a
+     * separate server search; this only narrows the loaded roster.
+     */
+    searchLocal:
+      (s) =>
+      (q: string): Contact[] => {
+        const needle = q.trim().toLowerCase();
+        if (!needle) return s.list;
+        return s.list.filter(
+          (c) =>
+            c.user.displayName.toLowerCase().includes(needle) ||
+            c.user.tag.toLowerCase().includes(needle),
+        );
+      },
   },
 
   actions: {

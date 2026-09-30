@@ -113,6 +113,15 @@ func (m *Mem) AreMutual(_ context.Context, a, b string) (bool, error) {
 	return ab && ba, nil
 }
 
+func (m *Mem) ContactEdges(_ context.Context, a, b string) (bool, bool, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	_, ab := cs.contacts[a][b]
+	_, ba := cs.contacts[b][a]
+	return ab, ba, nil
+}
+
 func (m *Mem) IsChatMember(_ context.Context, chatID, userID string) (bool, error) {
 	cs := m.cs()
 	cs.mu.Lock()
