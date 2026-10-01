@@ -1,0 +1,34 @@
+# Copyright (C) 2025 OpenGlass contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+version: 2
+updates:
+  # Go modules — weekly, grouped to keep PR noise low
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  # pnpm workspaces — weekly, dev/prod grouped separately
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions — keeps the SHA-pinned actions current
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Docker base images
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
