@@ -594,6 +594,11 @@ export function createHandlers(state: MockState) {
       if (!members) return err(404, "not_found", "Chat not found");
       const i = members.findIndex((m) => m.user.id === params.userId);
       if (i !== -1) members.splice(i, 1);
+      // self-leave: the chat disappears from the leaving user's list
+      if (params.userId === state.session?.user?.id) {
+        state.chatSummaries.delete(String(params.chatId));
+        state.chats.delete(String(params.chatId));
+      }
       return empty();
     }),
 

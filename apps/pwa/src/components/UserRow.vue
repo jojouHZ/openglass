@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import type { User } from "@openglass/core";
 
-defineProps<{ user: User }>();
+defineProps<{ user: User; subtitle?: string }>();
 const emit = defineEmits<{ open: [] }>();
 </script>
 
@@ -21,7 +21,7 @@ const emit = defineEmits<{ open: [] }>();
         {{ user.displayName }}
       </span>
       <span class="block truncate text-msg text-muted" data-testid="user-tag">
-        {{ user.tag }}
+        {{ subtitle ?? user.tag }}
       </span>
     </span>
     <span class="shrink-0" @click.stop>

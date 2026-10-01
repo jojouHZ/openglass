@@ -9,7 +9,7 @@
 import { defineStore } from "pinia";
 
 import { ApiRequestError, type ApiClient } from "../api/client";
-import type { Chat, ChatSummary, Message, User } from "../api/client";
+import type { Chat, ChatSummary, GroupMember, MemberRights, Message, User } from "../api/client";
 import type { Unsubscribe } from "../api/client";
 import { useContactsStore } from "./contacts";
 import { api, useSessionStore } from "./session";
@@ -91,6 +91,55 @@ export const useChatsStore = defineStore("chats", {
       this.details[chat.id] = chat;
       void this.refreshChats();
       return chat;
+    },
+
+    /** Current user's GroupMember row in a group (rights/role source). */
+    myMember(chatId: string): GroupMember | undefined {
+      const s = useSessionStore();
+      return this.details[chatId]?.members?.find((m) => m.user.id === s.user?.id);
+    },
+
+    /** Refetch the detail after a 204 group mutation; chat.updated may also merge it. */
+    async syncGroupDetail(chatId: string) {
+      this.details[chatId] = (await api().chats.get(chatId)).chat;
+      void this.refreshChats();
+    },
+
+    async renameGroup(chatId: string, title: string) {
+      const { chat } = await api().groups.edit(chatId, { title });
+      this.details[chatId] = chat;
+      void this.refreshChats();
+    },
+
+    async addGroupMembers(chatId: string, memberIds: string[]) {
+      await api().groups.addMembers(chatId, memberIds);
+      await this.syncGroupDetail(chatId);
+    },
+
+    async removeGroupMember(chatId: string, userId: string) {
+      await api().groups.removeMember(chatId, userId);
+      await this.syncGroupDetail(chatId);
+    },
+
+    /** S9a leave — self-removal drops the chat locally, no detail resync. */
+    async leaveGroup(chatId: string) {
+      const s = useSessionStore();
+      if (s.user) await api().groups.removeMember(chatId, s.user.id);
+      delete this.details[chatId];
+      delete this.windows[chatId];
+      void this.refreshChats();
+    },
+
+    async setMemberRights(chatId: string, userId: string, rights: MemberRights) {
+      const { member } = await api().groups.setMemberRights(chatId, userId, rights);
+      const chat = this.details[chatId];
+      const i = chat?.members?.findIndex((m) => m.user.id === userId) ?? -1;
+      if (chat?.members && i !== -1) chat.members[i] = member;
+    },
+
+    async transferOwnership(chatId: string, newOwnerId: string) {
+      await api().groups.transferOwnership(chatId, newOwnerId);
+      await this.syncGroupDetail(chatId);
     },
 
     chatTitle(c: ChatSummary): string {

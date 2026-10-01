@@ -23,7 +23,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/contacts/:userId", name: "s7-contact-profile", component: () => import("./views/S7ContactProfile.vue"), meta: { screen: "S7", auth: true } },
   { path: "/groups/new", name: "s8-group-create", component: () => import("./views/S8GroupCreate.vue"), meta: { screen: "S8", auth: true } },
   { path: "/groups/:chatId", name: "s9-group", component: Placeholder, meta: { screen: "S9", auth: true } },
-  { path: "/groups/:chatId/manage", name: "s9a-group-manage", component: Placeholder, meta: { screen: "S9a", auth: true } },
+  { path: "/groups/:chatId/manage", name: "s9a-group-manage", component: () => import("./views/S9aGroupManage.vue"), meta: { screen: "S9a", auth: true } },
   { path: "/settings", name: "s13-settings", component: Placeholder, meta: { screen: "S13", auth: true } },
   { path: "/settings/security", name: "s14-security", component: Placeholder, meta: { screen: "S14", auth: true } },
   { path: "/pwa", name: "s15-pwa", component: Placeholder, meta: { screen: "S15" } },

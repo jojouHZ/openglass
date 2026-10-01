@@ -9,6 +9,10 @@ import type { LocalMessage } from "@openglass/core";
 const props = defineProps<{
   message: LocalMessage;
   own: boolean;
+  /** group pinMessages right / owner — server still enforces */
+  canPin: boolean;
+  /** own message, or deleteMessages right / owner in a group */
+  canDelete: boolean;
   x: number;
   y: number;
 }>();
@@ -56,10 +60,11 @@ const act = (fn: () => void) => () => {
         >
           edit
         </button>
-        <button class="menu-item" data-testid="mi-pin" @click="act(() => emit('pin'))()">
+        <button v-if="canPin" class="menu-item" data-testid="mi-pin" @click="act(() => emit('pin'))()">
           {{ message.pinned ? "unpin" : "pin" }}
         </button>
         <button
+          v-if="canDelete"
           class="menu-item text-danger"
           data-testid="mi-delete"
           @click="act(() => emit('delete'))()"

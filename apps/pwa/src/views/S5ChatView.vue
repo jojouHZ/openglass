@@ -146,6 +146,19 @@ function cancelStrip() {
 
 // --- message menu ---
 const menu = ref<{ m: LocalMessage; x: number; y: number } | null>(null);
+
+// party/raid rights — UI gate only, the server enforces
+const myMember = computed(() => chats.myMember(chatId.value));
+const canPinMsg = computed(
+  () =>
+    chat.value?.type !== "group" ||
+    myMember.value?.role === "owner" ||
+    !!myMember.value?.rights?.pinMessages,
+);
+function canDeleteMsg(m: LocalMessage) {
+  if (m.senderId === session.user?.id) return true;
+  return myMember.value?.role === "owner" || !!myMember.value?.rights?.deleteMessages;
+}
 let lpTimer: ReturnType<typeof setTimeout> | null = null;
 
 function openMenu(m: LocalMessage, e: MouseEvent) {
@@ -303,6 +316,15 @@ watch(
         class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
         data-testid="peer-avatar"
         @click="router.push({ name: 's7-contact-profile', params: { userId: peer.id } })"
+      >
+        {{ title.slice(0, 1) }}
+      </button>
+      <button
+        v-else-if="chat?.type === 'group'"
+        class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
+        aria-label="group settings"
+        data-testid="group-avatar"
+        @click="router.push({ name: 's9a-group-manage', params: { chatId } })"
       >
         {{ title.slice(0, 1) }}
       </button>
@@ -476,6 +498,8 @@ watch(
       v-if="menu"
       :message="menu.m"
       :own="menu.m.senderId === session.user?.id"
+      :can-pin="canPinMsg"
+      :can-delete="canDeleteMsg(menu.m)"
       :x="menu.x"
       :y="menu.y"
       @reply="replyTo = menu!.m"
