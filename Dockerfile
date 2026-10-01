@@ -10,7 +10,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN adduser -D openglass
 USER openglass
 COPY --from=build /out/server /usr/local/bin/server
