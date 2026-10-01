@@ -8,7 +8,8 @@
 
 import { defineStore } from "pinia";
 
-import type { ApiClient, User } from "../api/client";
+import type { ApiClient, DeviceSession, User } from "../api/client";
+import { useChatsStore } from "./chats";
 
 let apiRef: ApiClient | null = null;
 
@@ -61,6 +62,8 @@ export const useSessionStore = defineStore("session", {
     needsProfile: false,
     /** resendAvailableInS echoed from the last requestOtp. */
     resendCooldownS: 0,
+    /** S14 — sessions of this account (own device included). */
+    sessions: [] as DeviceSession[],
   }),
   getters: {
     authed: (s) => s.user !== null,
@@ -144,8 +147,46 @@ export const useSessionStore = defineStore("session", {
       return r;
     },
 
+    /** S13 — rename via users.updateMe; persists the fresh user. */
+    async updateProfile(displayName: string) {
+      const { user } = await api().users.updateMe({ displayName });
+      this.user = user;
+      if (this.accessToken && this.refreshToken && this.email) {
+        savePersisted({
+          accessToken: this.accessToken,
+          refreshToken: this.refreshToken,
+          user,
+          email: this.email,
+        });
+      }
+      return user;
+    },
+
+    /** S14 */
+    async refreshSessions() {
+      const { sessions } = await api().auth.listSessions();
+      this.sessions = sessions;
+    },
+
+    /** Revoke a non-current session; the current row is never removable. */
+    async revokeSession(sessionId: string) {
+      await api().auth.revokeSession(sessionId);
+      this.sessions = this.sessions.filter((s) => s.id !== sessionId);
+    },
+
+    /** Revoke every session except the current device. */
+    async revokeOtherSessions() {
+      for (const s of this.sessions.filter((x) => !x.current)) {
+        await api().auth.revokeSession(s.id);
+      }
+      this.sessions = this.sessions.filter((s) => s.current);
+    },
+
     async logout() {
       try {
+        // purge chats/contacts state before the session resets —
+        // a second account must never see the previous owner's data
+        useChatsStore().teardown();
         await api().auth.logout();
       } finally {
         this.$reset();

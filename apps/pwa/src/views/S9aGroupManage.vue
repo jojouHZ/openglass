@@ -251,7 +251,7 @@ onMounted(async () => {
 
     <!-- title editor -->
     <div v-if="editingTitle" class="border-t border-line px-6 py-4">
-      <AppInput v-model="titleDraft" label="group name" placeholder="group name" maxlength="128" data-testid="title-input" />
+      <AppInput v-model="titleDraft" label="group name" placeholder="group name" maxlength="128" />
       <div class="mt-2 flex gap-2">
         <AppButton :loading="busy" data-testid="title-save" @click="saveTitle">save</AppButton>
         <button class="text-muted" @click="editingTitle = false">cancel</button>
