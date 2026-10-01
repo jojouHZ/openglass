@@ -39,8 +39,8 @@ jobs:
       - name: go build
         run: go build ./cmd/... ./internal/...
 
-      - name: go test
-        run: go test ./cmd/... ./internal/...
+      - name: go test (with race detector)
+        run: go test -race ./cmd/... ./internal/...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@e7fa5ac41e1cf5b7d48e45e42232ce7ada589601 # v9.1.0
