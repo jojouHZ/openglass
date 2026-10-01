@@ -13,7 +13,7 @@
   "dependencies": {
     "@openglass/core": "workspace:*",
     "lucide-vue-next": "^1.0.0",
-    "pinia": "^3.0.3",
+    "pinia": "^4.0.3",
     "vue": "^3.5.21",
     "vue-router": "^5.3.1"
   },
