@@ -49,8 +49,7 @@ screens.forEach(s => {
   a.onclick = e => { e.preventDefault(); pick(s); };
   list.appendChild(a);
 });
-const initial = location.hash.slice(1);
-pick(screens.includes(initial) ? initial : screens[0]);
+pick(screens.find(s => s === location.hash.slice(1)) ?? screens[0]);
 </script>
 </body>
 </html>
