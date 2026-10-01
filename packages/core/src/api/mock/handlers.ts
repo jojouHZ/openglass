@@ -353,8 +353,8 @@ export function createHandlers(state: MockState) {
 
       const chatId = String(params.chatId);
       if (!state.chats.has(chatId)) return err(404, "not_found", "Chat not found");
-      if (q !== null && q !== undefined && q.length < 2)
-        return err(400, "validation_failed", "q must be at least 2 characters");
+      if (q !== null && q !== undefined && q.length === 0)
+        return err(400, "validation_failed", "q must be non-empty");
 
       let list = [...(state.messages.get(chatId) ?? [])].filter(
         (m) => !m.deletedAt,

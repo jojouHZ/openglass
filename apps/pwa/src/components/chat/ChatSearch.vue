@@ -16,13 +16,18 @@ const emit = defineEmits<{
 }>();
 
 const q = ref("");
+/** Last query actually emitted — "no results" shows only once the
+    debounce has fired for the current input, not while typing. */
+const emitted = ref("");
 let timer: ReturnType<typeof setTimeout>;
 
 watch(q, (v) => {
   clearTimeout(timer);
   timer = setTimeout(() => {
-    // contract: q minLength 2 — shorter queries are not sent
-    emit("query", v.trim().length >= 2 ? v.trim() : "");
+    const t = v.trim();
+    emitted.value = t;
+    // contract: q minLength 1 — empty just clears the results
+    emit("query", t);
   }, 300);
 });
 </script>
@@ -38,9 +43,19 @@ watch(q, (v) => {
       class="w-full bg-transparent text-msg outline-none placeholder:text-muted"
       placeholder="search in chat…"
       data-testid="search-input"
+      @keydown.enter="total && emit('next')"
     />
+    <!-- feedback states: silent zero-result / too-short queries looked
+         like a dead search box — always answer the user -->
     <span v-if="total" class="text-meta text-muted" data-testid="search-count">
       {{ current + 1 }} of {{ total }}
+    </span>
+    <span
+      v-else-if="emitted === q.trim() && emitted.length >= 1"
+      class="whitespace-nowrap text-meta text-muted"
+      data-testid="search-empty"
+    >
+      no results
     </span>
     <button class="p-1 text-muted disabled:opacity-40" aria-label="previous" :disabled="!total" @click="emit('prev')">
       <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">

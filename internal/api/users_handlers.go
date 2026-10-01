@@ -50,8 +50,8 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) searchUsers(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len(q) < 2 {
-		badRequest(w, "q must be at least 2 chars", map[string]any{"q": "minLength 2"})
+	if q == "" {
+		badRequest(w, "q must be non-empty", map[string]any{"q": "minLength 1"})
 		return
 	}
 	users, err := s.store.SearchUsers(r.Context(), q, 20)

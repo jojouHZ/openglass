@@ -387,7 +387,7 @@ paths:
         - name: q
           in: query
           required: true
-          schema: { type: string, minLength: 2 }
+          schema: { type: string, minLength: 1 }
           description: Display-name substring or exact `name#NNNN` tag
       responses:
         '200':
@@ -630,7 +630,7 @@ paths:
           schema: { type: integer, default: 50, maximum: 100 }
         - name: q
           in: query
-          schema: { type: string, minLength: 2 }
+          schema: { type: string, minLength: 1 }
           description: Full-text search within this chat (S5b). When set,
             results are matching messages ordered by seq desc; `before`
             cursor paginates further matches.

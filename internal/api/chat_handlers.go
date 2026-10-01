@@ -274,8 +274,8 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		Q:        qq.Get("q"),
 		Pinned:   qq.Get("pinned") == "true",
 	}
-	if mq.Q != "" && len(mq.Q) < 2 {
-		badRequest(w, "q must be at least 2 characters", map[string]any{"q": "minLength"})
+	if qq.Has("q") && mq.Q == "" {
+		badRequest(w, "q must be non-empty", map[string]any{"q": "minLength 1"})
 		return
 	}
 	msgs, next, newer, err := s.chats.ListMessages(r.Context(), chatID, mq)

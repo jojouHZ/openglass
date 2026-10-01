@@ -117,7 +117,7 @@ async function message() {
 </script>
 
 <template>
-  <main class="flex min-h-dvh flex-col">
+  <main class="flex h-dvh flex-col overflow-hidden">
     <div class="flex items-center px-6 pb-4 pt-8">
       <button
         class="grid size-10 place-items-center text-ink"
@@ -143,7 +143,7 @@ async function message() {
       </div>
     </div>
 
-    <div v-else-if="user" class="flex flex-col items-center gap-6 px-6 pt-4">
+    <div v-else-if="user" class="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-y-auto px-6 pt-4">
       <span
         class="grid size-24 place-items-center rounded-full bg-bubble-in text-header text-muted"
         data-testid="avatar"

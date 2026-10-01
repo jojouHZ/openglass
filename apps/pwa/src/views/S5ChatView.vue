@@ -281,7 +281,9 @@ watch(
 </script>
 
 <template>
-  <main class="relative flex min-h-dvh flex-col">
+  <!-- h-dvh + overflow-hidden: the header and composer stay pinned;
+       only the messages layer scrolls (flex child needs min-h-0) -->
+  <main class="relative flex h-dvh flex-col overflow-hidden">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line px-6 pb-3 pt-8">
       <button class="text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
@@ -373,7 +375,7 @@ watch(
     </button>
 
     <!-- messages -->
-    <div ref="scrollEl" class="flex-1 overflow-y-auto px-6 py-4" data-testid="msg-scroll" @scroll="onScroll">
+    <div ref="scrollEl" class="min-h-0 flex-1 overflow-y-auto px-6 py-4" data-testid="msg-scroll" @scroll="onScroll">
       <div v-if="win.loading && !win.messages.length" class="py-8 text-center text-meta text-muted">
         loading…
       </div>

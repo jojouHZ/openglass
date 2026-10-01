@@ -85,6 +85,14 @@ export const useChatsStore = defineStore("chats", {
       this.chats = sortChats(chats);
     },
 
+    /** S8 — contacts-only group create; lands in local state at once. */
+    async createGroup(title: string, memberIds: string[]): Promise<Chat> {
+      const { chat } = await api().groups.create({ title, memberIds });
+      this.details[chat.id] = chat;
+      void this.refreshChats();
+      return chat;
+    },
+
     chatTitle(c: ChatSummary): string {
       const s = useSessionStore();
       if (c.type === "direct" && c.peer?.id === s.user?.id) return "saved messages";

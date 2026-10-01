@@ -313,9 +313,14 @@ func TestMessages_SearchAndPin(t *testing.T) {
 	if len(msgs) != 2 || msgs[0].(map[string]any)["text"] != "red cherry" {
 		t.Fatalf("search: %v", msgs)
 	}
-	// q too short → validation_failed
-	if c, b := get(t, ts, "/api/v1/chats/"+chatID+"/messages?q=x", aTok); c != 400 || errCode(b) != "validation_failed" {
-		t.Fatalf("short q: %d %v", c, b)
+	// single char is a valid query (marker-prefix search) — zero hits
+	if c, p2 := get(t, ts, "/api/v1/chats/"+chatID+"/messages?q=x", aTok); c != 200 ||
+		len(p2["messages"].([]any)) != 0 {
+		t.Fatalf("1-char q: %d %v", c, p2)
+	}
+	// present-but-empty → validation_failed
+	if c, b := get(t, ts, "/api/v1/chats/"+chatID+"/messages?q=", aTok); c != 400 || errCode(b) != "validation_failed" {
+		t.Fatalf("empty q: %d %v", c, b)
 	}
 	// pin first message, then pinned view shows only it
 	mid := msgs[1].(map[string]any)["id"].(string)

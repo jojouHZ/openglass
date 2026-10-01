@@ -38,7 +38,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
 </script>
 
 <template>
-  <main class="flex min-h-dvh flex-col">
+  <main class="flex h-dvh flex-col overflow-hidden">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
         class="grid size-10 place-items-center text-ink"
@@ -84,7 +84,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <div v-if="!sorted.length" class="grid h-full place-items-center px-6" data-testid="empty">
         <div class="flex flex-col items-center gap-3 text-center">
           <svg viewBox="0 0 24 24" class="size-8 text-muted" fill="none" stroke="currentColor" stroke-width="1.5">

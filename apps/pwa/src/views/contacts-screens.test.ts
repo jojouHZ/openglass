@@ -10,7 +10,7 @@
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   bindApiClient,
@@ -59,7 +59,7 @@ describe("S6 contact search", () => {
     expect(names).not.toContain("mira");
   });
 
-  it("short queries filter locally only — no server search below min 2", async () => {
+  it("queries filter the local roster without duplicating global hits", async () => {
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
     await flush();
     await w.find('[data-testid="contact-search-input"]').setValue("an");
@@ -105,8 +105,9 @@ describe("S7 contact profile", () => {
     // mira was added in the S6 test above — now mutual
     expect(w.find('[data-testid="badge"]').text()).toContain("mutual");
     await w.find('[data-testid="action-message"]').trigger("click");
-    await flush();
-    expect(router.currentRoute.value.name).toBe("s5-chat-view");
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.name).toBe("s5-chat-view");
+    });
     expect(w.find('[data-testid="action-remove"]').exists()).toBe(true);
   });
 

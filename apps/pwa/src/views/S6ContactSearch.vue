@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { ChevronLeft, Search } from "lucide-vue-next";
+import { ChevronLeft, Search, Users } from "lucide-vue-next";
 
 import type { User } from "@openglass/core";
 import { api, useContactsStore, useSessionStore } from "@openglass/core";
@@ -33,8 +33,8 @@ const globalFiltered = computed(() =>
 watch(q, (v) => {
   clearTimeout(timer);
   const needle = v.trim();
-  if (needle.length < 2) {
-    // contract: q minLength 2 — shorter queries only filter locally
+  if (!needle) {
+    // empty query only filters locally — no server round-trip
     global.value = [];
     searching.value = false;
     return;
@@ -73,7 +73,7 @@ async function add(userId: string) {
 </script>
 
 <template>
-  <main class="flex min-h-dvh flex-col">
+  <main class="flex h-dvh flex-col overflow-hidden">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
         class="grid size-10 shrink-0 place-items-center text-ink"
@@ -94,7 +94,18 @@ async function add(userId: string) {
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto">
+    <button
+      class="flex w-full items-center gap-3 px-6 py-3 text-left hover:bg-canvas"
+      data-testid="new-group"
+      @click="router.push({ name: 's8-group-create' })"
+    >
+      <span class="grid size-[52px] shrink-0 place-items-center rounded-full bg-soft text-ink">
+        <Users class="size-5" :stroke-width="1.5" />
+      </span>
+      <span class="text-name text-ink">new group</span>
+    </button>
+
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <div v-if="local.length" class="px-6 pb-1 pt-2 text-meta text-muted">contacts</div>
       <UserRow
         v-for="c in local"
@@ -134,10 +145,10 @@ async function add(userId: string) {
       >
         <div class="flex flex-col items-center gap-3 text-center">
           <div class="text-body text-ink">
-            {{ q.trim().length >= 2 ? "no results" : "no contacts yet" }}
+            {{ q.trim() ? "no results" : "no contacts yet" }}
           </div>
           <div class="text-meta text-muted">
-            {{ q.trim().length >= 2 ? `nothing found for "${q.trim()}"` : "find people by tag to start" }}
+            {{ q.trim() ? `nothing found for "${q.trim()}"` : "find people by tag to start" }}
           </div>
         </div>
       </div>

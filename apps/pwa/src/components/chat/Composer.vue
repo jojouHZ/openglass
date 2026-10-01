@@ -23,6 +23,7 @@ const emit = defineEmits<{
 
 const text = ref("");
 const fileInput = ref<HTMLInputElement>();
+const textarea = ref<HTMLTextAreaElement>();
 
 watch(
   () => props.editing,
@@ -31,11 +32,33 @@ watch(
   },
 );
 
+// auto-grow to ~6 lines, then the textarea scrolls internally;
+// post-flush so scrollHeight reflects the patched DOM
+watch(
+  text,
+  () => {
+    const el = textarea.value;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 140) + "px";
+  },
+  { flush: "post" },
+);
+
 function submit() {
   const t = text.value.trim();
   if (!t && !props.staged?.attachmentId) return;
   emit("send", t);
   text.value = "";
+}
+
+// Enter sends, Shift+Enter inserts a newline; Enter during IME
+// composition confirms the candidate, never sends
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    submit();
+  }
 }
 
 function pickFile(f: File | undefined) {
@@ -113,13 +136,15 @@ const placeholder = () =>
           data-testid="file-input"
           @change="pickFile(($event.target as HTMLInputElement).files?.[0])"
         />
-        <input
+        <textarea
+          ref="textarea"
           v-model="text"
-          class="w-full bg-transparent text-msg outline-none placeholder:text-muted"
+          rows="1"
+          class="w-full resize-none bg-transparent text-msg outline-none placeholder:text-muted"
           :placeholder="offline ? 'offline…' : placeholder()"
           :disabled="offline"
           data-testid="composer-input"
-          @keydown.enter="submit"
+          @keydown="onKeydown"
         />
       </div>
       <button
