@@ -46,13 +46,9 @@ jobs:
           ${{ runner.os }}-huggingface-
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f scripts/requirements.txt ]; then
-          pip install -r scripts/requirements.txt
-        else
-          pip install sentence-transformers qdrant-client beautifulsoup4 markdown
-        fi
+      # Regenerate with: uv pip compile scripts/requirements.txt \
+      #   --generate-hashes --python-version 3.11 -o scripts/requirements-hashed.txt
+      run: pip install --require-hashes -r scripts/requirements-hashed.txt
 
     - name: Wait for Qdrant to be ready
       run: |
