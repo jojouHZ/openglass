@@ -845,6 +845,26 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /attachments/{attachmentId}:
+    get:
+      tags: [messages]
+      summary: Download an attachment blob
+      description: |
+        Authorized URL referenced by `Attachment.url`. Serving requires
+        membership in the attachment's chat; non-members get 404 so the
+        existence of an attachment is never revealed.
+      operationId: downloadAttachment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AttachmentId' }
+      responses:
+        '200':
+          description: The blob
+          content:
+            application/octet-stream: {}
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /chats/{chatId}/read:
     post:
       tags: [messages]
@@ -1135,6 +1155,11 @@ components:
       schema: { type: string, format: uuid }
     SessionId:
       name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AttachmentId:
+      name: attachmentId
       in: path
       required: true
       schema: { type: string, format: uuid }

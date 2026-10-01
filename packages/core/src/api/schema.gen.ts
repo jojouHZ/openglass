@@ -398,6 +398,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download an attachment blob
+         * @description Authorized URL referenced by `Attachment.url`. Serving requires
+         *     membership in the attachment's chat; non-members get 404 so the
+         *     existence of an attachment is never revealed.
+         */
+        get: operations["downloadAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{chatId}/read": {
         parameters: {
             query?: never;
@@ -781,6 +803,7 @@ export interface components {
         ChatId: string;
         MessageId: string;
         SessionId: string;
+        AttachmentId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1671,6 +1694,30 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    downloadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The blob */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     markRead: {

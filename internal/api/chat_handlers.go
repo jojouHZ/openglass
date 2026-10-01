@@ -333,7 +333,25 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		ReplyToMessageID: in.ReplyToMessageID,
 	}
 	for _, id := range in.AttachmentIDs {
-		m.Attachments = append(m.Attachments, store.Attachment{ID: id})
+		// Contract: each id must be a staged upload in this chat by this
+		// sender — anything else is validation_failed, never silent.
+		a, err := s.chats.AttachmentByID(r.Context(), id)
+		if err != nil || a.ChatID != chatID || a.UploaderID != uid {
+			badRequest(w, "Validation failed",
+				map[string]any{"attachmentIds": "invalid attachment reference"})
+			return
+		}
+		if a.MessageID != "" {
+			// already bound — valid only as a nonce replay of that send
+			bm, berr := s.chats.MessageByID(r.Context(), a.MessageID)
+			if berr != nil || bm.ClientNonce != in.ClientNonce ||
+				bm.SenderID != uid || bm.ChatID != chatID {
+				badRequest(w, "Validation failed",
+					map[string]any{"attachmentIds": "invalid attachment reference"})
+				return
+			}
+		}
+		m.Attachments = append(m.Attachments, *a)
 	}
 	got, created, err := s.chats.SendMessage(r.Context(), m)
 	switch {

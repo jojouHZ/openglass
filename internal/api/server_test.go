@@ -32,6 +32,7 @@ func newServer(t *testing.T) (*httptest.Server, *store.Mem, *auth.CaptureSender)
 		OtpResendCooldown: 60 * time.Second,
 		OtpMaxAttempts:    5,
 		DevMode:           true,
+		UploadsDir:        t.TempDir(),
 	}
 	srv := api.New(cfg, st, sender)
 	handler := srv.Handler(func(w http.ResponseWriter, r *http.Request) {

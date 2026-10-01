@@ -132,6 +132,7 @@ type Attachment struct {
 	FileName    string
 	SizeBytes   int64
 	StoragePath string // "" until uploaded (#16)
+	MessageID   string // "" while staged; bound on send
 	CreatedAt   time.Time
 }
 
@@ -201,6 +202,13 @@ type ChatStore interface {
 	DeleteMessage(ctx context.Context, messageID, userID string) error                   // own; groups: also owner/delete_messages
 	SetMessagePinned(ctx context.Context, messageID, userID string, pinned bool) (*Message, error)
 	MarkRead(ctx context.Context, chatID, userID string, upToSeq int64) error
+
+	// attachments — metadata rows; the blob bytes live on disk and are
+	// owned by the upload/serve handlers, not the store.
+	// CreateAttachment stages an upload (message_id NULL); SendMessage
+	// binds staged ids of the same chat+sender onto the new message.
+	CreateAttachment(ctx context.Context, a *Attachment) (*Attachment, error)
+	AttachmentByID(ctx context.Context, id string) (*Attachment, error) // ErrNotFound
 }
 
 // Store — full persistence surface. PG and Mem both implement it.

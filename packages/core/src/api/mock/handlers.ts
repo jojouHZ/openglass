@@ -10,6 +10,7 @@
 import { delay, http, HttpResponse } from "msw";
 
 import type {
+  Attachment,
   Chat,
   ChatSummary,
   Contact,
@@ -415,6 +416,26 @@ export function createHandlers(state: MockState) {
         return err(400, "validation_failed", "Message needs text or attachments");
 
       const senderId = (state.session?.user ?? selfUser).id;
+
+      // staged attachments: must exist and belong to this chat; a bound
+      // one is valid only for a nonce replay — mirrors the server contract.
+      const bound: Attachment[] = [];
+      for (const id of body.attachmentIds ?? []) {
+        const rec = state.attachments.get(id);
+        const invalid = () =>
+          err(400, "validation_failed", "Message needs text or attachments", {
+            attachmentIds: "invalid attachment reference",
+          });
+        if (!rec || rec.chatId !== chatId) return invalid();
+        if (rec.messageId) {
+          // bound — valid only as a nonce replay of that send
+          const bm = state.messages
+            .get(chatId)
+            ?.find((m) => m.id === rec.messageId);
+          if (!bm || bm.clientNonce !== body.clientNonce) return invalid();
+        }
+        bound.push(rec.meta);
+      }
       const nonceKey = `${senderId}:${body.clientNonce}`;
       const dup = state.nonceIndex.get(nonceKey);
       if (dup) return ok({ message: dup }, 200); // idempotent retry
@@ -430,6 +451,13 @@ export function createHandlers(state: MockState) {
         sentAt: new Date().toISOString(),
         pinned: false,
       };
+      if (bound.length) {
+        message.attachments = bound;
+        for (const a of bound) {
+          const rec = state.attachments.get(a.id);
+          if (rec) rec.messageId = message.id;
+        }
+      }
       state.messages.get(chatId)!.push(message);
       state.nonceIndex.set(nonceKey, message);
       const s = state.chatSummaries.get(chatId);
@@ -474,23 +502,45 @@ export function createHandlers(state: MockState) {
       return ok({ message: m });
     }),
 
-    http.post(`${API}/chats/:chatId/attachments`, async ({ request }) => {
+    http.post(`${API}/chats/:chatId/attachments`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
       await delay(LATENCY_MS);
+      const chatId = String(params.chatId);
+      if (!state.chats.has(chatId)) return err(404, "not_found", "Chat not found");
       const fd = await request.formData();
       const file = fd.get("file");
       const id = freshId();
+      const bytes =
+        file instanceof File ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array();
       const attachment = {
         ...demoAttachment,
         id,
         fileName: file instanceof File ? file.name : "file.bin",
-        mimeType: file instanceof File ? file.type || "application/octet-stream" : "application/octet-stream",
+        mimeType:
+          file instanceof File ? file.type || "application/octet-stream" : "application/octet-stream",
         sizeBytes: file instanceof File ? file.size : 0,
         kind: file instanceof File && file.type.startsWith("image/") ? ("photo" as const) : ("file" as const),
         url: `/api/v1/attachments/${id}`,
       };
+      state.attachments.set(id, { meta: attachment, bytes, chatId, messageId: null });
       return ok({ attachment }, 201);
+    }),
+
+    http.get(`${API}/attachments/:attachmentId`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      const rec = state.attachments.get(String(params.attachmentId));
+      if (!rec || !state.chats.has(rec.chatId)) {
+        return err(404, "not_found", "Not found");
+      }
+      return new HttpResponse(rec.bytes, {
+        status: 200,
+        headers: {
+          "Content-Type": rec.meta.mimeType,
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
     }),
 
     http.post(`${API}/chats/:chatId/read`, async ({ request, params }) => {

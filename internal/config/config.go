@@ -26,6 +26,9 @@ type Config struct {
 	// DevMode enables the log-only OTP sender and verbose errors.
 	// MUST be false in production.
 	DevMode bool
+
+	// UploadsDir is where attachment blobs are written (metadata in PG).
+	UploadsDir string
 }
 
 func FromEnv() (*Config, error) {
@@ -51,6 +54,7 @@ func FromEnv() (*Config, error) {
 		OtpResendCooldown: 60 * time.Second, // contract constant — not configurable
 		OtpMaxAttempts:    getInt("OPENGLASS_OTP_MAX_ATTEMPTS", 5),
 		DevMode:           dev,
+		UploadsDir:        get("OPENGLASS_UPLOADS_DIR", "data/uploads"),
 	}, nil
 }
 

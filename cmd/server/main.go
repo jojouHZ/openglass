@@ -11,6 +11,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -43,6 +44,10 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 	log.Print("migrations applied")
+
+	if err := os.MkdirAll(cfg.UploadsDir, 0o750); err != nil {
+		log.Fatalf("uploads dir: %v", err)
+	}
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer func() { _ = rdb.Close() }()

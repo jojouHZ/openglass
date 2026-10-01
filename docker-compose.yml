@@ -53,7 +53,10 @@ services:
       - OPENGLASS_LISTEN=:8081
       - OPENGLASS_PG_DSN=postgres://openglass:openglass_dev@postgres:5432/openglass
       - OPENGLASS_REDIS_ADDR=redis:6379
+      - OPENGLASS_UPLOADS_DIR=/data/uploads
       - OPENGLASS_DEV_MODE=1 # dev sender logs OTP codes; prod needs a real sender + JWT secret
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,4 +86,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  uploads_data:
     driver: local

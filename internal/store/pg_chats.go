@@ -399,6 +399,12 @@ func (p *PG) attachFor(ctx context.Context, chatID string, msgs []Message) error
 	return rows.Err()
 }
 
+func (p *PG) attachOne(ctx context.Context, m *Message) {
+	tmp := []Message{*m}
+	_ = p.attachFor(ctx, m.ChatID, tmp)
+	*m = tmp[0]
+}
+
 func (p *PG) ListMessages(ctx context.Context, chatID string, q MessageQuery) ([]Message, *int64, *int64, error) {
 	limit := q.Limit
 	if limit <= 0 || limit > 100 {
@@ -566,7 +572,7 @@ func (p *PG) SendMessage(ctx context.Context, m *Message) (*Message, bool, error
 		if err != nil {
 			return nil, false, err
 		}
-		_ = p.attachFor(ctx, got.ChatID, []Message{*got})
+		p.attachOne(ctx, got)
 		return got, false, nil
 	}
 	if err != nil {
@@ -589,7 +595,7 @@ func (p *PG) SendMessage(ctx context.Context, m *Message) (*Message, bool, error
 	if err := tx.Commit(ctx); err != nil {
 		return nil, false, err
 	}
-	_ = p.attachFor(ctx, out.ChatID, []Message{*out})
+	p.attachOne(ctx, out)
 	return out, true, nil
 }
 
@@ -602,7 +608,7 @@ func (p *PG) MessageByID(ctx context.Context, messageID string) (*Message, error
 	if err != nil {
 		return nil, err
 	}
-	_ = p.attachFor(ctx, m.ChatID, []Message{*m})
+	p.attachOne(ctx, m)
 	return m, nil
 }
 
@@ -994,4 +1000,36 @@ func (p *PG) MarkRead(ctx context.Context, chatID, userID string, upToSeq int64)
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (p *PG) CreateAttachment(ctx context.Context, a *Attachment) (*Attachment, error) {
+	row := p.pool.QueryRow(ctx,
+		`INSERT INTO attachments (chat_id, uploader_id, kind, mime_type, file_name, size_bytes, storage_path)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 RETURNING id, created_at`,
+		a.ChatID, a.UploaderID, a.Kind, a.MimeType, a.FileName, a.SizeBytes, a.StoragePath)
+	out := *a
+	if err := row.Scan(&out.ID, &out.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *PG) AttachmentByID(ctx context.Context, id string) (*Attachment, error) {
+	var a Attachment
+	err := p.pool.QueryRow(ctx,
+		`SELECT id, chat_id, uploader_id, kind, mime_type, coalesce(file_name,''),
+		        size_bytes, coalesce(storage_path,''), created_at,
+		        coalesce(message_id::text,'')
+		 FROM attachments WHERE id=$1`, id).
+		Scan(&a.ID, &a.ChatID, &a.UploaderID, &a.Kind, &a.MimeType,
+			&a.FileName, &a.SizeBytes, &a.StoragePath, &a.CreatedAt,
+			&a.MessageID)
+	if err == pgx.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
 }

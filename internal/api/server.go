@@ -119,6 +119,10 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("POST /messages/{messageId}/pin", s.requireAuth(s.setMessagePinned))
 	v1.HandleFunc("POST /chats/{chatId}/read", s.requireAuth(s.markRead))
 
+	// attachments — member-only upload/download (B4)
+	v1.HandleFunc("POST /chats/{chatId}/attachments", s.requireAuth(s.uploadAttachment))
+	v1.HandleFunc("GET /attachments/{attachmentId}", s.requireAuth(s.downloadAttachment))
+
 	// groups (B3) — party/raid rights model
 	v1.HandleFunc("POST /groups", s.requireAuth(s.createGroup))
 	v1.HandleFunc("PATCH /groups/{chatId}", s.requireAuth(s.editGroup))
@@ -130,7 +134,6 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	// contracted-but-unimplemented slices → honest 501, not 404/silence
 	stub := s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) })
 	for _, r := range []string{
-		"POST /chats/{chatId}/attachments",
 		"GET /push/vapid-key", "GET /push/subscriptions", "POST /push/subscriptions",
 		"DELETE /push/subscriptions/{subscriptionId}",
 		"POST /reports",

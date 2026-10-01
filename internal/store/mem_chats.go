@@ -34,6 +34,7 @@ type memChats struct {
 	messages map[string][]*Message            // chatID -> seq-ordered
 	contacts map[string]map[string]time.Time  // owner -> contact -> addedAt
 	nonce    map[string]*Message              // chatID:senderID:nonce
+	atts     map[string]*Attachment           // attachmentID
 }
 
 func (m *Mem) cs() *memChats {
@@ -44,6 +45,7 @@ func (m *Mem) cs() *memChats {
 			messages: map[string][]*Message{},
 			contacts: map[string]map[string]time.Time{},
 			nonce:    map[string]*Message{},
+			atts:     map[string]*Attachment{},
 		}
 	})
 	return m.chats
@@ -446,11 +448,24 @@ func (m *Mem) SendMessage(_ context.Context, msg *Message) (*Message, bool, erro
 			return nil, false, ErrNotFound
 		}
 	}
+	// staged attachments: must exist, belong to this chat, be uploaded by
+	// this sender, and not already bound — mirrors the PG UPDATE rule.
+	for i := range msg.Attachments {
+		a, ok := cs.atts[msg.Attachments[i].ID]
+		if !ok || a.ChatID != msg.ChatID || a.UploaderID != msg.SenderID ||
+			a.MessageID != "" {
+			return nil, false, ErrNotFound
+		}
+	}
 	c.lastSeq++
 	cp := *msg
 	cp.ID = memID()
 	cp.Seq = c.lastSeq
 	cp.SentAt = time.Now()
+	for i := range cp.Attachments {
+		cs.atts[cp.Attachments[i].ID].MessageID = cp.ID
+		cp.Attachments[i] = *cs.atts[cp.Attachments[i].ID] // full record, not an id stub
+	}
 	cs.messages[msg.ChatID] = append(cs.messages[msg.ChatID], &cp)
 	cs.nonce[key] = &cp
 	out := cp
@@ -730,4 +745,31 @@ func (m *Mem) MarkRead(_ context.Context, chatID, userID string, upToSeq int64) 
 		mm.lastReadSeq = upToSeq
 	}
 	return nil
+}
+
+func (m *Mem) CreateAttachment(_ context.Context, a *Attachment) (*Attachment, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if _, member := cs.members[a.ChatID][a.UploaderID]; !member {
+		return nil, ErrNotFound
+	}
+	cp := *a
+	cp.ID = memID()
+	cp.CreatedAt = time.Now()
+	cs.atts[cp.ID] = &cp
+	out := cp
+	return &out, nil
+}
+
+func (m *Mem) AttachmentByID(_ context.Context, id string) (*Attachment, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	a, ok := cs.atts[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *a
+	return &cp, nil
 }

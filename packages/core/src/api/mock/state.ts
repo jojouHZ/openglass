@@ -7,6 +7,7 @@
 // NOT a chat simulator: no ordering engine, no TTLs, no hub.
 
 import type {
+  Attachment,
   Chat,
   ChatSummary,
   Contact,
@@ -34,6 +35,11 @@ export class MockState {
   readonly messages = new Map<string, Message[]>();
   /** (senderId, clientNonce) → message — send idempotency */
   readonly nonceIndex = new Map<string, Message>();
+  /** staged uploads: id → meta + bytes; bound→MessageID set on send */
+  readonly attachments = new Map<
+    string,
+    { meta: Attachment; bytes: Uint8Array; chatId: string; messageId: string | null }
+  >();
   /** emails with a completed profile */
   readonly profileDone = new Set<string>();
   readonly members = new Map<string, GroupMember[]>();
