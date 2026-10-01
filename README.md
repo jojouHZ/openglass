@@ -20,6 +20,27 @@ layer and an ephemeral, zero-persistence private layer.
 - **Data:** PostgreSQL (public layer), Redis (presence/rate-limit only)
 - **Infra:** Docker Compose deployment, managed hosting ≤100 users/instance
 
+## Getting started
+
+```bash
+git clone https://github.com/jojouHZ/openglass.git
+cd openglass
+docker compose up -d
+```
+
+The backend listens on `:8081`. For the PWA dev shell see `apps/pwa/`
+(`pnpm install && pnpm dev`). See [docs/](docs/architecture/00-overview.md)
+for architecture and configuration.
+
+## Feedback and contributing
+
+- Bug reports and enhancement requests:
+  [GitHub Issues](https://github.com/jojouHZ/openglass/issues)
+- Security reports: see [SECURITY.md](SECURITY.md) — please use GitHub
+  private vulnerability reporting.
+- Contributions go through pull requests; requirements are in
+  [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+
 ## Documentation
 
 - [Architecture](docs/architecture/00-overview.md) — full system docs
