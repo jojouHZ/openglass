@@ -47,7 +47,7 @@ func (s *Server) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 			map[string]any{"file": "required"})
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Sniff the real content type — never trust the client header.
 	head := make([]byte, 512)
@@ -60,6 +60,7 @@ func (s *Server) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 
 	id := newUUID()
 	path := filepath.Join(s.cfg.UploadsDir, id)
+	// #nosec G304 -- path is UploadsDir + a server-minted uuid, no user input
 	out, err := os.Create(path)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal", "Upload failed", nil)
