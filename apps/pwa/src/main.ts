@@ -12,6 +12,7 @@ import {
 
 import App from "./App.vue";
 import { pinia } from "./pinia";
+import { initInstallPrompt } from "./pwa/install";
 import { ApiClientKey } from "./provide";
 import { createAppRouter } from "./router";
 import "./styles/tokens.css";
@@ -24,6 +25,7 @@ async function bootstrap() {
     privateModule: import.meta.env.VITE_PRIVATE_MODULE === "1",
   });
   bindApiClient(api);
+  initInstallPrompt();
 
   const app = createApp(App);
   app.use(pinia);
@@ -37,6 +39,16 @@ async function bootstrap() {
   app.use(createAppRouter());
   app.provide(ApiClientKey, api);
   app.mount("#app");
+
+  // App SW only in live production builds — mock mode is served by MSW's
+  // own worker, and dev doesn't need the cache.
+  if (
+    import.meta.env.PROD &&
+    import.meta.env.VITE_API_MODE !== "mock" &&
+    "serviceWorker" in navigator
+  ) {
+    void navigator.serviceWorker.register("/sw.js");
+  }
 }
 
 void bootstrap();

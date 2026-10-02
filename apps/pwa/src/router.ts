@@ -26,7 +26,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/groups/:chatId/manage", name: "s9a-group-manage", component: () => import("./views/S9aGroupManage.vue"), meta: { screen: "S9a", auth: true } },
   { path: "/settings", name: "s13-settings", component: () => import("./views/S13Settings.vue"), meta: { screen: "S13", auth: true } },
   { path: "/settings/security", name: "s14-security", component: () => import("./views/S14Security.vue"), meta: { screen: "S14", auth: true } },
-  { path: "/pwa", name: "s15-pwa", component: Placeholder, meta: { screen: "S15" } },
+  { path: "/pwa", name: "s15-pwa", component: () => import("./views/S15Pwa.vue"), meta: { screen: "S15", auth: true } },
   { path: "/states", name: "s16-states", component: Placeholder, meta: { screen: "S16" } },
 ];
 

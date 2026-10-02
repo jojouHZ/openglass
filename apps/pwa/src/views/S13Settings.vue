@@ -101,6 +101,13 @@ async function signOut() {
       >
         security & sessions
       </button>
+      <button
+        class="w-full px-6 py-3 text-left text-name text-ink"
+        data-testid="app-link"
+        @click="router.push({ name: 's15-pwa' })"
+      >
+        app — install & offline
+      </button>
 
       <div class="mt-6 px-6">
         <button
