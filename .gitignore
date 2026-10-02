@@ -32,6 +32,7 @@ Thumbs.db
 # Code graph artifacts (local-only, rebuilt by `go run ./cmd/codegraph index`)
 .codegraph/
 /codegraph
+/server
 
 # === Internal development infrastructure (local-only, never committed) ===
 .devin/
