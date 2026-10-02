@@ -12,6 +12,8 @@ export interface RequestInit {
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
   file?: File;
+  /** Return the raw body as Blob (attachment downloads). */
+  blob?: boolean;
 }
 
 /**
@@ -60,6 +62,7 @@ export class HttpTransport {
     });
 
     if (res.status === 204) return undefined as T;
+    if (init.blob && res.ok) return (await res.blob()) as T;
 
     const text = await res.text();
     const json = text ? (JSON.parse(text) as Record<string, unknown>) : {};

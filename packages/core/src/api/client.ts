@@ -154,6 +154,7 @@ export interface ApiClient {
     delete(messageId: string): Promise<void>;
     setPinned(messageId: string, pinned: boolean): Promise<{ message: Message }>;
     uploadAttachment(chatId: string, file: File): Promise<{ attachment: Attachment }>;
+    downloadAttachment(attachmentId: string): Promise<Blob>;
     markRead(chatId: string, upToSeq: number): Promise<void>;
   };
   groups: {

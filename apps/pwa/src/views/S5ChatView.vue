@@ -7,7 +7,6 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocalMessage } from "@openglass/core";
 import {
   api,
-  ApiRequestError,
   dayChanged,
   toSeries,
   useChatsStore,
@@ -16,6 +15,7 @@ import {
 
 import type { StagedAttachment } from "../components/chat/attachment";
 import { MAX_ATTACHMENT } from "../components/chat/attachment";
+import AttachmentView from "../components/chat/AttachmentView.vue";
 import Composer from "../components/chat/Composer.vue";
 import ChatSearch from "../components/chat/ChatSearch.vue";
 import MessageMenu from "../components/chat/MessageMenu.vue";
@@ -109,10 +109,7 @@ async function stageFile(f: File) {
     if (!staged.value) return;
     staged.value = {
       ...staged.value,
-      error:
-        e instanceof ApiRequestError && e.status === 501
-          ? "attachments not supported yet"
-          : "upload failed",
+      error: "upload failed",
     };
   }
 }
@@ -454,7 +451,9 @@ watch(
                 reply
               </div>
               <div v-if="m.text" class="whitespace-pre-wrap break-words">{{ m.text }}</div>
-              <div v-if="m.attachments?.length" class="text-sub opacity-80">[attachment]</div>
+              <div v-if="m.attachments?.length" class="mt-1 flex flex-col gap-1">
+                <AttachmentView v-for="a in m.attachments" :key="a.id" :att="a" />
+              </div>
               <div class="mt-0.5 flex items-center justify-end gap-1 text-meta opacity-70">
                 <span v-if="m.editedAt" class="text-micro">edited</span>
                 <span>{{ fmtTime(m.sentAt) }}</span>

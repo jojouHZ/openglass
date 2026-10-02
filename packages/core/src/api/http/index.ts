@@ -182,6 +182,12 @@ export class HttpApiClient implements ApiClient {
         path: `/chats/${chatId}/attachments`,
         file,
       }),
+    downloadAttachment: (attachmentId: string) =>
+      this.t.request<Blob>({
+        method: "GET",
+        path: `/attachments/${attachmentId}`,
+        blob: true,
+      }),
     markRead: (chatId: string, upToSeq: number) =>
       this.t.request<void>({
         method: "POST",
