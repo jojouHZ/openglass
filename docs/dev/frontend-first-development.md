@@ -63,7 +63,7 @@ screens.
 | S13–S15 settings, security, PWA prompts | full mock |
 | WS events (typing, receipts, presence) | scripted fixtures only, for demo/GIF — no hub logic, no ordering, no TTL |
 | OTP cooldown / rate limits | constants from the contract, no real timers |
-| Attachments | local blob URLs, no upload pipeline |
+| Attachments | full mock — staged upload, member-gated blob download, send binding |
 | E2EE handshake, verify ritual (S11b), session countdown/BURN | **not mocked** — stub "private mode" UI states only |
 | Outbox / offline send queue | **not mocked** — semantics fixed in contract first |
 | Auth token refresh lifecycle | **not mocked** — mock issues a permanent token |

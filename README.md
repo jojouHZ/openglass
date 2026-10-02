@@ -8,9 +8,9 @@ layer and an ephemeral, zero-persistence private layer.
 - Email + one-time-code registration (invite-only, closed-circle hosting)
 - Contacts by nickname/ID
 - Public layer: 1-1 and group chats (party/raid model), attachments,
-  edit/delete, read receipts, typing indicators, web push
-- Private layer: ephemeral live E2EE sessions — blind relay, zero server
-  storage, burnable chats with configurable lifetime
+  edit/delete, read receipts, typing indicators; web push planned
+- Private layer (post-MVP): ephemeral live E2EE sessions — blind relay,
+  zero server storage, burnable chats with configurable lifetime
 - PWA shell (MVP); iOS/Android/Desktop shells planned
 
 ## Tech Stack
@@ -39,7 +39,7 @@ for architecture and configuration.
 - Security reports: see [SECURITY.md](SECURITY.md) — please use GitHub
   private vulnerability reporting.
 - Contributions go through pull requests; requirements are in
-  [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+  [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 

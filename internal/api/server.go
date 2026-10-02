@@ -3,9 +3,9 @@
 
 // Package api — public REST API, contract: docs/api/public-api.openapi.yaml.
 //
-// Slice boundary: this issue lands auth + users + healthz + ws stub.
-// Contacts/chats/messages/groups/push/reports routes exist but answer
-// 501 not_implemented until their slices arrive — never silently wrong.
+// Implemented: auth, users, contacts, chats, messages, attachments,
+// groups, ws. Push and reports routes still answer 501 not_implemented
+// until their slices arrive — never silently wrong.
 package api
 
 import (
