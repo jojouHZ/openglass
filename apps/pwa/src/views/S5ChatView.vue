@@ -48,7 +48,9 @@ const peerReadSeq = computed(() => chats.peerReadSeq[chatId.value] ?? 0);
 const subtitle = computed(() => {
   if (typing.value) return "typing…";
   if (chat.value?.type === "group") {
-    return `${chats.details[chatId.value]?.members?.length ?? 0} members`;
+    const n = chats.details[chatId.value]?.members?.length;
+    // detail still loading / fetch failed — show nothing over a false 0
+    return n != null ? `${n} members` : "";
   }
   if (peer.value?.id === session.user?.id) return "saved messages";
   return chats.isOnline(peer.value?.id) ? "online" : "last seen recently";

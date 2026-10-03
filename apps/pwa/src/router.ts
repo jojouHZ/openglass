@@ -22,12 +22,10 @@ export const routes: RouteRecordRaw[] = [
   { path: "/search", name: "s6-contact-search", component: () => import("./views/S6ContactSearch.vue"), meta: { screen: "S6", auth: true } },
   { path: "/contacts/:userId", name: "s7-contact-profile", component: () => import("./views/S7ContactProfile.vue"), meta: { screen: "S7", auth: true } },
   { path: "/groups/new", name: "s8-group-create", component: () => import("./views/S8GroupCreate.vue"), meta: { screen: "S8", auth: true } },
-  { path: "/groups/:chatId", name: "s9-group", component: Placeholder, meta: { screen: "S9", auth: true } },
   { path: "/groups/:chatId/manage", name: "s9a-group-manage", component: () => import("./views/S9aGroupManage.vue"), meta: { screen: "S9a", auth: true } },
   { path: "/settings", name: "s13-settings", component: () => import("./views/S13Settings.vue"), meta: { screen: "S13", auth: true } },
   { path: "/settings/security", name: "s14-security", component: () => import("./views/S14Security.vue"), meta: { screen: "S14", auth: true } },
   { path: "/pwa", name: "s15-pwa", component: () => import("./views/S15Pwa.vue"), meta: { screen: "S15", auth: true } },
-  { path: "/states", name: "s16-states", component: Placeholder, meta: { screen: "S16" } },
   {
     path: "/:pathMatch(.*)*",
     name: "not-found",
@@ -39,6 +37,12 @@ export const routes: RouteRecordRaw[] = [
     },
   },
 ];
+
+// Dev-only screens: the S16 state catalog is a debugging aid, not a
+// product surface — prod builds let it fall into the catch-all.
+if (import.meta.env.DEV) {
+  routes.push({ path: "/states", name: "s16-states", component: Placeholder, meta: { screen: "S16" } });
+}
 
 // Private-layer screens S10–S12 exist ONLY in the pwa-dev build
 // (VITE_PRIVATE_MODULE=1). The pwa-mvp bundle must not contain the

@@ -18,6 +18,8 @@ import {
 } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
 
+import { groupChatId } from "@openglass/core/api/mock/fixtures";
+
 import { pinia } from "../pinia";
 import { createAppRouter } from "../router";
 import S4ChatList from "./S4ChatList.vue";
@@ -66,6 +68,11 @@ describe("S4 chat list", () => {
 
   it("unknown path redirects to the chat list", async () => {
     await router.push("/totally/bogus/path");
+    expect(router.currentRoute.value.name).toBe("s4-chat-list");
+  });
+
+  it("dropped /groups/:chatId route falls into the catch-all", async () => {
+    await router.push("/groups/some-chat-id");
     expect(router.currentRoute.value.name).toBe("s4-chat-list");
   });
 
@@ -206,7 +213,30 @@ describe("S5 chat view", () => {
     }
   });
 
+  it("group subtitle stays empty while the detail is unavailable", async () => {
+    const orig = ctx.api.chats.get;
+    ctx.api.chats.get = () =>
+      Promise.reject(
+        new ApiRequestError(500, { code: "server_error", message: "boom" }),
+      );
+    try {
+      delete chats().details[groupChatId];
+      await router.push({
+        name: "s5-chat-view",
+        params: { chatId: groupChatId },
+      });
+      const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+      await flush(400);
+      expect(w.text()).not.toContain("0 members");
+      w.unmount();
+    } finally {
+      ctx.api.chats.get = orig;
+      await router.push({ name: "s4-chat-list" });
+    }
+  });
+
   it("offline state shows the banner and disables the composer", async () => {
+    await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
     chats().connState = "offline";
     const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
     await flush(300);
