@@ -85,7 +85,22 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
-      <div v-if="!sorted.length" class="grid h-full place-items-center px-6" data-testid="empty">
+      <!-- refresh failed: banner + manual retry, never a false empty -->
+      <div
+        v-if="chats.chatsLoadError"
+        class="flex items-center gap-2 border-b border-line bg-soft px-6 py-2 text-meta text-body"
+        data-testid="load-error"
+      >
+        <span class="flex-1">couldn't refresh chats</span>
+        <button class="text-accent" data-testid="chats-retry" @click="chats.refreshChats()">
+          retry
+        </button>
+      </div>
+      <div
+        v-if="!sorted.length && !chats.chatsLoadError"
+        class="grid h-full place-items-center px-6"
+        data-testid="empty"
+      >
         <div class="flex flex-col items-center gap-3 text-center">
           <svg viewBox="0 0 24 24" class="size-8 text-muted" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

@@ -9,7 +9,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { bindApiClient, useChatsStore, useSessionStore } from "../index";
+import { ApiRequestError, bindApiClient, useChatsStore, useSessionStore } from "../index";
 import { createMockNodeApiClient } from "../api/mock/node";
 
 const ctx = createMockNodeApiClient({
@@ -156,5 +156,56 @@ describe("realtime", () => {
     });
     expect(s().unreadCount).toBe(unread + 1);
     expect(s().lastMessage?.text).toBe("ws bump");
+  });
+});
+
+describe("load failures", () => {
+  const fail = (status: number) =>
+    new ApiRequestError(status, { code: "server_error", message: "boom" });
+
+  it("refreshChats failure flags chatsLoadError — never a false empty", async () => {
+    const orig = ctx.api.chats.list;
+    ctx.api.chats.list = () => Promise.reject(fail(500));
+    try {
+      await chats.refreshChats();
+      expect(chats.chatsLoadError).toBe(true);
+    } finally {
+      ctx.api.chats.list = orig;
+    }
+    await chats.refreshChats();
+    expect(chats.chatsLoadError).toBe(false);
+  });
+
+  it("401 rotates the token pair and retries the call once", async () => {
+    const orig = ctx.api.chats.list;
+    let calls = 0;
+    ctx.api.chats.list = () => {
+      calls += 1;
+      return calls === 1 ? Promise.reject(fail(401)) : orig();
+    };
+    try {
+      await chats.refreshChats();
+      expect(calls).toBe(2);
+      expect(chats.chatsLoadError).toBe(false);
+    } finally {
+      ctx.api.chats.list = orig;
+    }
+  });
+
+  it("loadTail failure sets window.loadError; manual retry recovers", async () => {
+    const orig = ctx.api.messages.list;
+    ctx.api.messages.list = () => Promise.reject(fail(500));
+    try {
+      await chats.loadTail(DIRECT);
+      const w = chats.window(DIRECT);
+      expect(w.loadError).toBe(true);
+      expect(w.loading).toBe(false);
+    } finally {
+      ctx.api.messages.list = orig;
+    }
+    await chats.loadTail(DIRECT);
+    const w = chats.window(DIRECT);
+    expect(w.loadError).toBe(false);
+    expect(w.messages.length).toBeGreaterThan(0);
   });
 });

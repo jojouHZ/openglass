@@ -6,6 +6,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import type { LocalMessage } from "@openglass/core";
 import {
+  ApiRequestError,
   api,
   dayChanged,
   toSeries,
@@ -245,10 +246,22 @@ function fmtDay(iso: string) {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+const notFound = ref(false);
+
 async function enterChat() {
-  await chats.refreshChats().catch(() => undefined);
+  notFound.value = false;
+  await chats.refreshChats();
   await chats.connectRealtime().catch(() => undefined);
-  await chats.openChat(chatId.value);
+  try {
+    await chats.openChat(chatId.value);
+  } catch (e) {
+    // 404 = deleted chat / membership revoked — a product state, not a typo
+    if (e instanceof ApiRequestError && e.status === 404) {
+      notFound.value = true;
+      return;
+    }
+    console.warn("[s5] openChat failed", e);
+  }
   pinned.value = await chats.pinnedMessages(chatId.value).catch(() => []);
   await scrollToBottom();
   initialScrollDone.value = true;
@@ -291,9 +304,23 @@ watch(
 </script>
 
 <template>
+  <!-- valid path, gone entity: deleted chat / revoked membership -->
+  <main v-if="notFound" class="grid h-dvh place-items-center px-6" data-testid="not-found">
+    <div class="flex flex-col items-center gap-3 text-center">
+      <div class="text-body text-ink">chat not found</div>
+      <div class="text-meta text-muted">it was deleted or you're no longer a member</div>
+      <button
+        class="mt-1 h-11 rounded-pill bg-ink px-6 text-msg text-bg"
+        @click="router.push({ name: 's4-chat-list' })"
+      >
+        back to chats
+      </button>
+    </div>
+  </main>
+
   <!-- h-dvh + overflow-hidden: the header and composer stay pinned;
        only the messages layer scrolls (flex child needs min-h-0) -->
-  <main class="relative flex h-dvh flex-col overflow-hidden">
+  <main v-else class="relative flex h-dvh flex-col overflow-hidden">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line px-6 pb-3 pt-8">
       <button class="text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
@@ -398,8 +425,30 @@ watch(
       <div v-if="win.loading && !win.messages.length" class="py-8 text-center text-meta text-muted">
         loading…
       </div>
+      <div
+        v-else-if="win.loadError && !win.messages.length"
+        class="py-8 text-center"
+        data-testid="history-error"
+      >
+        <div class="text-meta text-danger">couldn't load messages</div>
+        <button
+          class="mt-1 text-meta text-accent"
+          data-testid="history-retry"
+          @click="chats.loadTail(chatId)"
+        >
+          retry
+        </button>
+      </div>
       <div v-if="win.nextCursor" class="pb-2 text-center">
-        <button class="text-meta text-accent" data-testid="load-older" @click="loadOlder">
+        <button
+          v-if="win.loadError"
+          class="text-meta text-danger"
+          data-testid="load-older-retry"
+          @click="loadOlder"
+        >
+          couldn't load earlier — retry
+        </button>
+        <button v-else class="text-meta text-accent" data-testid="load-older" @click="loadOlder">
           load earlier
         </button>
       </div>
@@ -476,7 +525,10 @@ watch(
           </div>
         </div>
       </template>
-      <div v-if="!win.loading && !win.messages.length" class="py-8 text-center text-meta text-muted">
+      <div
+        v-if="!win.loading && !win.messages.length && !win.loadError"
+        class="py-8 text-center text-meta text-muted"
+      >
         no messages yet
       </div>
     </div>

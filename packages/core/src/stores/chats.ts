@@ -25,6 +25,8 @@ interface ChatWindow {
   nextCursor: string | null; // older page
   newerCursor: string | null; // newer page (after an `around` jump)
   loading: boolean;
+  /** last page fetch failed — the view renders a manual retry row */
+  loadError: boolean;
   /** true once the newest tail is loaded (steady state) */
   atTail: boolean;
 }
@@ -34,6 +36,7 @@ const emptyWindow = (): ChatWindow => ({
   nextCursor: null,
   newerCursor: null,
   loading: false,
+  loadError: false,
   atTail: false,
 });
 
@@ -58,6 +61,8 @@ export const useChatsStore = defineStore("chats", {
     reconnectAttempt: 0,
     /** Chat the user is looking at — suppresses its unread bumps. */
     activeChatId: null as string | null,
+    /** last refreshChats failed — S4 shows a manual retry, never a false empty */
+    chatsLoadError: false,
   }),
 
   getters: {
@@ -80,9 +85,41 @@ export const useChatsStore = defineStore("chats", {
       return c.type === "direct" && c.peer?.id === s.user?.id;
     },
 
+    /**
+     * 401 = expired access token: rotate the pair and retry once.
+     * Refresh rejection means the session is dead — teardown + logout.
+     */
+    async withAuthRetry<T>(fn: () => Promise<T>): Promise<T> {
+      try {
+        return await fn();
+      } catch (e) {
+        if (!(e instanceof ApiRequestError) || e.status !== 401) throw e;
+      }
+      const session = useSessionStore();
+      try {
+        await session.refreshTokens();
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 401) {
+          await this.handleSessionRevoked();
+        }
+        throw e;
+      }
+      return fn();
+    },
+
+    /**
+     * Failures surface on chatsLoadError instead of throwing — callers
+     * (WS handlers, mount hooks) fire-and-forget this, and a silent
+     * failure must never render as a false "no chats" empty state.
+     */
     async refreshChats() {
-      const { chats } = await api().chats.list();
-      this.chats = sortChats(chats);
+      try {
+        const { chats } = await this.withAuthRetry(() => api().chats.list());
+        this.chats = sortChats(chats);
+        this.chatsLoadError = false;
+      } catch {
+        this.chatsLoadError = true;
+      }
     },
 
     /** S8 — contacts-only group create; lands in local state at once. */
@@ -165,11 +202,14 @@ export const useChatsStore = defineStore("chats", {
       const w = this.ensureWindow(chatId);
       w.loading = true;
       try {
-        const page = await api().messages.list(chatId, { limit: 50 });
+        const page = await this.withAuthRetry(() => api().messages.list(chatId, { limit: 50 }));
         w.messages = page.messages;
         w.nextCursor = page.nextCursor;
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
+        w.loadError = false;
+      } catch {
+        w.loadError = true;
       } finally {
         w.loading = false;
       }
@@ -178,14 +218,17 @@ export const useChatsStore = defineStore("chats", {
     async loadOlder(chatId: string) {
       const w = this.windows[chatId];
       if (!w?.nextCursor || w.loading) return;
+      const before = w.nextCursor;
       w.loading = true;
       try {
-        const page = await api().messages.list(chatId, {
-          limit: 50,
-          before: w.nextCursor,
-        });
+        const page = await this.withAuthRetry(() =>
+          api().messages.list(chatId, { limit: 50, before }),
+        );
         w.messages = [...page.messages, ...w.messages];
         w.nextCursor = page.nextCursor;
+        w.loadError = false;
+      } catch {
+        w.loadError = true;
       } finally {
         w.loading = false;
       }
@@ -194,15 +237,18 @@ export const useChatsStore = defineStore("chats", {
     async loadNewer(chatId: string) {
       const w = this.windows[chatId];
       if (!w?.newerCursor || w.loading) return;
+      const after = w.newerCursor;
       w.loading = true;
       try {
-        const page = await api().messages.list(chatId, {
-          limit: 50,
-          after: w.newerCursor,
-        });
+        const page = await this.withAuthRetry(() =>
+          api().messages.list(chatId, { limit: 50, after }),
+        );
         w.messages = [...w.messages, ...page.messages];
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
+        w.loadError = false;
+      } catch {
+        w.loadError = true;
       } finally {
         w.loading = false;
       }
@@ -218,6 +264,9 @@ export const useChatsStore = defineStore("chats", {
         w.nextCursor = page.nextCursor;
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
+        w.loadError = false;
+      } catch {
+        w.loadError = true;
       } finally {
         w.loading = false;
       }

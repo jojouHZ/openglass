@@ -11,6 +11,7 @@ import { createMemoryHistory } from "vue-router";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  ApiRequestError,
   bindApiClient,
   useChatsStore,
   useSessionStore,
@@ -62,6 +63,32 @@ describe("S4 chat list", () => {
     expect(w.find('[data-testid="unread"]').text()).toBe("3");
     expect(w.find('[data-testid="empty"]').exists()).toBe(false);
   });
+
+  it("unknown path redirects to the chat list", async () => {
+    await router.push("/totally/bogus/path");
+    expect(router.currentRoute.value.name).toBe("s4-chat-list");
+  });
+
+  it("load failure shows a retry banner instead of a false empty", async () => {
+    const orig = ctx.api.chats.list;
+    ctx.api.chats.list = () =>
+      Promise.reject(
+        new ApiRequestError(500, { code: "server_error", message: "boom" }),
+      );
+    const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
+    await flush(300);
+    try {
+      expect(w.find('[data-testid="load-error"]').exists()).toBe(true);
+      expect(w.find('[data-testid="empty"]').exists()).toBe(false);
+      ctx.api.chats.list = orig;
+      await w.find('[data-testid="chats-retry"]').trigger("click");
+      await flush(300);
+      expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
+    } finally {
+      ctx.api.chats.list = orig;
+      w.unmount();
+    }
+  });
 });
 
 describe("S5 chat view", () => {
@@ -111,6 +138,45 @@ describe("S5 chat view", () => {
     await flush(50);
     expect(w.find('[data-testid="strip-reply"]').exists()).toBe(true);
     w.unmount();
+  });
+
+  it("unknown chatId renders the not-found state", async () => {
+    await router.push({
+      name: "s5-chat-view",
+      params: { chatId: "00000000-0000-4000-8000-000000000000" },
+    });
+    const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush(400);
+    expect(w.find('[data-testid="not-found"]').exists()).toBe(true);
+    expect(w.text()).toContain("chat not found");
+    w.unmount();
+    await router.push({ name: "s4-chat-list" });
+  });
+
+  it("history load failure shows a retry row that recovers", async () => {
+    // drop the cached window so openChat fetches the tail again
+    delete chats().windows[DIRECT];
+    const orig = ctx.api.messages.list;
+    ctx.api.messages.list = () =>
+      Promise.reject(
+        new ApiRequestError(500, { code: "server_error", message: "boom" }),
+      );
+    await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
+    const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush(400);
+    try {
+      expect(w.find('[data-testid="history-error"]').exists()).toBe(true);
+      ctx.api.messages.list = orig;
+      await w.find('[data-testid="history-retry"]').trigger("click");
+      await flush(400);
+      expect(w.find('[data-testid="history-error"]').exists()).toBe(false);
+      expect(w.find('[data-testid="msg-scroll"]').text()).toContain(
+        "fixture message",
+      );
+    } finally {
+      ctx.api.messages.list = orig;
+      w.unmount();
+    }
   });
 
   it("offline state shows the banner and disables the composer", async () => {

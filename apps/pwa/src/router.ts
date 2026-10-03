@@ -28,6 +28,16 @@ export const routes: RouteRecordRaw[] = [
   { path: "/settings/security", name: "s14-security", component: () => import("./views/S14Security.vue"), meta: { screen: "S14", auth: true } },
   { path: "/pwa", name: "s15-pwa", component: () => import("./views/S15Pwa.vue"), meta: { screen: "S15", auth: true } },
   { path: "/states", name: "s16-states", component: Placeholder, meta: { screen: "S16" } },
+  {
+    path: "/:pathMatch(.*)*",
+    name: "not-found",
+    // no public 404 surface in an app shell — recover to the chat list;
+    // warn stays in the console for bug reports
+    redirect: (to) => {
+      console.warn(`[router] unknown path "${to.path}" — redirecting to chats`);
+      return { name: "s4-chat-list" };
+    },
+  },
 ];
 
 // Private-layer screens S10–S12 exist ONLY in the pwa-dev build
