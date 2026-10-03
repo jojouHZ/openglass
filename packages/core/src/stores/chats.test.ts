@@ -198,14 +198,14 @@ describe("load failures", () => {
     try {
       await chats.loadTail(DIRECT);
       const w = chats.window(DIRECT);
-      expect(w.loadError).toBe(true);
+      expect(w.loadError).toBe("tail");
       expect(w.loading).toBe(false);
     } finally {
       ctx.api.messages.list = orig;
     }
     await chats.loadTail(DIRECT);
     const w = chats.window(DIRECT);
-    expect(w.loadError).toBe(false);
+    expect(w.loadError).toBeNull();
     expect(w.messages.length).toBeGreaterThan(0);
   });
 });

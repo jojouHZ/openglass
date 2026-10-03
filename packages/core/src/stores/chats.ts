@@ -25,8 +25,8 @@ interface ChatWindow {
   nextCursor: string | null; // older page
   newerCursor: string | null; // newer page (after an `around` jump)
   loading: boolean;
-  /** last page fetch failed — the view renders a manual retry row */
-  loadError: boolean;
+  /** last page fetch failed — which direction to retry (manual retry row) */
+  loadError: "tail" | "older" | "newer" | null;
   /** true once the newest tail is loaded (steady state) */
   atTail: boolean;
 }
@@ -36,7 +36,7 @@ const emptyWindow = (): ChatWindow => ({
   nextCursor: null,
   newerCursor: null,
   loading: false,
-  loadError: false,
+  loadError: null,
   atTail: false,
 });
 
@@ -207,9 +207,9 @@ export const useChatsStore = defineStore("chats", {
         w.nextCursor = page.nextCursor;
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
-        w.loadError = false;
+        w.loadError = null;
       } catch {
-        w.loadError = true;
+        w.loadError = "tail";
       } finally {
         w.loading = false;
       }
@@ -226,9 +226,9 @@ export const useChatsStore = defineStore("chats", {
         );
         w.messages = [...page.messages, ...w.messages];
         w.nextCursor = page.nextCursor;
-        w.loadError = false;
+        w.loadError = null;
       } catch {
-        w.loadError = true;
+        w.loadError = "older";
       } finally {
         w.loading = false;
       }
@@ -246,9 +246,9 @@ export const useChatsStore = defineStore("chats", {
         w.messages = [...w.messages, ...page.messages];
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
-        w.loadError = false;
+        w.loadError = null;
       } catch {
-        w.loadError = true;
+        w.loadError = "newer";
       } finally {
         w.loading = false;
       }
@@ -264,9 +264,9 @@ export const useChatsStore = defineStore("chats", {
         w.nextCursor = page.nextCursor;
         w.newerCursor = page.newerCursor;
         w.atTail = !page.newerCursor;
-        w.loadError = false;
+        w.loadError = null;
       } catch {
-        w.loadError = true;
+        w.loadError = "tail";
       } finally {
         w.loading = false;
       }

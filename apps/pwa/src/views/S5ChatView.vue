@@ -81,6 +81,14 @@ async function loadOlder() {
   }
 }
 
+/** Manual retry — the failed direction lives on the window's loadError. */
+function retryLoad() {
+  const dir = win.value.loadError;
+  if (dir === "newer") return chats.loadNewer(chatId.value);
+  if (dir === "older") return loadOlder();
+  return chats.loadTail(chatId.value);
+}
+
 async function scrollToBottom() {
   await nextTick();
   if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight;
@@ -439,16 +447,17 @@ watch(
           retry
         </button>
       </div>
-      <div v-if="win.nextCursor" class="pb-2 text-center">
+      <div v-if="win.loadError && win.messages.length" class="pb-2 text-center">
         <button
-          v-if="win.loadError"
           class="text-meta text-danger"
-          data-testid="load-older-retry"
-          @click="loadOlder"
+          data-testid="history-retry"
+          @click="retryLoad"
         >
-          couldn't load earlier — retry
+          couldn't load — retry
         </button>
-        <button v-else class="text-meta text-accent" data-testid="load-older" @click="loadOlder">
+      </div>
+      <div v-else-if="win.nextCursor" class="pb-2 text-center">
+        <button class="text-meta text-accent" data-testid="load-older" @click="loadOlder">
           load earlier
         </button>
       </div>
