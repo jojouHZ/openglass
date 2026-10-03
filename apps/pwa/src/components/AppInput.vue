@@ -6,6 +6,11 @@
      accent on focus-visible. -->
 
 <script setup lang="ts">
+// Fragment root (label + error line): without inheritAttrs:false every
+// attr (required, maxlength, autofocus, data-testid) is dropped with a
+// Vue warn — bind them onto the real input instead.
+defineOptions({ inheritAttrs: false });
+
 defineProps<{
   label: string;
   placeholder?: string;
@@ -22,6 +27,7 @@ const model = defineModel<string>();
   <label class="flex flex-col gap-2">
     <span class="text-sender text-muted uppercase tracking-wide">{{ label }}</span>
     <input
+      v-bind="$attrs"
       v-model="model"
       :type="type ?? 'text'"
       :placeholder="placeholder"

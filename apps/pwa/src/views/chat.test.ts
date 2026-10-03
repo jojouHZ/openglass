@@ -179,6 +179,33 @@ describe("S5 chat view", () => {
     }
   });
 
+  it("failed message action surfaces an error, not silence", async () => {
+    const orig = ctx.api.messages.delete;
+    ctx.api.messages.delete = () =>
+      Promise.reject(
+        new ApiRequestError(500, { code: "server_error", message: "boom" }),
+      );
+    try {
+      await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
+      const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+      await flush(400);
+      const own = w
+        .findAll("[data-mid]")
+        .find((b) => b.find(".bg-bubble-own").exists())!;
+      await own.trigger("contextmenu", { clientX: 10, clientY: 10 });
+      document
+        .querySelector('[data-testid="mi-delete"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flush(150);
+      expect(w.find('[data-testid="action-error"]').text()).toContain(
+        "delete failed",
+      );
+      w.unmount();
+    } finally {
+      ctx.api.messages.delete = orig;
+    }
+  });
+
   it("offline state shows the banner and disables the composer", async () => {
     chats().connState = "offline";
     const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });

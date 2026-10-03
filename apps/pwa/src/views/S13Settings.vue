@@ -40,7 +40,9 @@ async function saveName() {
 
 async function signOut() {
   confirmSignOut.value = false;
-  await session.logout();
+  // local teardown is guaranteed by logout()'s finally — navigate
+  // even when the server-side revoke call fails
+  await session.logout().catch(() => undefined);
   router.push({ name: "s1-invite" });
 }
 </script>

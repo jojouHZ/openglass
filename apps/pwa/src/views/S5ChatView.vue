@@ -98,7 +98,17 @@ async function scrollToBottom() {
 const replyTo = ref<LocalMessage | null>(null);
 const editing = ref<LocalMessage | null>(null);
 const staged = ref<StagedAttachment | null>(null);
-const sendError = ref("");
+/** send / pin / delete / search failures all land on this strip */
+const actionError = ref("");
+
+/** Every chat action surfaces its failure — nothing fails silently. */
+async function chatAction(label: string, fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch {
+    actionError.value = `${label} failed — try again`;
+  }
+}
 
 async function stageFile(f: File) {
   if (f.size > MAX_ATTACHMENT) {
@@ -124,7 +134,7 @@ async function stageFile(f: File) {
 }
 
 async function onSend(text: string) {
-  sendError.value = "";
+  actionError.value = "";
   try {
     if (editing.value) {
       await chats.edit(editing.value.id, text);
@@ -140,7 +150,7 @@ async function onSend(text: string) {
     staged.value = null;
     await scrollToBottom();
   } catch {
-    sendError.value = "send failed — message marked";
+    actionError.value = "send failed — message marked";
   }
 }
 
@@ -179,7 +189,10 @@ function longPressEnd() {
 }
 
 function copyText(m: LocalMessage) {
-  if (m.text) void navigator.clipboard?.writeText(m.text);
+  if (!m.text) return;
+  navigator.clipboard
+    ?.writeText(m.text)
+    .catch(() => (actionError.value = "copy failed"));
 }
 
 // --- header menu / search / pinned ---
@@ -196,7 +209,13 @@ async function onSearchQuery(q: string) {
     searchResults.value = [];
     return;
   }
-  searchResults.value = await chats.search(chatId.value, q);
+  try {
+    searchResults.value = await chats.search(chatId.value, q);
+  } catch {
+    searchResults.value = [];
+    actionError.value = "search failed — try again";
+    return;
+  }
   searchIdx.value = 0;
   await focusResult();
 }
@@ -227,8 +246,12 @@ async function openPinned() {
 
 async function toggleChatPin() {
   headMenu.value = false;
-  if (chat.value) await api().chats.setPinned(chatId.value, !chat.value.pinned);
-  await chats.refreshChats();
+  try {
+    if (chat.value) await api().chats.setPinned(chatId.value, !chat.value.pinned);
+    await chats.refreshChats();
+  } catch {
+    actionError.value = "pin failed — try again";
+  }
 }
 
 function senderName(m: LocalMessage) {
@@ -542,7 +565,9 @@ watch(
       </div>
     </div>
 
-    <div v-if="sendError" class="px-6 pb-1 text-meta text-danger">{{ sendError }}</div>
+    <div v-if="actionError" class="px-6 pb-1 text-meta text-danger" data-testid="action-error">
+      {{ actionError }}
+    </div>
     <Composer
       :offline="offline"
       :reply-to="replyTo"
@@ -565,8 +590,8 @@ watch(
       @reply="replyTo = menu!.m"
       @copy="copyText(menu!.m)"
       @edit="editing = menu!.m"
-      @pin="chats.setMessagePinned(menu!.m.id, !menu!.m.pinned)"
-      @delete="chats.remove(menu!.m.id)"
+      @pin="chatAction('pin', () => chats.setMessagePinned(menu!.m.id, !menu!.m.pinned))"
+      @delete="chatAction('delete', () => chats.remove(menu!.m.id))"
       @close="menu = null"
     />
   </main>
