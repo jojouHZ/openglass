@@ -25,6 +25,7 @@ The private-hosting deployment host always lives in a separate repository.
   - `Privacy Engine` — E2EE via Web Crypto API / native crypto
   - `Volatile State Manager` — RAM-only state, zero persistence
   - `Relay Client (TS)` — WebSocket client for the Go relay
+    (`/api/v1/relay`, contract: `docs/api/relay-events.md`)
 
 **The PWA exclusion is build-time**: private routes and views are
 registered only under `VITE_PRIVATE_MODULE=1` and kept out of the

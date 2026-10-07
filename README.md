@@ -84,7 +84,8 @@ shipped yet, so treat every current conversation as host-readable.
 - [Private layer design](docs/architecture/02-private-layer.md)
 - [Threat model](docs/architecture/05-threat-model.md)
 - [API contract](docs/api/public-api.openapi.yaml) ·
-  [WS events](docs/api/ws-events.md) · [Errors](docs/api/errors.md)
+  [WS events](docs/api/ws-events.md) · [Errors](docs/api/errors.md) ·
+  [Relay events](docs/api/relay-events.md) *(design)*
 - [UI Kit](docs/ux/ui-kit.md) · [Components](docs/ux/components.md) ·
   [Design tokens](docs/ux/design-tokens.md)
 - [AI workflow](docs/ai-workflow.md) — RAG knowledge pipeline and

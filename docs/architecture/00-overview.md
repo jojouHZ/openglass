@@ -27,7 +27,7 @@ tested on `main`, **designed** means the contract/thinking is written down,
 | WebSocket hub (delivery, presence, typing, receipts, replay/resync) | **Implemented** |
 | PWA shell (installable, offline states) | **Implemented** |
 | Shared frontend core (`packages/core`) | **Implemented** |
-| Private layer (relay, E2EE, SAS verify, burnable chats) | **Designed** — see `02-private-layer.md`; UI exists only in the internal `pwa-dev` build |
+| Private layer (relay, E2EE, SAS verify, burnable chats) | **Designed, implementation starting** — contract: `docs/api/relay-events.md`; UI exists only in the internal `pwa-dev` build |
 | Push notifications | **Stubbed** (501) |
 | Abuse reports | **Stubbed** (501) |
 | iOS / Android / Desktop shells | **Designed** |

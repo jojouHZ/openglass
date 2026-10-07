@@ -60,6 +60,12 @@ session lifetime.
   relay; live in RAM only; destroyed with the chat.
 - **Identity keys**: long-term, stored in platform secure storage —
   iOS/macOS Keychain (Secure Enclave), Android Keystore, Electron `safeStorage`.
+- **Dev-tier exception (pwa-dev only)**: the internal demo host has no
+  keystore, so identity keys are **non-extractable `CryptoKey` objects in a
+  dedicated IndexedDB** (`openglass-private`). Weakest tier of all shells —
+  no enclave, XSS-compromisable — and it exists **only** in the `pwa-dev`
+  build; `pwa-mvp` ships no private code at all. Full teardown deletes the
+  database itself (see zero-trace discipline in `docs/api/relay-events.md`).
 - **Message encryption**: blobs encrypted client-side before they reach the
   relay; the server sees ciphertext only.
 - **No Double Ratchet for v1**: a single ECDH session key is sufficient for
@@ -96,10 +102,29 @@ Consequences, honestly:
   at accept time — prevents buffer hijack during the grace window.
 - Key/queue names use opaque session UUIDs — no user pairing in identifiers.
 
-## Platform Availability
+## Platform Availability & Implementation Plan
 
-Private layer is **native-shells only** (iOS first). PWA never loads the
-private remote module — see `03-platforms.md`.
+Private layer is **native-shells only** in production — the internal
+`pwa-dev` demo host is the sole exception (dev-tier, IndexedDB keys).
+
+Implementation order — the path to the post-MVP goal *"a running server
+serves private-layer clients on any device"* (milestone **v0.9.0**,
+pre-1.0 GA):
+
+| Order | Shell | Identity key storage | Why this order |
+|-------|-------|----------------------|----------------|
+| 1 | **pwa-dev** (internal) | IndexedDB, non-extractable | testable today, unblocks the whole stack's E2E before any shell exists |
+| 2 | **Desktop (Electron)** | `safeStorage` | first *real* client — buildable and testable immediately, no store/signing pipeline needed |
+| 3 | **Android (Capacitor)** | Keystore | second-largest target, mature keystore API |
+| 4 | **iOS (Capacitor)** | Keychain / Secure Enclave | strongest storage, most pipeline overhead (signing, entitlements, App Store) — last |
+| — | **macOS** | Keychain (via Electron `safeStorage` or native) | covered by the desktop shell unless a native client appears |
+
+Same rule everywhere: private code is a remote module loaded only by
+shells entitled to it; a shell that shouldn't have private simply never
+receives the module (build exclusion on pwa, platform entitlement on
+native).
+
+## Optional / Post-MVP
 
 ## Optional / Post-MVP
 
