@@ -76,6 +76,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: MVP bundle guard
+        run: pnpm verify:mvp-bundle
+
       # Advisory: npm ecosystem noise — report but do not gate.
       - name: pnpm audit (advisory)
         continue-on-error: true
