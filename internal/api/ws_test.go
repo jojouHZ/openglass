@@ -548,6 +548,197 @@ func TestWS_MultiConnSameSession(t *testing.T) {
 	}
 }
 
+// A conn must not outlive the credential that opened it — afterExpiry
+// drops it with 4401 the moment the access token dies.
+func TestWS_TokenExpiryDropsConn(t *testing.T) {
+	ts, st, sender, _ := newServerWS(t)
+	aTok, aID := mkUser(t, ts, st, sender, "exp@x.io", "exp#0001")
+
+	code, body := get(t, ts, "/api/v1/auth/sessions", aTok)
+	if code != 200 {
+		t.Fatalf("sessions: %d", code)
+	}
+	var sid string
+	for _, s := range body["sessions"].([]any) {
+		if s.(map[string]any)["current"] == true {
+			sid = s.(map[string]any)["id"].(string)
+		}
+	}
+	if sid == "" {
+		t.Fatal("no current session in list")
+	}
+
+	// same secret, ~1s TTL — the token parses, then dies mid-conn.
+	// (jwt.NumericDate truncates to seconds — sub-second TTLs are
+	// born expired.)
+	short := auth.NewTokens([]byte("test-secret"), time.Second, time.Hour)
+	pair, err := short.NewPair(aID, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := wsConnect(t, ts, pair.AccessToken, 0)
+	defer func() { _ = c.Close() }()
+
+	_ = c.SetReadDeadline(time.Now().Add(4 * time.Second))
+	for {
+		var f wsFrame
+		if err := c.ReadJSON(&f); err != nil {
+			ce, ok := err.(*websocket.CloseError)
+			if !ok || ce.Code != 4401 {
+				t.Fatalf("expected close 4401 on token expiry, got %v", err)
+			}
+			return
+		}
+	}
+}
+
+// A first frame that isn't `auth` is unauthorized, not a protocol noop.
+func TestWS_NonAuthFirstFrame(t *testing.T) {
+	ts, _, _, _ := newServerWS(t)
+	c := wsDial(t, ts, 0)
+	defer func() { _ = c.Close() }()
+	if err := c.WriteJSON(map[string]any{"type": "ping", "data": map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := c.ReadMessage()
+	ce, ok := err.(*websocket.CloseError)
+	if !ok || ce.Code != 4401 {
+		t.Fatalf("expected close 4401 for non-auth frame, got %v", err)
+	}
+}
+
+// typing from a non-member is dropped silently — no fan-out, no echo.
+func TestWS_TypingNonMemberDropped(t *testing.T) {
+	ts, st, sender, _ := newServerWS(t)
+	aTok, aID := mkUser(t, ts, st, sender, "ta@x.io", "ta#0001")
+	bTok, bID := mkUser(t, ts, st, sender, "tb@x.io", "tb#0002")
+	cTok, _ := mkUser(t, ts, st, sender, "tc@x.io", "tc#0003")
+	befriend(t, ts, aTok, bTok, aID, bID)
+	chatID := directChat(t, ts, aTok, bID)
+
+	ac, _ := wsConnect(t, ts, aTok, 0)
+	wsRead(t, ac)
+	cc, _ := wsConnect(t, ts, cTok, 0)
+	wsRead(t, cc)
+	defer func() { _ = ac.Close(); _ = cc.Close() }()
+
+	if err := cc.WriteJSON(map[string]any{
+		"type": "typing.start", "data": map[string]any{"chatId": chatID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// alice must see nothing — the typing must not leak outside members
+	_ = ac.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	var f wsFrame
+	if err := ac.ReadJSON(&f); err == nil {
+		t.Fatalf("non-member typing leaked to a member: %v", f)
+	}
+}
+
+// EmitToChatExcept must not echo typing back to its sender.
+func TestWS_TypingNotEchoedToSender(t *testing.T) {
+	ts, _, _, aTok, _, bTok, _, chatID := setupWSChat(t)
+
+	ac, _ := wsConnect(t, ts, aTok, 0)
+	wsRead(t, ac)
+	bc, _ := wsConnect(t, ts, bTok, 0)
+	wsRead(t, bc)
+	defer func() { _ = ac.Close(); _ = bc.Close() }()
+
+	if err := ac.WriteJSON(map[string]any{
+		"type": "typing.start", "data": map[string]any{"chatId": chatID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// bob gets it — proves the emit fired
+	for i := 0; i < 5; i++ {
+		if f := wsRead(t, bc); f.Type == "typing" {
+			break
+		}
+	}
+	// alice must NOT see her own typing
+	_ = ac.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	for {
+		var f wsFrame
+		if err := ac.ReadJSON(&f); err != nil {
+			return
+		}
+		if f.Type == "typing" {
+			t.Fatalf("sender received own typing echo: %v", f.Data)
+		}
+	}
+}
+
+// typing.stop emits `until` ≈ now — clients drop the indicator at once.
+func TestWS_TypingStopImmediate(t *testing.T) {
+	ts, _, _, aTok, aID, bTok, _, chatID := setupWSChat(t)
+
+	ac, _ := wsConnect(t, ts, aTok, 0)
+	wsRead(t, ac)
+	bc, _ := wsConnect(t, ts, bTok, 0)
+	wsRead(t, bc)
+	defer func() { _ = ac.Close(); _ = bc.Close() }()
+
+	if err := ac.WriteJSON(map[string]any{
+		"type": "typing.stop", "data": map[string]any{"chatId": chatID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		f := wsRead(t, bc)
+		if f.Type != "typing" {
+			continue
+		}
+		until, err := time.Parse(time.RFC3339, f.Data["until"].(string))
+		if err != nil {
+			t.Fatalf("until: %v", err)
+		}
+		if time.Since(until) > 2*time.Second {
+			t.Fatalf("typing.stop must land already-expired, got until=%v", until)
+		}
+		if f.Data["userId"] != aID {
+			t.Fatalf("typing payload userId: %v", f.Data)
+		}
+		return
+	}
+	t.Fatal("typing frame never arrived")
+}
+
+// Reconnect inside the grace window must not flap presence{offline} —
+// flaky networks shouldn't spam mutuals with false offlines.
+func TestWS_PresenceGraceSuppressesFlap(t *testing.T) {
+	ts, st, sender, hub := newServerWS(t)
+	hub.OfflineGrace = 500 * time.Millisecond
+	aTok, aID := mkUser(t, ts, st, sender, "ga@x.io", "ga#0001")
+	bTok, bID := mkUser(t, ts, st, sender, "gb@x.io", "gb#0002")
+	befriend(t, ts, aTok, bTok, aID, bID)
+
+	ac, _ := wsConnect(t, ts, aTok, 0)
+	wsRead(t, ac)
+	defer func() { _ = ac.Close() }()
+	bc, _ := wsConnect(t, ts, bTok, 0)
+	wsRead(t, bc)
+
+	// flap: disconnect + reconnect well inside the grace window
+	_ = bc.Close()
+	time.Sleep(50 * time.Millisecond)
+	bc2, _ := wsConnect(t, ts, bTok, 0)
+	defer func() { _ = bc2.Close() }()
+
+	// alice may legitimately see presence{bob online} again — the banned
+	// outcome is offline. Read past the grace window to be sure.
+	_ = ac.SetReadDeadline(time.Now().Add(900 * time.Millisecond))
+	for {
+		var f wsFrame
+		if err := ac.ReadJSON(&f); err != nil {
+			return // timeout — no flap leaked
+		}
+		if f.Type == "presence" && f.Data["status"] == "offline" && f.Data["userId"] == bID {
+			t.Fatalf("grace flap leaked presence{offline}: %v", f.Data)
+		}
+	}
+}
+
 // Client frames are capped at 32 KiB — an oversized frame kills the conn.
 func TestWS_ReadLimit(t *testing.T) {
 	ts, _, _, aTok, _, _, _, _ := setupWSChat(t)
