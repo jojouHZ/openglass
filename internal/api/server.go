@@ -14,6 +14,7 @@ import (
 
 	"github.com/jojouHZ/openglass/internal/auth"
 	"github.com/jojouHZ/openglass/internal/config"
+	"github.com/jojouHZ/openglass/internal/relay"
 	"github.com/jojouHZ/openglass/internal/store"
 	"github.com/jojouHZ/openglass/internal/ws"
 )
@@ -25,7 +26,8 @@ type Server struct {
 	chats  store.ChatStore
 	tokens *auth.Tokens
 	sender auth.OtpSender
-	hub    *ws.Hub // nil in tests that don't exercise realtime
+	hub    *ws.Hub      // nil in tests that don't exercise realtime
+	relay  *relay.Relay // nil when the private layer isn't wired
 
 	// optional probes for /healthz — nil dep reports "down"
 	pgPing    func(context.Context) error
@@ -38,7 +40,8 @@ func WithPgPing(fn func(context.Context) error) Option { return func(s *Server) 
 func WithRedisPing(fn func(context.Context) error) Option {
 	return func(s *Server) { s.redisPing = fn }
 }
-func WithHub(h *ws.Hub) Option { return func(s *Server) { s.hub = h } }
+func WithHub(h *ws.Hub) Option         { return func(s *Server) { s.hub = h } }
+func WithRelay(rl *relay.Relay) Option { return func(s *Server) { s.relay = rl } }
 
 // nil-safe emit wrappers — REST mutates, the hub notifies.
 func (s *Server) emitToUsers(userIDs []string, typ string, data map[string]any) {
@@ -54,6 +57,9 @@ func (s *Server) emitToChat(ctx context.Context, chatID, typ string, data map[st
 func (s *Server) revokeSessionConns(sessionID string) {
 	if s.hub != nil {
 		s.hub.Revoke(sessionID)
+	}
+	if s.relay != nil {
+		s.relay.RevokeSessionConns(sessionID)
 	}
 }
 
@@ -99,6 +105,12 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 
 	// ws — upgrade + first-frame auth inside
 	v1.HandleFunc("GET /ws", wsHandler)
+
+	// private-layer relay — separate socket per docs/api/relay-events.md;
+	// mounted only when the relay is wired (production main).
+	if s.relay != nil {
+		v1.HandleFunc("GET /relay", s.relay.ServeHTTP)
+	}
 
 	// contacts — bearer
 	v1.HandleFunc("GET /contacts", s.requireAuth(s.listContacts))

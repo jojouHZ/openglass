@@ -21,6 +21,7 @@ import (
 	"github.com/jojouHZ/openglass/internal/api"
 	"github.com/jojouHZ/openglass/internal/auth"
 	"github.com/jojouHZ/openglass/internal/config"
+	"github.com/jojouHZ/openglass/internal/relay"
 	"github.com/jojouHZ/openglass/internal/store"
 	"github.com/jojouHZ/openglass/internal/ws"
 )
@@ -60,11 +61,14 @@ func main() {
 	tokens := auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	hub := ws.NewHub(tokens.ParseAccess, pg)
 	defer hub.Close()
+	rl := relay.New(tokens.ParseAccess, pg)
+	defer rl.Close()
 
 	srv := api.New(cfg, pg, sender,
 		api.WithPgPing(pg.Ping),
 		api.WithRedisPing(func(ctx context.Context) error { return rdb.Ping(ctx).Err() }),
 		api.WithHub(hub),
+		api.WithRelay(rl),
 	)
 	handler := srv.Handler(hub.ServeHTTP)
 

@@ -51,6 +51,7 @@ internal/*
 !internal/api/
 !internal/auth/
 !internal/config/
+!internal/relay/
 !internal/store/
 !internal/ws/
 # go.mod/go.sum are required to build the committed backend
