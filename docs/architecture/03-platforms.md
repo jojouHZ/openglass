@@ -26,15 +26,28 @@ The private-hosting deployment host always lives in a separate repository.
   - `Volatile State Manager` — RAM-only state, zero persistence
   - `Relay Client (TS)` — WebSocket client for the Go relay
 
-**The PWA exclusion is architectural**: the private module simply is not served
-to it. This is the security boundary, not a config flag.
+**The PWA exclusion is build-time**: private routes and views are
+registered only under `VITE_PRIVATE_MODULE=1` and kept out of the
+`pwa-mvp` chunk graph via dynamic imports — the production bundle
+contains no private-layer code to reach. In the mature MFE world this
+tightens further: the private remote module is simply never served to
+shells that shouldn't load it.
 
-**Exception — internal demo host.** During MVP there are no native shells and
-only two test users, so an internal `pwa-dev` host **does** load the private
-module for real private-layer E2E testing and demos. It is a separate build and
-separate deployment — never the MVP build, never public — and its UI still
-shows the honest (server-trusted) security tier. See
-`docs/dev/frontend-first-development.md`.
+**Exception — internal demo host.** During MVP there are no native shells
+and only two test users, so an internal `pwa-dev` build **does** load the
+private module for real private-layer E2E testing and demos. It is a
+separate build and separate deployment — never the MVP build, never
+public — and its UI still shows the honest (server-trusted) security
+tier. See `docs/dev/frontend-first-development.md`.
+
+## Repository Layout (current monorepo)
+
+```
+packages/core/          shared frontend core — API client (http + mock),
+                        Pinia stores, WS client, generated contract types
+apps/pwa/               PWA shell — views, router, service worker, manifest
+  └── src/views/private/   private screens — pwa-dev builds only
+```
 
 ## Security Tier Indicator
 

@@ -5,27 +5,34 @@ defines **behavior and navigation only** — no visual design. It is the
 contract between product intent and implementation: every arrow is a
 navigation event, every screen lists the data it needs.
 
+> **Route truth**: the live routing table is `apps/pwa/src/router.ts` —
+> this file documents intent. Statuses below: **shipped** = live in the
+> production PWA, **pwa-dev** = built but gated behind
+> `VITE_PRIVATE_MODULE` (internal demo host only), **design** = spec only,
+> **merged** = realized inside another screen.
+
 ## Screen Inventory
 
-| ID | Screen | Layer |
-|----|--------|-------|
-| S1 | Invite / email entry | Public |
-| S2 | OTP verification | Public |
-| S3 | Profile setup (nickname, ID) | Public |
-| S4 | Chat list (empty / populated) | Public |
-| S5 | Chat view (1-1) | Public |
-| S6 | Contact search & add | Public |
-| S7 | Contact profile / chat actions | Public |
-| S8 | Group creation | Public |
-| S9 | Group view | Public |
-| S9a | Group management (owner panel) | Public |
-| S10 | Private session invite (in-chat card) | Private |
-| S11 | Private session setup + mutual verify | Private |
-| S11b | Device-pair verification ritual (emoji grid / QR) | Private |
-| S12 | Chat view in PRIVATE MODE (same window, private messages styled dark/muted with lock icon, dark header w/ countdown + BURN) | Private |
-| S13 | Profile & settings | Public |
-| S14 | Security & sessions | Public |
-| S15 | PWA install / push / offline | Public |
+| ID | Screen | Layer | Status |
+|----|--------|-------|--------|
+| S1 | Invite / email entry | Public | shipped |
+| S2 | OTP verification | Public | shipped |
+| S3 | Profile setup (nickname, ID) | Public | shipped |
+| S4 | Chat list (empty / populated) | Public | shipped |
+| S5 | Chat view (1-1) | Public | shipped |
+| S6 | Contact search & add | Public | shipped |
+| S7 | Contact profile / chat actions | Public | shipped |
+| S8 | Group creation | Public | shipped |
+| S9 | Group view | Public | **merged into S5** — group chats render in the chat view; no standalone route |
+| S9a | Group management (owner panel) | Public | shipped |
+| S10 | Private session invite (in-chat card) | Private | pwa-dev only |
+| S11 | Private session setup + mutual verify | Private | pwa-dev only |
+| S11b | Device-pair verification ritual (emoji grid / QR) | Private | pwa-dev only |
+| S12 | Chat view in PRIVATE MODE (same window, private messages styled dark/muted with lock icon, dark header w/ countdown + BURN) | Private | pwa-dev only |
+| S13 | Profile & settings | Public | shipped |
+| S14 | Security & sessions | Public | shipped |
+| S15 | PWA install / push / offline | Public | shipped — install prompt + offline banner live; push card hidden (backend is `501`) |
+| S16 | UI state catalog | — | dev-only route `/states` (`import.meta.env.DEV`); a component checklist, not a user flow |
 
 ## Flow Map
 

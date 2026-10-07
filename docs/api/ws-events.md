@@ -103,8 +103,14 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 - Frames on one connection arrive in `seq` order — gaps mean a lost event → `resync.required`.
 - `message.new` for one chat is totally ordered by the message's per-chat `seq`.
 - Cross-chat ordering is **not** guaranteed.
-- The server buffers undelivered events for a short window (~60 s grace,
-  Redis-backed); beyond that → `resync.required` on reconnect.
+- Undelivered events are buffered per-session in a **bounded in-memory
+  ring** (`ReplayCap` = 256 events — not Redis, not time-bounded). Reconnect
+  with `?last_seq=N`: if N+1 is still in the ring, missed frames replay then
+  `auth.ok{resumedFromSeq}`; if the ring rolled past N →
+  `resync.required{reason:"gap"}`. Sessions idle past `SessionIdleTTL`
+  (10 min) are evicted → `resync.required{reason:"evicted"}`.
+- A slow consumer that can't drain its send queue is **dropped**; the
+  session's replay ring survives so a reconnect catches up (or resyncs).
 
 ## Explicitly out of scope
 

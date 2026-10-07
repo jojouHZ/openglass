@@ -38,9 +38,10 @@ Every non-2xx response body is:
 | `forbidden` | 403 | authenticated, action not allowed (not mutual, missing group right) | toast/disabled action |
 | `not_found` | 404 | resource absent or invisible | empty state |
 | `conflict` | 409 | duplicate state (e.g. already in contacts) | idempotent UI, refresh |
-| `rate_limited` | 429 | generic rate limit; `Retry-After` header set | backoff + toast |
-| `payload_too_large` | 413 | attachment over limit | composer error |
-| `internal` | 500 | server fault | generic error screen |
+| `too_large` | 413 | attachment over limit (also HTTP body cap) | composer error |
+| `not_implemented` | 501 | route exists in the contract but the feature is stubbed (push, reports) | hide feature UI |
+| `internal` / `internal_error` | 500 | server fault | generic error screen |
+| `rate_limited` | 429 | **reserved — not emitted today**; will carry `Retry-After` when IP rate limiting lands | backoff + toast |
 
 ## WS close codes
 
@@ -48,10 +49,12 @@ Realtime channel uses standard WS close codes plus:
 
 | code | meaning | client action |
 |-----:|---------|---------------|
-| `4401` | access token expired / invalid | refresh token, reconnect |
-| `4403` | session revoked | log out to S1 |
+| `4401` | bad/expired access token, non-auth first frame, **or** `session.revoked` | refresh + reconnect on token fail; log out to S1 if a `session.revoked` event preceded it |
 | `4408` | no `auth` frame within 5 s | reconnect and send auth promptly |
-| `4429` | connection rate-limited | exponential backoff |
+
+(The contract reserves `4403` for an explicit revoked-session close and
+`4429` for connection rate limiting; the hub currently uses `4401` for
+revocation and does not rate-limit connects.)
 
 ## Constants
 
@@ -69,4 +72,5 @@ Values the mock and backend must share:
 | `ATTACHMENTS_PER_MESSAGE` | 10 | composer |
 | `WS_PING_INTERVAL_S` | 30 | client heartbeat |
 | `WS_IDLE_TIMEOUT_S` | 90 | server drop |
-| `WS_REPLAY_GRACE_S` | 60 | reconnect buffer |
+| `WS_REPLAY_RING` | 256 events | per-session in-memory replay ring (`ReplayCap`) |
+| `WS_SESSION_IDLE_S` | 600 | idle session eviction → `resync.required{reason:"evicted"}` |

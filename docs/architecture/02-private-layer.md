@@ -1,5 +1,11 @@
 # Private Layer — Ephemeral Live Sessions
 
+> **Status: DESIGN — not implemented.** No relay endpoint, no key exchange,
+> no private messaging ships today. The screens exist only inside the
+> internal `pwa-dev` demo build (`VITE_PRIVATE_MODULE=1`), gated out of the
+> production bundle. Everything below is the intended contract, not a
+> guarantee — treat it as a spec under review, not shipped behavior.
+
 The private layer provides **burnable end-to-end encrypted chats**: live
 sessions that exist only while both parties are present, where the server acts
 as a blind relay and stores nothing.
@@ -61,10 +67,24 @@ session lifetime.
 
 ## MITM Protection — Fingerprint Verification
 
-A relay server could theoretically MITM the key exchange. Mitigation shipped
-in MVP-private: after accept, both clients display a short **verification
-fingerprint** (emoji/numeric code). Users may compare
-out-of-band; the UI shows it prominently but does not force it.
+**This is the load-bearing piece, and it deserves bluntness.** A relay —
+malicious or compromised — can MITM the ECDH exchange: it substitutes both
+public keys, terminates the encryption on itself, and re-encrypts onward.
+The "blind relay" guarantee does not exist unless the clients authenticate
+the key exchange.
+
+Mitigation designed for MVP-private: after accept, both clients display a
+short **verification fingerprint** (emoji/numeric code, derived from both
+parties' session public keys — S11b). Users compare it out-of-band; the UI
+shows it prominently but does not force it.
+
+Consequences, honestly:
+
+- **Verified pair** → relay is blind. Ciphertext and metadata only.
+- **Unverified pair** → the session is encrypted against passive sniffing
+  but remains MITM-able by the relay. The guarantee is not "partial" — it
+  simply does not apply. The UI must never imply otherwise: an unverified
+  session is labeled unverified, not "encrypted".
 
 ## Relay Semantics
 
