@@ -249,3 +249,17 @@ describe("S5 chat view", () => {
     w.unmount();
   });
 });
+
+// must run last — handleSessionRevoked tears the session down
+describe("app shell", () => {
+  it("session loss on an authed route bounces to the invite screen", async () => {
+    const { default: App } = await import("../App.vue");
+    await router.push({ name: "s4-chat-list" });
+    const w = mount(App, { global: { plugins: [router, pinia] } });
+    await flush(100);
+    await chats().handleSessionRevoked();
+    await flush(100);
+    expect(router.currentRoute.value.name).toBe("s1-invite");
+    w.unmount();
+  });
+});

@@ -5,8 +5,8 @@
      chrome rows (header/nav) are shell rows, only the 1fr row scrolls. -->
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { RouterView } from "vue-router";
+import { computed, watch } from "vue";
+import { RouterView, useRoute, useRouter } from "vue-router";
 
 import { useChatsStore, useSessionStore } from "@openglass/core";
 
@@ -14,6 +14,18 @@ import { pinia } from "./pinia";
 
 const session = useSessionStore(pinia);
 const chats = useChatsStore(pinia);
+const route = useRoute();
+const router = useRouter();
+
+// The session can die with no navigation in flight (session.revoked
+// over WS, refresh-token rejection) — the route guard only runs on
+// navigation, so watch auth and bounce to the invite screen ourselves.
+watch(
+  () => session.authed,
+  (authed) => {
+    if (!authed && route.meta.auth) void router.push({ name: "s1-invite" });
+  },
+);
 
 // global connectivity strip — post-auth only; S5 additionally disables
 // the composer, this is the ambient "you're offline" signal elsewhere.
