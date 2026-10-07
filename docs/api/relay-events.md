@@ -87,6 +87,7 @@ encrypted-channel semantics.)
 | `relay.established` | `{ "sessionId": uuid, "peer": User, "resumeToken": string, "ttlEndsAt": ts }` | sent to **both** sides on accept; each side gets its own `resumeToken`. Clients immediately begin key exchange via `relay.send`. Also **re-emitted after every auth** for each live session the user belongs to — reconnects rejoin their sessions; the event is idempotent (clients dedup by `sessionId`) |
 | `relay.declined` | `{ "sessionId": uuid }` | invitee declined |
 | `relay.peer-offline` | `{ "sessionId": uuid, "graceEndsAt": ts }` | peer lost its conn; session survives until `graceEndsAt` (~60 s). Skipped in `strict` sessions — they die on first disconnect |
+| `relay.peer-online` | `{ "sessionId": uuid }` | peer reconnected within grace — session continues. Balances `peer-offline` (a return inside grace is not silent) |
 | `relay.closed` | `{ "sessionId": uuid, "reason": "timer" \| "burned" \| "expired" \| "peer-gone" \| "revoked" }` | terminal for the session; buffers destroyed |
 
 ### Envelopes

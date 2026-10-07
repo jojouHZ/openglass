@@ -239,10 +239,16 @@ func (r *Relay) attach(c *conn) {
 	}
 	r.conns[c.userID][c] = struct{}{}
 	// conn live → this user is back online; cancel pending peer-gone closes
+	// and tell the peer the user is reachable again (peer-offline must not
+	// be a one-way state leak)
 	for _, s := range r.sessions {
 		if t := s.grace[c.userID]; t != nil {
 			t.Stop()
 			delete(s.grace, c.userID)
+			if s.state == stEstablished {
+				r.emitToUserLocked(other(s, c.userID), "relay.peer-online",
+					map[string]any{"sessionId": s.id})
+			}
 		}
 	}
 }
@@ -286,28 +292,51 @@ func (r *Relay) detach(c *conn) {
 // emitKnownSessions re-syncs a fresh conn: pending invites for this user
 // and established sessions they belong to (rejoin after reconnect —
 // relay.established is idempotent by sessionId).
+// Peer lookups run outside r.mu — a PG read under the global lock would
+// stall every relay op.
 func (r *Relay) emitKnownSessions(c *conn) {
+	type pendingEmit struct {
+		sid, otherID string
+		pending      bool
+	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	ctx := context.Background()
+	var todo []pendingEmit
 	for _, s := range r.sessions {
 		switch {
 		case s.state == stPending && s.b == c.userID:
-			r.send(c, Frame{Type: "relay.invite", Ts: nowTS(), Data: map[string]any{
-				"sessionId":  s.id,
-				"from":       peerJSON(ctx, r.dir, s.a),
-				"ttlSeconds": int(time.Until(s.ttlEndsAt).Seconds()),
-				"burnOnRead": s.burnOnRead,
-				"strict":     s.strict,
-			}})
+			todo = append(todo, pendingEmit{sid: s.id, otherID: s.a, pending: true})
 		case s.state == stEstablished && (s.a == c.userID || s.b == c.userID):
-			r.send(c, Frame{Type: "relay.established", Ts: nowTS(), Data: map[string]any{
-				"sessionId":   s.id,
-				"peer":        peerJSON(ctx, r.dir, other(s, c.userID)),
-				"resumeToken": s.resumeTok[c.userID],
-				"ttlEndsAt":   s.ttlEndsAt.UTC().Format(time.RFC3339),
-			}})
+			todo = append(todo, pendingEmit{sid: s.id, otherID: other(s, c.userID)})
 		}
+	}
+	r.mu.Unlock()
+
+	ctx := context.Background()
+	for _, e := range todo {
+		r.mu.Lock()
+		s := r.sessions[e.sid]
+		if s == nil {
+			r.mu.Unlock()
+			continue // died between the two passes
+		}
+		data := map[string]any{"sessionId": s.id}
+		typ := "relay.established"
+		if e.pending {
+			typ = "relay.invite"
+			data["ttlSeconds"] = int(time.Until(s.ttlEndsAt).Seconds())
+			data["burnOnRead"] = s.burnOnRead
+			data["strict"] = s.strict
+		} else {
+			data["resumeToken"] = s.resumeTok[c.userID]
+			data["ttlEndsAt"] = s.ttlEndsAt.UTC().Format(time.RFC3339)
+		}
+		r.mu.Unlock()
+		if e.pending {
+			data["from"] = peerJSON(ctx, r.dir, e.otherID)
+		} else {
+			data["peer"] = peerJSON(ctx, r.dir, e.otherID)
+		}
+		r.send(c, Frame{Type: typ, Ts: nowTS(), Data: data})
 	}
 }
 
@@ -422,6 +451,7 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		buf:        map[string][]envelope{},
 		grace:      map[string]*time.Timer{},
 	}
+	fromPeer := peerJSON(ctx, r.dir, c.userID) // DB read before the lock
 	r.mu.Lock()
 	r.sessions[s.id] = s
 	s.timer = time.AfterFunc(r.InviteTTL, func() {
@@ -433,7 +463,7 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 	})
 	r.emitToUserLocked(peerID, "relay.invite", map[string]any{
 		"sessionId":  s.id,
-		"from":       peerJSON(ctx, r.dir, c.userID),
+		"from":       fromPeer,
 		"ttlSeconds": int(ttl),
 		"burnOnRead": s.burnOnRead,
 		"strict":     s.strict,
@@ -442,10 +472,27 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 }
 
 func (r *Relay) onAccept(ctx context.Context, c *conn, sid string) {
+	// phase 1: resolve participant ids under the lock
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	s := r.sessions[sid]
 	if s == nil || s.state != stPending || s.b != c.userID {
+		r.mu.Unlock()
+		r.errTo(c, "not_found")
+		return
+	}
+	a, b := s.a, s.b
+	r.mu.Unlock()
+
+	// peer lookups hit the store — outside the lock
+	peers := map[string]map[string]any{
+		a: peerJSON(ctx, r.dir, b),
+		b: peerJSON(ctx, r.dir, a),
+	}
+
+	// phase 2: re-validate (session may have died in between), then mutate
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s.state != stPending {
 		r.errTo(c, "not_found")
 		return
 	}
@@ -463,7 +510,7 @@ func (r *Relay) onAccept(ctx context.Context, c *conn, sid string) {
 	for _, uid := range []string{s.a, s.b} {
 		r.emitToUserLocked(uid, "relay.established", map[string]any{
 			"sessionId":   s.id,
-			"peer":        peerJSON(ctx, r.dir, other(s, uid)),
+			"peer":        peers[uid],
 			"resumeToken": s.resumeTok[uid],
 			"ttlEndsAt":   s.ttlEndsAt.UTC().Format(time.RFC3339),
 		})

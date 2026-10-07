@@ -363,6 +363,63 @@ func TestRelay_Decline(t *testing.T) {
 	}
 }
 
+func TestRelay_PeerOnlineAfterBlip(t *testing.T) {
+	ts, st, _ := newTestRelay(t)
+	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")
+	befriend(t, st, ua, ub)
+	ca, cb := connect(t, ts, ua.ID, "sa"), connect(t, ts, ub.ID, "sb")
+	defer func() { _ = ca.Close() }()
+
+	sid := invite(t, ca, cb, ub.ID, nil)
+	establish(t, ca, cb, sid)
+	_ = cb.Close() // offline → peer-offline
+	if f := read(t, ca); f.Type != "relay.peer-offline" {
+		t.Fatalf("want peer-offline, got %v", f)
+	}
+	cb = connect(t, ts, ub.ID, "sb") // back inside grace
+	defer func() { _ = cb.Close() }()
+	_ = read(t, cb) // b's own established re-emit
+	f := read(t, ca)
+	if f.Type != "relay.peer-online" || f.Data["sessionId"] != sid {
+		t.Fatalf("want peer-online after within-grace reconnect, got %v", f)
+	}
+}
+
+func TestRelay_SessionRevokedKillsPrivate(t *testing.T) {
+	ts, st, rl := newTestRelay(t)
+	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")
+	befriend(t, st, ua, ub)
+	ca, cb := connect(t, ts, ua.ID, "sa"), connect(t, ts, ub.ID, "sb")
+	defer func() { _ = ca.Close() }()
+	defer func() { _ = cb.Close() }()
+
+	sid := invite(t, ca, cb, ub.ID, nil)
+	establish(t, ca, cb, sid)
+	rl.RevokeSessionConns("sa") // a's device session revoked server-side
+	for _, c := range []*websocket.Conn{ca, cb} {
+		f := read(t, c)
+		if f.Type != "relay.closed" || f.Data["reason"] != "revoked" {
+			t.Fatalf("want closed{revoked}, got %v", f)
+		}
+	}
+	if rl.SessionCount() != 0 {
+		t.Fatal("revoked session must destroy its private sessions")
+	}
+	// a's conn ends with 4401
+	_ = ca.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var ce *websocket.CloseError
+	for {
+		_, _, err := ca.ReadMessage()
+		if err == nil {
+			continue
+		}
+		if errors.As(err, &ce) && ce.Code == 4401 {
+			return
+		}
+		t.Fatalf("want close 4401, got %v", err)
+	}
+}
+
 func TestRelay_GraceWindowSurvivesBlip(t *testing.T) {
 	ts, st, rl := newTestRelay(t)
 	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")
