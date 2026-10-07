@@ -568,10 +568,11 @@ func TestWS_TokenExpiryDropsConn(t *testing.T) {
 		t.Fatal("no current session in list")
 	}
 
-	// same secret, ~1s TTL — the token parses, then dies mid-conn.
-	// (jwt.NumericDate truncates to seconds — sub-second TTLs are
-	// born expired.)
-	short := auth.NewTokens([]byte("test-secret"), time.Second, time.Hour)
+	// same secret, 2s TTL — the token parses, then dies mid-conn.
+	// jwt.NumericDate truncates to whole seconds, so a 1s TTL minted
+	// at t.999 would live ~1ms and die before auth completes; 2s
+	// guarantees (1s, 2s] of life.
+	short := auth.NewTokens([]byte("test-secret"), 2*time.Second, time.Hour)
 	pair, err := short.NewPair(aID, sid)
 	if err != nil {
 		t.Fatal(err)
@@ -579,7 +580,7 @@ func TestWS_TokenExpiryDropsConn(t *testing.T) {
 	c, _ := wsConnect(t, ts, pair.AccessToken, 0)
 	defer func() { _ = c.Close() }()
 
-	_ = c.SetReadDeadline(time.Now().Add(4 * time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	for {
 		var f wsFrame
 		if err := c.ReadJSON(&f); err != nil {
