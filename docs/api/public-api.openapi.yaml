@@ -182,7 +182,11 @@ paths:
                       created via `POST /auth/profile` (S3).
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '403':
-          description: Code invalid or expired
+          description: |
+            Code invalid or expired. `otp_invalid` carries
+            `error.details.attemptsLeft`; when attempts run out the code is
+            deleted and subsequent verifies answer `otp_expired` ("Too many
+            attempts") — the lockout signal is `otp_expired`, not a 429.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -191,7 +195,6 @@ paths:
                   value: { error: { code: otp_invalid, message: "Wrong code" } }
                 expired:
                   value: { error: { code: otp_expired, message: "Code expired, request a new one" } }
-        '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/profile:
     post:
@@ -557,11 +560,13 @@ paths:
                 required: [chat]
                 properties:
                   chat: { $ref: '#/components/schemas/Chat' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
         '403':
           description: Not mutual contacts
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /chats/{chatId}:
     get:
@@ -839,8 +844,16 @@ paths:
                 required: [attachment]
                 properties:
                   attachment: { $ref: '#/components/schemas/Attachment' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Chat not found or caller is not a member
+            (existence privacy — non-members cannot distinguish)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '413':
-          description: File too large
+          description: File too large (`too_large`)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -883,7 +896,9 @@ paths:
               properties:
                 upToSeq: { type: integer }
       responses:
+        '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '204': { description: Recorded }
 
   /groups:
@@ -905,7 +920,13 @@ paths:
                   type: array
                   items: { type: string, format: uuid }
       responses:
+        '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: All `memberIds` must be in the creator's contacts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '201':
           description: Created
           content:
@@ -1187,7 +1208,11 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     RateLimited:
-      description: Rate limit hit
+      description: |
+        Rate limit hit. **Reserved — no endpoint emits 429 with
+        `rate_limited` today** (OTP resend cooldown uses `otp_cooldown`;
+        attempt lockout uses `otp_expired`). Kept for the future
+        IP-level rate limiter.
       headers:
         Retry-After:
           schema: { type: integer }
@@ -1217,10 +1242,12 @@ components:
         id: { type: string, format: uuid }
         displayName:
           type: string
-          description: Free-form, changeable, NOT unique
+          nullable: true
+          description: Free-form, changeable, NOT unique; null until profile setup (S3)
         tag:
           type: string
-          description: Immutable unique handle `name#NNNN`; `#1` reserved for instance owner
+          nullable: true
+          description: Immutable unique handle `name#NNNN`; `#1` reserved for instance owner; null until profile setup
           example: "jojou#1042"
         avatarUrl: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }

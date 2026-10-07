@@ -65,7 +65,7 @@ Values the mock and backend must share:
 | `OTP_LENGTH` | 6 digits | S2 |
 | `OTP_TTL_S` | 600 | S2 expiry |
 | `OTP_RESEND_COOLDOWN_S` | 60 | S2 resend |
-| `OTP_MAX_ATTEMPTS` | 5 | S2 lockout → `rate_limited` |
+| `OTP_MAX_ATTEMPTS` | 5 | S2 lockout → code deleted, further verifies get `otp_expired` ("Too many attempts") |
 | `ACCESS_TOKEN_TTL_S` | 900 | refresh flow |
 | `MESSAGE_MAX_LEN` | 8192 | composer |
 | `ATTACHMENT_MAX_BYTES` | 25 MiB | composer |

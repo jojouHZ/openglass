@@ -16,8 +16,8 @@ internal/
   store/             Store interface + two implementations: Mem (tests/dev) and
                      PG (postgres) — contract-parity tested against each other
   ws/                WebSocket hub — delivery, replay/resync, presence, typing
-  models/            wire types shared by api/store/ws
   vector/ + knowledge/ + codegraph/   dev knowledge infrastructure
+                     (wire types live in store/store.go, shared across api/ws)
 ```
 
 ## Responsibilities

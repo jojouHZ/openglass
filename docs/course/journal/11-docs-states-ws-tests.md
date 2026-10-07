@@ -85,3 +85,10 @@ than a doc fix.
   reality (maturity matrix, trust model scoped to designed-but-unshipped
   private layer); API error/WS catalogs diffed against code; UX flow
   table gains ship-status column; SECURITY/CONTRIBUTING freshened.
+- **D.4 contract-drift pass**: OpenAPI diffed route-by-route against
+  handlers. Found and fixed: `otp/verify` documented a `429 rate_limited`
+  the server never emits (attempt lockout is `otp_expired` 403);
+  `User.displayName`/`tag` weren't nullable (backend emits null until S3);
+  missing error responses on upload (400/404), open-direct-chat (400/404),
+  mark-read (400/404), create-group (400/403). Everything else — wire
+  shapes, query params, request bodies, 501 stubs — matched exactly.
