@@ -26,6 +26,10 @@ single maintainer; external contributions are welcome through GitHub.
 - **Privacy posture:** keep the public-layer/private-layer separation
   documented in `docs/architecture/` — private (E2EE) code must never leak
   into the public `pwa-mvp` build.
+- **Docs stay true:** if your change alters API behavior, error codes, WS
+  events, routes, or feature status, update the matching doc in the same
+  PR (`docs/api/*`, `docs/architecture/*`, `docs/ux/flows.md`). Feature
+  status must be stated honestly — designed vs implemented vs stubbed.
 
 ## Commit style
 

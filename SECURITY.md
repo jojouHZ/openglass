@@ -22,9 +22,14 @@ unless you prefer to stay anonymous.
 
 ## Scope
 
-- **In scope:** auth/session handling, contact & group authorization,
-  message delivery/visibility rules, relay metadata, dependency supply
-  chain, deployment defaults.
+- **In scope:** auth/session handling (JWT, refresh rotation, revocation),
+  contact & group authorization, message delivery/visibility rules,
+  WebSocket relay (auth gates, replay/resync, presence privacy),
+  attachment handling (member gating, MIME sniffing, existence privacy),
+  dependency supply chain, deployment defaults.
+- **Private-layer cryptography is not yet shipped** — see
+  `docs/architecture/02-private-layer.md`; reports about the designed
+  scheme are welcome as issues, not vulnerabilities.
 - **Out of scope:** attacks requiring physical access to the server,
   self-inflicted misconfiguration (e.g. disabling TLS on your own
   deployment), and social engineering.

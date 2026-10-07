@@ -1,6 +1,8 @@
 # Code Graph Integration Plan (graphify)
 
-Status: in progress (milestones 1–4 done) · Owner: Knowledge Agent ·
+Status: **active** — the graph is built (`.codegraph/`) and auto-reindexed
+by git hooks after every commit; agents query it during exploration.
+Owner: Knowledge Agent ·
 Scope: pre-development infrastructure, alongside Qdrant.
 
 ## Goal
