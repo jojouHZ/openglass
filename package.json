@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
+    "verify:mvp-bundle": "pnpm --filter @openglass/pwa verify:mvp-bundle",
     "api:types": "openapi-typescript docs/api/public-api.openapi.yaml -o packages/core/src/api/schema.gen.ts"
   }
 }
