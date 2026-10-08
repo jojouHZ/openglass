@@ -9,3 +9,8 @@ onlyBuiltDependencies:
 allowBuilds:
   esbuild: true
   msw: true
+
+# GHSA source-map-js event-loop DoS — parents declare ^1.2.1 which
+# covers the fixed 1.2.2; force the lockfile past the vulnerable range.
+overrides:
+  source-map-js: ^1.2.2
