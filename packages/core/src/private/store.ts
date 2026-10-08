@@ -26,7 +26,7 @@ import {
   type SessionKeyPair,
 } from "./engine";
 import { wipeIdentityStore } from "./keys";
-import { RelayClient, type PeerUser } from "./relay";
+import { RelayClient, type ConnState, type PeerUser } from "./relay";
 
 export type PrivateStatus =
   | "inviting" // we sent relay.invite, waiting for accept
@@ -82,6 +82,9 @@ export const usePrivateStore = defineStore("private", {
     /** our outbound invites by peerId — lets established recover the
      *  burnOnRead/strict/ttlSeconds flags the contract doesn't echo back */
     pendingInvites: new Map<string, { burnOnRead: boolean; strict: boolean }>(),
+    relayState: "offline" as ConnState,
+    reconnectTimer: null as ReturnType<typeof setTimeout> | null,
+    reconnectDelay: 1000,
     relayUrl: "",
     getAccessToken: null as null | (() => string | null),
   }),
@@ -93,6 +96,18 @@ export const usePrivateStore = defineStore("private", {
     /** peerIds with an unanswered invite — the "inviting" state */
     outgoingInvites(state): string[] {
       return [...state.pendingInvites.keys()];
+    },
+    /** live private session with this peer, if any — chatId→session
+     *  bridge: the public DM resolves the peer, this resolves the session */
+    sessionByPeer(state): (peerId: string) => PrivateSession | null {
+      return (peerId) =>
+        [...state.sessions.values()].find(
+          (s) => s.peer.id === peerId && s.status !== "closed",
+        ) ?? null;
+    },
+    /** invites addressed to us, still unanswered — the S5 invite cards */
+    incomingInvites(state): PrivateSession[] {
+      return [...state.sessions.values()].filter((s) => s.status === "incoming");
     },
   },
 
@@ -165,12 +180,32 @@ export const usePrivateStore = defineStore("private", {
         }
         this.pendingEnvelopes.delete(ev.data.sessionId);
       });
+
+      c.onStateChange((s) => {
+        this.relayState = s;
+        if (s === "online") this.reconnectDelay = 1000;
+        if (s === "offline") this.scheduleReconnect();
+      });
     },
 
-    async connect(): Promise<void> {
+    /** Connect the relay — failures surface via relayState, never throw. */
+    connect(): void {
       const token = this.getAccessToken?.();
       if (!this.client || !token) return;
-      await this.client.connect(token);
+      void this.client.connect(token).catch(() => undefined);
+    },
+
+    /** Exponential backoff reconnect — skipped while torn down or
+     *  while a retry is already armed. */
+    scheduleReconnect(): void {
+      if (this.reconnectTimer || !this.client || !this.getAccessToken?.()) {
+        return;
+      }
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (this.client) this.connect();
+      }, this.reconnectDelay);
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     },
 
     /** Inviter flow — S10. The session appears on relay.established;
@@ -356,12 +391,19 @@ export const usePrivateStore = defineStore("private", {
      * After this call the private module leaves no trace on the device.
      */
     async teardown(): Promise<void> {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      const c = this.client;
+      this.client = null; // detach first — disconnect's offline callback
+      // must not schedule a reconnect for a dead module
+      c?.disconnect();
       for (const s of this.sessions.values()) this.wipeSessionSecrets(s);
       this.sessions.clear();
       this.pendingEnvelopes.clear();
       this.pendingInvites.clear();
-      this.client?.disconnect();
-      this.client = null;
+      this.relayState = "offline";
       await wipeIdentityStore();
     },
   },

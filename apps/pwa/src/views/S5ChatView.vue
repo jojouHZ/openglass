@@ -1,7 +1,7 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import type { LocalMessage } from "@openglass/core";
@@ -25,6 +25,22 @@ const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
 const session = useSessionStore();
+
+// Private layer (pwa-dev only): the env flag is statically replaced, so
+// in the mvp build this entire branch — imports included — is dead code
+// and the private chunk never enters the bundle graph.
+const privateEnabled = import.meta.env.VITE_PRIVATE_MODULE === "1";
+const PrivateInviteCard = privateEnabled
+  ? defineAsyncComponent(
+      () => import("../components/private/PrivateInviteCard.vue"),
+    )
+  : null;
+const privStore = shallowRef<{ sessionByPeer: (id: string) => { id: string } | null } | null>(null);
+if (privateEnabled) {
+  void import("@openglass/core/private/store").then((m) => {
+    privStore.value = m.usePrivateStore();
+  });
+}
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
@@ -246,6 +262,16 @@ async function openPinned() {
   highlightId.value = pinnedShown.value.id;
 }
 
+function onPrivateToggle() {
+  const p = peer.value;
+  if (!p) return;
+  router.push(
+    privStore.value?.sessionByPeer(p.id)
+      ? { name: "s12-private-chat", params: { chatId: chatId.value } }
+      : { name: "s11-session-setup", params: { chatId: chatId.value } },
+  );
+}
+
 async function toggleChatPin() {
   headMenu.value = false;
   try {
@@ -388,6 +414,19 @@ watch(
       <span v-else class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted">
         {{ title.slice(0, 1) }}
       </span>
+      <button
+        v-if="privateEnabled && peer && peer.id !== session.user?.id"
+        class="p-1"
+        :class="privStore?.sessionByPeer(peer.id) ? 'text-accent' : 'text-muted'"
+        aria-label="private session"
+        data-testid="private-toggle"
+        @click="onPrivateToggle"
+      >
+        <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </button>
       <button class="p-1 text-muted" aria-label="chat menu" @click="headMenu = !headMenu">
         <svg viewBox="0 0 24 24" class="size-4" fill="currentColor">
           <circle cx="5" cy="12" r="1" />
@@ -413,6 +452,15 @@ watch(
       </button>
     </div>
     <div v-if="headMenu" class="fixed inset-0 z-30" @click="headMenu = false" />
+
+    <!-- private invite / live-session card (pwa-dev only) -->
+    <component
+      :is="PrivateInviteCard"
+      v-if="PrivateInviteCard && peer && peer.id !== session.user?.id"
+      :peer-id="peer.id"
+      :chat-id="chatId"
+      @verify="router.push({ name: 's11b-verify', params: { chatId } })"
+    />
 
     <ChatSearch
       v-if="searchOpen"

@@ -36,6 +36,18 @@ async function bootstrap() {
   if (session.authed) {
     void useChatsStore(pinia).connectRealtime().catch(() => undefined);
   }
+
+  // Private layer — pwa-dev only (VITE_PRIVATE_MODULE=1). The dynamic
+  // import is behind a statically-replaced flag so the mvp bundle drops
+  // this branch entirely; zero-trace teardown on logout + pagehide.
+  if (import.meta.env.VITE_PRIVATE_MODULE === "1") {
+    const { usePrivateStore } = await import("@openglass/core/private/store");
+    const { wirePrivateLifecycle } = await import("./privateBoot");
+    const priv = usePrivateStore(pinia);
+    priv.boot("/api/v1/relay", () => session.accessToken);
+    wirePrivateLifecycle(priv, session);
+  }
+
   app.use(createAppRouter());
   app.provide(ApiClientKey, api);
   app.mount("#app");
