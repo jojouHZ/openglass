@@ -27,6 +27,6 @@ export async function createMockApiClient(opts: CreateApiOptions): Promise<ApiCl
   const state = new MockState();
   const { setupWorker } = await import("msw/browser");
   const worker = setupWorker(...createHandlers(state));
-  await worker.start({ onUnhandledRequest: "bypass" });
+  await worker.start({ onUnhandledFrame: "bypass" });
   return new HttpApiClient(opts, new MockWsClient(state));
 }

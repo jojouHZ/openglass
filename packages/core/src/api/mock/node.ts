@@ -21,7 +21,7 @@ export interface MockNodeContext {
 export function createMockNodeApiClient(opts: CreateApiOptions): MockNodeContext {
   const state = new MockState();
   const server = setupServer(...createHandlers(state));
-  server.listen({ onUnhandledRequest: "bypass" });
+  server.listen({ onUnhandledFrame: "bypass" });
   const api = new HttpApiClient(opts, new MockWsClient(state));
   return { api, server, state };
 }
