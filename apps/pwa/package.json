@@ -27,9 +27,9 @@
     "happy-dom": "^20.14.5",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2",
-    "vite": "^8.3.1",
-    "vitest": "^5.0.2",
-    "vue-tsc": "^3.0.8"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3",
+    "vue-tsc": "^3.3.12"
   },
   "msw": {
     "workerDirectory": [
