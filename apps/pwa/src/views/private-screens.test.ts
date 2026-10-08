@@ -221,6 +221,33 @@ describe("S11 session setup", () => {
   });
 });
 
+describe("S10 private invite", () => {
+  it("incoming state: accept sends relay.accept, decline exits to S5", async () => {
+    seedSession({ id: "ps-in3", status: "incoming" });
+    await router.push({ name: "s10-private-invite", params: { chatId: directChatId } });
+    const w = mount(S10PrivateInvite, { global: { plugins: [router, pinia] } });
+    await w.vm.$nextTick();
+    expect(w.find('[data-testid="invite-incoming"]').exists()).toBe(true);
+
+    await w.find('[data-testid="invite-accept"]').trigger("click");
+    expect(relay.accept).toHaveBeenCalledWith("ps-in3");
+  });
+
+  it("a declined/expired invite (session gone) leaves to S5", async () => {
+    seedSession({ id: "ps-out", status: "inviting" });
+    await router.push({ name: "s10-private-invite", params: { chatId: directChatId } });
+    const w = mount(S10PrivateInvite, { global: { plugins: [router, pinia] } });
+    await w.vm.$nextTick();
+    expect(w.find('[data-testid="invite-waiting"]').exists()).toBe(true);
+
+    // relay.declined → dropSession deletes the record entirely
+    priv().sessions.delete("ps-out");
+    await w.vm.$nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(router.currentRoute.value.name).toBe("s5-chat-view");
+  });
+});
+
 describe("PrivateInviteCard", () => {
   it("accept forwards to the relay and emits verify", async () => {
     seedSession({ id: "ps-in", status: "incoming" });
@@ -248,7 +275,11 @@ describe("PrivateInviteCard", () => {
 
   it("renders the waiting state for our outgoing invite", async () => {
     priv().sessions.clear();
-    priv().pendingInvites.set(wife.id, { burnOnRead: false, strict: true });
+    priv().pendingInvites.set(wife.id, {
+      burnOnRead: false,
+      strict: true,
+      expiresAt: Date.now() + 60_000,
+    });
     const w = mount(PrivateInviteCard, {
       props: { peerId: wife.id, chatId: directChatId },
       global: { plugins: [router, pinia] },

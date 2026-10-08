@@ -18,9 +18,15 @@ const priv = usePrivateStore();
 const incoming = computed(() =>
   priv.incomingInvites.find((s) => s.peer.id === props.peerId) ?? null,
 );
-const outgoing = computed(() => priv.outgoingInvites.includes(props.peerId));
-/** a live session with this peer (any non-closed status) */
-const live = computed(() => priv.sessionByPeer(props.peerId));
+const session = computed(() => priv.sessionByPeer(props.peerId));
+const outgoing = computed(() =>
+  priv.outgoingInvites.includes(props.peerId),
+);
+/** a live session — past the invite phase (key exchange or later) */
+const live = computed(() => {
+  const s = session.value;
+  return s && s.status !== "incoming" && s.status !== "inviting" ? s : null;
+});
 
 function accept() {
   if (!incoming.value) return;

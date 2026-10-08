@@ -134,6 +134,12 @@ func invite(t *testing.T, a, b *websocket.Conn, bID string, extra map[string]any
 	if sid == "" {
 		t.Fatalf("invite missing sessionId: %v", f.Data)
 	}
+	// the inviter's own ack — carries the same sessionId so it can
+	// correlate declined/expired frames later
+	ack := read(t, a)
+	if ack.Type != "relay.invited" || ack.Data["sessionId"] != sid {
+		t.Fatalf("want relay.invited ack for %s, got %v", sid, ack)
+	}
 	return sid
 }
 

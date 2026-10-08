@@ -270,6 +270,45 @@ describe("private store — session lifecycle", () => {
     expect(sb.sessions.get("s1")!.messages).toHaveLength(0);
   });
 
+  it("relay.invited acks the invite; declined/expired correlate by sessionId", async () => {
+    const { sa, ra } = twoParties();
+    sa.startInvite(USER_B, { burnOnRead: true, ttlSeconds: 300 });
+    expect(sa.outgoingInvites).toContain("ub"); // pre-ack pending marker
+
+    // server ack — the session gets a real id and echo'd flags
+    ra.emit({
+      type: "relay.invited",
+      data: { sessionId: "s-ack", to: USER_B, ttlSeconds: 300, burnOnRead: true, strict: false },
+    });
+    const s = sa.sessions.get("s-ack")!;
+    expect(s.status).toBe("inviting");
+    expect(s.burnOnRead).toBe(true);
+    expect(sa.outgoingInvites).toContain("ub"); // now via the inviting session
+
+    // peer declines — inviter correlates by sessionId and drops it
+    ra.emit({ type: "relay.declined", data: { sessionId: "s-ack" } });
+    expect(sa.sessions.has("s-ack")).toBe(false);
+    expect(sa.outgoingInvites).not.toContain("ub");
+  });
+
+  it("expired pendingInvites are filtered from outgoingInvites", () => {
+    const { sa } = twoParties();
+    sa.pendingInvites.set("ub", {
+      burnOnRead: false,
+      strict: false,
+      expiresAt: Date.now() - 1,
+    });
+    expect(sa.outgoingInvites).not.toContain("ub");
+  });
+
+  it("connect self-heals after teardown (logout→login in the same page)", async () => {
+    const { sa } = twoParties();
+    await sa.teardown();
+    expect(sa.client).toBeNull();
+    sa.connect(); // must rebuild + re-wire the client, not no-op
+    expect(sa.client).not.toBeNull();
+  });
+
   it("inviter's own flags survive via pendingInvites; outgoingInvites tracks", async () => {
     const { sa, sb, ra, rb } = twoParties();
     sa.startInvite(USER_B, { burnOnRead: true, strict: true, ttlSeconds: 300 });

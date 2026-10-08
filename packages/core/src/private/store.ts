@@ -79,9 +79,13 @@ export const usePrivateStore = defineStore("private", {
     sessions: new Map<string, PrivateSession>(),
     /** envelopes that arrived before the session existed locally */
     pendingEnvelopes: new Map<string, string[]>(),
-    /** our outbound invites by peerId — lets established recover the
-     *  burnOnRead/strict/ttlSeconds flags the contract doesn't echo back */
-    pendingInvites: new Map<string, { burnOnRead: boolean; strict: boolean }>(),
+    /** our outbound invites by peerId — the pre-ack window between
+     *  relay.invite and the server's relay.invited echo. Entries expire
+     *  (server invite TTL ≈60 s) so a rejected invite can't leak */
+    pendingInvites: new Map<
+      string,
+      { burnOnRead: boolean; strict: boolean; expiresAt: number }
+    >(),
     relayState: "offline" as ConnState,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
     reconnectDelay: 1000,
@@ -93,17 +97,37 @@ export const usePrivateStore = defineStore("private", {
     activeSessions(state): PrivateSession[] {
       return [...state.sessions.values()].filter((s) => s.status !== "closed");
     },
-    /** peerIds with an unanswered invite — the "inviting" state */
+    /** peerIds with an unanswered invite — the "inviting" state (the
+     *  pre-ack window or a pending session the server has acked) */
     outgoingInvites(state): string[] {
-      return [...state.pendingInvites.keys()];
+      const now = Date.now();
+      const pending = [...state.pendingInvites]
+        .filter(([, v]) => v.expiresAt > now)
+        .map(([k]) => k);
+      const acked = [...state.sessions.values()]
+        .filter((s) => s.status === "inviting")
+        .map((s) => s.peer.id);
+      return [...new Set([...pending, ...acked])];
     },
     /** live private session with this peer, if any — chatId→session
-     *  bridge: the public DM resolves the peer, this resolves the session */
+     *  bridge: the public DM resolves the peer, this resolves the session.
+     *  The server allows parallel sessions per pair, so when several
+     *  exist prefer the most advanced phase (live > inviting > incoming). */
     sessionByPeer(state): (peerId: string) => PrivateSession | null {
-      return (peerId) =>
-        [...state.sessions.values()].find(
-          (s) => s.peer.id === peerId && s.status !== "closed",
-        ) ?? null;
+      const rank = (s: PrivateStatus): number =>
+        s === "verified" || s === "unverified" || s === "exchanging"
+          ? 0
+          : s === "inviting"
+            ? 1
+            : 2;
+      return (peerId) => {
+        let best: PrivateSession | null = null;
+        for (const s of state.sessions.values()) {
+          if (s.peer.id !== peerId || s.status === "closed") continue;
+          if (!best || rank(s.status) < rank(best.status)) best = s;
+        }
+        return best;
+      };
     },
     /** invites addressed to us, still unanswered — the S5 invite cards */
     incomingInvites(state): PrivateSession[] {
@@ -132,6 +156,33 @@ export const usePrivateStore = defineStore("private", {
           status: "incoming",
           strict: ev.data.strict,
           burnOnRead: ev.data.burnOnRead,
+          ttlEndsAt: null,
+          peerOfflineUntil: null,
+          resumeToken: null,
+          ownKeys: null,
+          pendingPeerPub: null,
+          sessionKey: null,
+          sas: null,
+          messages: [],
+          lastSeq: 0,
+        };
+        this.sessions.set(s.id, s);
+      });
+
+      // ack: server accepted our invite — the session now has a real
+      // id, so declined/expired frames correlate by sessionId
+      c.on("relay.invited", (ev) => {
+        const existing = this.sessions.get(ev.data.sessionId);
+        // dup/late ack after establishment must not regress the status
+        if (existing && existing.status !== "inviting") return;
+        const flags = this.pendingInvites.get(ev.data.to.id);
+        this.pendingInvites.delete(ev.data.to.id);
+        const s: PrivateSession = {
+          id: ev.data.sessionId,
+          peer: ev.data.to,
+          status: "inviting",
+          strict: ev.data.strict ?? flags?.strict ?? false,
+          burnOnRead: ev.data.burnOnRead ?? flags?.burnOnRead ?? false,
           ttlEndsAt: null,
           peerOfflineUntil: null,
           resumeToken: null,
@@ -188,8 +239,13 @@ export const usePrivateStore = defineStore("private", {
       });
     },
 
-    /** Connect the relay — failures surface via relayState, never throw. */
+    /** Connect the relay — failures surface via relayState, never throw.
+     *  Self-heals after teardown(): the SPA keeps running across a
+     *  logout→login cycle, so a null client is rebuilt and re-wired. */
     connect(): void {
+      if (!this.client && this.relayUrl && this.getAccessToken) {
+        this.boot(this.relayUrl, this.getAccessToken);
+      }
       const token = this.getAccessToken?.();
       if (!this.client || !token) return;
       void this.client.connect(token).catch(() => undefined);
@@ -215,9 +271,12 @@ export const usePrivateStore = defineStore("private", {
       peer: PeerUser,
       opts: { ttlSeconds?: number; burnOnRead?: boolean; strict?: boolean } = {},
     ): void {
+      // server invite TTL is 60 s — if relay.invited never arrives the
+      // invite was rejected and this marker must die with it
       this.pendingInvites.set(peer.id, {
         burnOnRead: opts.burnOnRead ?? false,
         strict: opts.strict ?? false,
+        expiresAt: Date.now() + 70_000,
       });
       this.client?.invite(peer.id, opts);
     },

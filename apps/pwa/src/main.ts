@@ -40,7 +40,12 @@ async function bootstrap() {
   // Private layer — pwa-dev only (VITE_PRIVATE_MODULE=1). The dynamic
   // import is behind a statically-replaced flag so the mvp bundle drops
   // this branch entirely; zero-trace teardown on logout + pagehide.
-  if (import.meta.env.VITE_PRIVATE_MODULE === "1") {
+  // Mock mode never connects — the relay needs a live backend and the
+  // UI says so honestly instead of retrying a socket that can't exist.
+  if (
+    import.meta.env.VITE_PRIVATE_MODULE === "1" &&
+    import.meta.env.VITE_API_MODE !== "mock"
+  ) {
     const { usePrivateStore } = await import("@openglass/core/private/store");
     const { wirePrivateLifecycle } = await import("./privateBoot");
     const priv = usePrivateStore(pinia);

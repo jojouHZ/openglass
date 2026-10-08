@@ -302,6 +302,7 @@ func (r *Relay) emitKnownSessions(c *conn) {
 	type pendingEmit struct {
 		sid, otherID string
 		pending      bool
+		ack          bool // inviter side → relay.invited, not relay.invite
 	}
 	r.mu.Lock()
 	var todo []pendingEmit
@@ -312,6 +313,11 @@ func (r *Relay) emitKnownSessions(c *conn) {
 				continue // this conn already got the live relay.invite
 			}
 			todo = append(todo, pendingEmit{sid: s.id, otherID: s.a, pending: true})
+		case s.state == stPending && s.a == c.userID:
+			if _, live := s.inviteSent[c]; live {
+				continue // this conn already got the live relay.invited
+			}
+			todo = append(todo, pendingEmit{sid: s.id, otherID: s.b, pending: true, ack: true})
 		case s.state == stEstablished && (s.a == c.userID || s.b == c.userID):
 			todo = append(todo, pendingEmit{sid: s.id, otherID: other(s, c.userID)})
 		}
@@ -331,19 +337,30 @@ func (r *Relay) emitKnownSessions(c *conn) {
 		}
 		data := map[string]any{"sessionId": s.id}
 		typ := "relay.established"
-		if e.pending {
+		switch {
+		case e.ack:
+			typ = "relay.invited"
+			data["ttlSeconds"] = int(time.Until(s.ttlEndsAt).Seconds())
+			data["burnOnRead"] = s.burnOnRead
+			data["strict"] = s.strict
+			s.inviteSent[c] = struct{}{}
+		case e.pending:
 			typ = "relay.invite"
 			data["ttlSeconds"] = int(time.Until(s.ttlEndsAt).Seconds())
 			data["burnOnRead"] = s.burnOnRead
 			data["strict"] = s.strict
 			s.inviteSent[c] = struct{}{}
-		} else {
+		default:
 			data["resumeToken"] = s.resumeTok[c.userID]
 			data["ttlEndsAt"] = s.ttlEndsAt.UTC().Format(time.RFC3339)
 		}
 		r.mu.Unlock()
 		if e.pending {
-			data["from"] = peerJSON(ctx, r.dir, e.otherID)
+			key := "from"
+			if e.ack {
+				key = "to"
+			}
+			data[key] = peerJSON(ctx, r.dir, e.otherID)
 		} else {
 			data["peer"] = peerJSON(ctx, r.dir, e.otherID)
 		}
@@ -463,7 +480,8 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		grace:      map[string]*time.Timer{},
 		inviteSent: map[*conn]struct{}{},
 	}
-	fromPeer := peerJSON(ctx, r.dir, c.userID) // DB read before the lock
+	fromPeer := peerJSON(ctx, r.dir, c.userID) // DB reads before the lock
+	toPeer := peerJSON(ctx, r.dir, peerID)
 	r.mu.Lock()
 	r.sessions[s.id] = s
 	s.timer = time.AfterFunc(r.InviteTTL, func() {
@@ -480,8 +498,20 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		"burnOnRead": s.burnOnRead,
 		"strict":     s.strict,
 	})
-	for c := range r.conns[peerID] {
-		s.inviteSent[c] = struct{}{}
+	for pc := range r.conns[peerID] {
+		s.inviteSent[pc] = struct{}{}
+	}
+	// ack to the inviter — the sessionId lets it correlate the later
+	// declined/expired frames, which carry no other identifier
+	r.emitToUserLocked(c.userID, "relay.invited", map[string]any{
+		"sessionId":  s.id,
+		"to":         toPeer,
+		"ttlSeconds": int(ttl),
+		"burnOnRead": s.burnOnRead,
+		"strict":     s.strict,
+	})
+	for ac := range r.conns[c.userID] {
+		s.inviteSent[ac] = struct{}{}
 	}
 	r.mu.Unlock()
 }

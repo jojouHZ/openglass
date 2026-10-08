@@ -173,8 +173,8 @@ function fmtTs(ts: number) {
       <input
         v-model="text"
         class="h-11 min-w-0 flex-1 rounded-pill bg-bubble-in px-4 text-msg text-ink outline-none"
-        :class="{ 'opacity-50': !pSession || pSession.status === 'closed' }"
-        :disabled="!pSession || pSession.status === 'closed'"
+        :class="{ 'opacity-50': !pSession?.sessionKey }"
+        :disabled="!pSession?.sessionKey"
         placeholder="private message…"
         data-testid="priv-input"
         @keyup.enter="send"

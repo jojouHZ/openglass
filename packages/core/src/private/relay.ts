@@ -28,6 +28,16 @@ export type RelayEvent =
       };
     }
   | {
+      type: "relay.invited";
+      data: {
+        sessionId: string;
+        to: PeerUser;
+        ttlSeconds: number;
+        burnOnRead: boolean;
+        strict: boolean;
+      };
+    }
+  | {
       type: "relay.established";
       data: { sessionId: string; peer: PeerUser; resumeToken: string; ttlEndsAt: string };
     }

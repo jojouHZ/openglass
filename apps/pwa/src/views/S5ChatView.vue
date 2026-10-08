@@ -35,7 +35,9 @@ const PrivateInviteCard = privateEnabled
       () => import("../components/private/PrivateInviteCard.vue"),
     )
   : null;
-const privStore = shallowRef<{ sessionByPeer: (id: string) => { id: string } | null } | null>(null);
+const privStore = shallowRef<{
+  sessionByPeer: (id: string) => { id: string; status: string } | null;
+} | null>(null);
 if (privateEnabled) {
   void import("@openglass/core/private/store").then((m) => {
     privStore.value = m.usePrivateStore();
@@ -265,10 +267,13 @@ async function openPinned() {
 function onPrivateToggle() {
   const p = peer.value;
   if (!p) return;
+  const s = privStore.value?.sessionByPeer(p.id);
   router.push(
-    privStore.value?.sessionByPeer(p.id)
-      ? { name: "s12-private-chat", params: { chatId: chatId.value } }
-      : { name: "s11-session-setup", params: { chatId: chatId.value } },
+    !s
+      ? { name: "s11-session-setup", params: { chatId: chatId.value } }
+      : s.status === "incoming" || s.status === "inviting"
+        ? { name: "s10-private-invite", params: { chatId: chatId.value } }
+        : { name: "s12-private-chat", params: { chatId: chatId.value } },
   );
 }
 
