@@ -87,6 +87,9 @@ type session struct {
 	bufBytes   int
 	timer      *time.Timer            // invite expiry or session TTL
 	grace      map[string]*time.Timer // userID → pending peer-gone close
+	// conns that already got the live relay.invite — emitKnownSessions
+	// must not re-send it to them (auth.ok → scan races the live emit)
+	inviteSent map[*conn]struct{}
 }
 
 type conn struct {
@@ -267,6 +270,7 @@ func (r *Relay) detach(c *conn) {
 	}
 	// last conn gone → peer-offline + grace (or instant death for strict)
 	for _, s := range r.sessions {
+		delete(s.inviteSent, c) // release the dead conn reference
 		if s.state != stEstablished || (s.a != c.userID && s.b != c.userID) {
 			continue
 		}
@@ -304,6 +308,9 @@ func (r *Relay) emitKnownSessions(c *conn) {
 	for _, s := range r.sessions {
 		switch {
 		case s.state == stPending && s.b == c.userID:
+			if _, live := s.inviteSent[c]; live {
+				continue // this conn already got the live relay.invite
+			}
 			todo = append(todo, pendingEmit{sid: s.id, otherID: s.a, pending: true})
 		case s.state == stEstablished && (s.a == c.userID || s.b == c.userID):
 			todo = append(todo, pendingEmit{sid: s.id, otherID: other(s, c.userID)})
@@ -315,9 +322,12 @@ func (r *Relay) emitKnownSessions(c *conn) {
 	for _, e := range todo {
 		r.mu.Lock()
 		s := r.sessions[e.sid]
-		if s == nil {
+		// re-validate the state captured in pass 1 — pending may have
+		// flipped to established or the session may have died in between
+		if s == nil || (e.pending && s.state != stPending) ||
+			(!e.pending && s.state != stEstablished) {
 			r.mu.Unlock()
-			continue // died between the two passes
+			continue
 		}
 		data := map[string]any{"sessionId": s.id}
 		typ := "relay.established"
@@ -326,6 +336,7 @@ func (r *Relay) emitKnownSessions(c *conn) {
 			data["ttlSeconds"] = int(time.Until(s.ttlEndsAt).Seconds())
 			data["burnOnRead"] = s.burnOnRead
 			data["strict"] = s.strict
+			s.inviteSent[c] = struct{}{}
 		} else {
 			data["resumeToken"] = s.resumeTok[c.userID]
 			data["ttlEndsAt"] = s.ttlEndsAt.UTC().Format(time.RFC3339)
@@ -450,6 +461,7 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		ttlEndsAt:  ttlEnd,
 		buf:        map[string][]envelope{},
 		grace:      map[string]*time.Timer{},
+		inviteSent: map[*conn]struct{}{},
 	}
 	fromPeer := peerJSON(ctx, r.dir, c.userID) // DB read before the lock
 	r.mu.Lock()
@@ -468,6 +480,9 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		"burnOnRead": s.burnOnRead,
 		"strict":     s.strict,
 	})
+	for c := range r.conns[peerID] {
+		s.inviteSent[c] = struct{}{}
+	}
 	r.mu.Unlock()
 }
 
