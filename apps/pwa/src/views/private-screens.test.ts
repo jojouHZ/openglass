@@ -72,6 +72,9 @@ function fakeRelay() {
 
 const { stub: relay, sent } = fakeRelay();
 
+// send() runs real AES-GCM — the seed needs a working session key
+let seededKey: CryptoKey;
+
 function seedSession(over: Partial<import("@openglass/core/private/store").PrivateSession> = {}) {
   // one session per peer — a stale seeded session would shadow the fresh one
   priv().sessions.clear();
@@ -86,7 +89,7 @@ function seedSession(over: Partial<import("@openglass/core/private/store").Priva
     resumeToken: "rt",
     ownKeys: null,
     pendingPeerPub: null,
-    sessionKey: {} as CryptoKey,
+    sessionKey: seededKey,
     sas: ["😀", "😁", "😂", "🤣", "😃", "😄", "😅", "😆", "😉", "😊", "😋", "😎"],
     messages: [],
     lastSeq: 0,
@@ -100,6 +103,11 @@ beforeAll(async () => {
   localStorage.clear();
   await session().requestOtp("jojou@openglass.demo");
   await session().verifyOtp("123456", "vitest");
+  seededKey = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
   await chats().refreshChats();
   priv().boot("/api/v1/relay", () => "tok", relay);
 });
@@ -172,18 +180,22 @@ describe("S12 private chat", () => {
     expect(router.currentRoute.value.name).toBe("s5-chat-view");
   });
 
-  it("shows the burnOnRead marker only as a flag", async () => {
-    seedSession({ id: "ps-5", burnOnRead: true, status: "verified" });
+  it("view-once toggle marks the outgoing message", async () => {
+    seedSession({ id: "ps-5", status: "verified" });
     await router.push({ name: "s12-private-chat", params: { chatId: directChatId } });
     const w = mount(S12PrivateChat, { global: { plugins: [router, pinia] } });
     await w.vm.$nextTick();
-    expect(w.find('[data-testid="burn-on-read"]').exists()).toBe(true);
-    // the flag is a marker in E.4 — messages are NOT auto-wiped locally
-    priv().sessions.get("ps-5")!.messages.push({
-      id: "mx", fromMe: false, text: "still here", ts: Date.now(),
-    });
+
+    await w.find('[data-testid="view-once-toggle"]').trigger("click");
+    await w.find('[data-testid="priv-input"]').setValue("vanish");
+    await w.find('[data-testid="priv-send"]').trigger("click");
+    await new Promise((r) => setTimeout(r, 0)); // encrypt is real async
     await w.vm.$nextTick();
-    expect(w.text()).toContain("still here");
+
+    const msgs = priv().sessions.get("ps-5")!.messages;
+    expect(msgs.at(-1)?.text).toBe("vanish");
+    expect(msgs.at(-1)?.viewOnce).toBe(true);
+    expect(w.find('[data-testid="view-once-mark"]').exists()).toBe(true);
   });
 });
 
@@ -195,13 +207,13 @@ describe("S11 session setup", () => {
     await w.vm.$nextTick();
 
     await w.find('[data-testid="ttl-300"]').trigger("click");
-    await w.find('[data-testid="opt-burn"]').setValue(true);
     await w.find('[data-testid="opt-strict"]').setValue(true);
     await w.find('[data-testid="start-private"]').trigger("click");
 
+    // burn-on-read moved to the per-message composer toggle — the
+    // session invite no longer carries it from the UI
     expect(relay.invite).toHaveBeenCalledWith(wife.id, {
       ttlSeconds: 300,
-      burnOnRead: true,
       strict: true,
     });
     expect(priv().outgoingInvites).toContain(wife.id);

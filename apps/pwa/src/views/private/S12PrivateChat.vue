@@ -40,6 +40,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   if (ticker) clearInterval(ticker);
+  // view-once means once — leaving the private screen is the second view
+  if (pSession.value) priv.purgeRead(pSession.value.id);
 });
 
 // --- composer ---
@@ -47,13 +49,16 @@ const text = ref("");
 const sendError = ref("");
 const scrollEl = ref<HTMLElement>();
 const confirmBurn = ref(false);
+// sticky toggle: once on, every outgoing message is view-once until
+// switched off — the burn choice belongs at send time, not setup
+const viewOnce = ref(false);
 
 async function send() {
   const t = text.value.trim();
   if (!t || !pSession.value) return;
   sendError.value = "";
   try {
-    await priv.send(pSession.value.id, t);
+    await priv.send(pSession.value.id, t, { viewOnce: viewOnce.value });
     text.value = "";
     await nextTick();
     scrollEl.value?.scrollTo(0, scrollEl.value.scrollHeight);
@@ -76,6 +81,17 @@ watch(
       router.replace({ name: "s5-chat-view", params: { chatId: chatId.value } });
     }
   },
+);
+
+// displaying is the read act — receipt the peer's view-once messages.
+// Receipts ride inside AES-GCM envelopes: the relay can't tell a
+// receipt from an ordinary message.
+watch(
+  () => [pSession.value?.id, pSession.value?.messages.length] as const,
+  ([id]) => {
+    if (id) priv.markDisplayed(id);
+  },
+  { immediate: true },
 );
 
 function fmtTs(ts: number) {
@@ -105,11 +121,6 @@ function fmtTs(ts: number) {
             peer offline — dies soon
           </span>
           <span v-else>ephemeral · dev host</span>
-          <span
-            v-if="pSession?.burnOnRead"
-            class="text-burn"
-            data-testid="burn-on-read"
-          > · burn on read</span>
         </div>
       </div>
       <button
@@ -155,6 +166,15 @@ function fmtTs(ts: number) {
         >
           <div class="whitespace-pre-wrap break-words">{{ m.text }}</div>
           <div class="mt-0.5 flex items-center justify-end gap-1 text-micro opacity-60">
+            <svg
+              v-if="m.viewOnce"
+              viewBox="0 0 24 24"
+              class="size-2.5 text-burn"
+              fill="currentColor"
+              data-testid="view-once-mark"
+            >
+              <path d="M13.5 1.5s.75 2.6-1.5 5.25c-2.06 2.4-4.5 4.27-4.5 7.5a6 6 0 0 0 12 0c0-1.8-.75-3.3-1.5-4.5-.6 1.05-1.2 1.8-2.25 2.25.45-2.1-.6-7.95-2.25-10.5Z" />
+            </svg>
             <span>{{ fmtTs(m.ts) }}</span>
             <svg viewBox="0 0 24 24" class="size-2.5" fill="none" stroke="currentColor" stroke-width="2.5">
               <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -179,6 +199,19 @@ function fmtTs(ts: number) {
         data-testid="priv-input"
         @keyup.enter="send"
       />
+      <button
+        class="grid size-11 shrink-0 place-items-center rounded-full transition-colors"
+        :class="viewOnce ? 'bg-burn text-white' : 'bg-bubble-in text-muted'"
+        aria-label="burn on read"
+        :aria-pressed="viewOnce"
+        data-testid="view-once-toggle"
+        title="burn after reading"
+        @click="viewOnce = !viewOnce"
+      >
+        <svg viewBox="0 0 24 24" class="size-4" fill="currentColor">
+          <path d="M13.5 1.5s.75 2.6-1.5 5.25c-2.06 2.4-4.5 4.27-4.5 7.5a6 6 0 0 0 12 0c0-1.8-.75-3.3-1.5-4.5-.6 1.05-1.2 1.8-2.25 2.25.45-2.1-.6-7.95-2.25-10.5Z" />
+        </svg>
+      </button>
       <button
         class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-bg"
         aria-label="send"

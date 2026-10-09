@@ -466,6 +466,20 @@ func (r *Relay) onInvite(ctx context.Context, c *conn, d map[string]any) {
 		r.errTo(c, "not_participant")
 		return
 	}
+	// one session per pair — a second invite while pending or
+	// established is rejected, not stacked (the client resolves a
+	// chat→session by peer; ambiguity there is a UX footgun)
+	r.mu.Lock()
+	for _, s := range r.sessions {
+		live := s.state == stPending || s.state == stEstablished
+		if live && (s.a == c.userID && s.b == peerID ||
+			s.a == peerID && s.b == c.userID) {
+			r.mu.Unlock()
+			r.errTo(c, "already_exists")
+			return
+		}
+	}
+	r.mu.Unlock()
 	ttlEnd := time.Now().Add(time.Duration(ttl) * time.Second)
 	s := &session{
 		id:         newUUID(),

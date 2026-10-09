@@ -9,10 +9,15 @@
  * for the exchange and the SAS fingerprint.
  *
  * Wire format inside the opaque relay `blob`:
- *   { t: "key", k: <base64 raw P-256 pubkey> }   — key material
- *   { t: "msg", iv: <b64>, ct: <b64> }           — AES-GCM ciphertext of
- *                                                JSON { text, ts }
- * The relay treats every blob identically — this typing is client-private.
+ *   { t: "key", k: <base64 raw P-256 pubkey> }   — key material (public,
+ *                                                sent in the clear — the
+ *                                                SAS is the MITM defense)
+ *   { t: "msg", iv: <b64>, ct: <b64> }           — AES-GCM ciphertext of a
+ *                                                MsgPayload (below)
+ *
+ * Everything the server must not see — text, burn-on-read flag, read
+ * receipts — lives INSIDE the ciphertext, so a receipt is
+ * indistinguishable from a message on the wire.
  */
 
 const subtle = (): SubtleCrypto => {
@@ -89,9 +94,19 @@ export interface KeyEnvelope {
 
 export type Envelope = EncryptedEnvelope | KeyEnvelope;
 
+/** Decrypted payload variants — all inside AES-GCM:
+ *  - "t": chat text; `id` is a client-generated uuid (the relay's msgSeq
+ *    is not echoed to the sender, so receipts can't reference it);
+ *    `bor` marks a view-once message the peer must receipt and drop
+ *  - "r": read receipt — peer displayed these message ids; the sender
+ *    burns its own copies on arrival */
+export type MsgPayload =
+  | { k: "t"; id: string; text: string; bor?: boolean }
+  | { k: "r"; ids: string[] };
+
 export async function encryptEnvelope(
   key: CryptoKey,
-  payload: { text: string },
+  payload: MsgPayload,
 ): Promise<EncryptedEnvelope> {
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const ct = await subtle().encrypt(
@@ -105,13 +120,13 @@ export async function encryptEnvelope(
 export async function decryptEnvelope(
   key: CryptoKey,
   env: EncryptedEnvelope,
-): Promise<{ text: string }> {
+): Promise<MsgPayload> {
   const pt = await subtle().decrypt(
     { name: "AES-GCM", iv: fromB64(env.iv) as BufferSource },
     key,
     fromB64(env.ct) as BufferSource,
   );
-  return JSON.parse(new TextDecoder().decode(pt)) as { text: string };
+  return JSON.parse(new TextDecoder().decode(pt)) as MsgPayload;
 }
 
 /** 64-emoji alphabet for the SAS grid — stable across clients. */

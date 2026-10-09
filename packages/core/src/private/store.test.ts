@@ -38,11 +38,31 @@ class FakeRelay extends RelayClient {
     return () => set.delete(cb as never);
   }
 
+  // server msgSeq is per-session monotonic across BOTH directions —
+  // the loopback must reproduce that or the client's replay-dedup
+  // drops every envelope after the first
+  private seqs = new Map<string, number>();
+
   override sendEnvelope(sessionId: string, blob: string): void {
     this.sent.push({ type: "relay.send", data: { sessionId, blob } });
+    const seq = (this.seqCounter(sessionId) ?? 0) + 1;
+    this.seqCounterSet(sessionId, seq);
     queueMicrotask(() =>
-      this.peer?.emit({ type: "relay.msg", data: { sessionId, msgSeq: 1, blob } }),
+      this.peer?.emit({ type: "relay.msg", data: { sessionId, msgSeq: seq, blob } }),
     );
+  }
+
+  private seqCounter(sid: string): number | undefined {
+    return this.seqPair ? this.seqPair.get(sid) : undefined;
+  }
+  private seqCounterSet(sid: string, v: number): void {
+    this.seqPair?.set(sid, v);
+  }
+  /** shared per-session counter — both loopback ends read/write it */
+  private seqPair: Map<string, number> | null = null;
+  linkSeq(): void {
+    if (!this.seqPair) this.seqPair = this.peer?.seqPair ?? new Map();
+    if (this.peer && !this.peer.seqPair) this.peer.seqPair = this.seqPair;
   }
 
   override invite(toUserId: string, opts?: Record<string, unknown>): void {
@@ -72,6 +92,7 @@ function makePair(): { a: FakeRelay; b: FakeRelay } {
   const b = new FakeRelay("/relay");
   a.peer = b;
   b.peer = a;
+  a.linkSeq();
   return { a, b };
 }
 
@@ -307,6 +328,51 @@ describe("private store — session lifecycle", () => {
     expect(sa.client).toBeNull();
     sa.connect(); // must rebuild + re-wire the client, not no-op
     expect(sa.client).not.toBeNull();
+  });
+
+  it("view-once: display receipts burn the sender's copy, exit purges ours", async () => {
+    const { sa, sb, ra, rb } = twoParties();
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+
+    await sa.send("s1", "ordinary");
+    await sa.send("s1", "read me once", { viewOnce: true });
+    await flush();
+    const b = sb.sessions.get("s1")!;
+    expect(b.messages).toHaveLength(2);
+    expect(b.messages[1].viewOnce).toBe(true);
+
+    // render: receipt goes out for the flagged message only
+    sb.markDisplayed("s1");
+    await flush();
+    expect(b.messages[1].read).toBe(true);
+    const a = sa.sessions.get("s1")!;
+    // sender's view-once copy is gone, the ordinary one stays
+    expect(a.messages.map((m) => m.text)).toEqual(["ordinary"]);
+
+    // reader keeps it for this view; leaving the screen purges it
+    expect(b.messages.map((m) => m.text)).toContain("read me once");
+    sb.purgeRead("s1");
+    expect(b.messages.map((m) => m.text)).toEqual(["ordinary"]);
+  });
+
+  it("replayed msgSeq is deduplicated (resume buffer flush)", async () => {
+    const { sa, sb, ra, rb } = twoParties();
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+    await sa.send("s1", "once only");
+    await flush();
+    // simulate the server replaying the same buffered envelope
+    const last = sb.sessions.get("s1")!.lastSeq;
+    const blob = ra.sent.filter((f) => f.type === "relay.send").at(-1)!.data
+      .blob as string;
+    rb.emit({ type: "relay.msg", data: { sessionId: "s1", msgSeq: last, blob } });
+    await flush();
+    expect(
+      sb.sessions.get("s1")!.messages.filter((m) => m.text === "once only"),
+    ).toHaveLength(1);
   });
 
   it("inviter's own flags survive via pendingInvites; outgoingInvites tracks", async () => {

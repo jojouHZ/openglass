@@ -25,14 +25,14 @@ const TTL_OPTIONS = [
   { label: "1 hour", value: 3600 },
 ];
 const ttl = ref(900);
-const burnOnRead = ref(false);
 const strict = ref(false);
 
 function start() {
   if (!peer.value) return;
+  // burn-on-read is per-message (composer flame in S12), not a
+  // session flag — the invite frame keeps the field for compat
   priv.startInvite(peer.value, {
     ttlSeconds: ttl.value,
-    burnOnRead: burnOnRead.value,
     strict: strict.value,
   });
   router.push({ name: "s10-private-invite", params: { chatId: chatId.value } });
@@ -70,12 +70,6 @@ function start() {
 
     <!-- flags -->
     <label class="mt-6 flex items-center gap-3">
-      <input v-model="burnOnRead" type="checkbox" class="size-4 accent-current" data-testid="opt-burn" />
-      <span class="text-msg text-ink">burn on read
-        <span class="text-meta text-muted">— messages die after the peer reads them</span>
-      </span>
-    </label>
-    <label class="mt-3 flex items-center gap-3">
       <input v-model="strict" type="checkbox" class="size-4 accent-current" data-testid="opt-strict" />
       <span class="text-msg text-ink">strict mode
         <span class="text-meta text-muted">— any disconnect kills the session instantly</span>

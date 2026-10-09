@@ -215,6 +215,42 @@ func TestRelay_InviteNonMutualRejected(t *testing.T) {
 	}
 }
 
+func TestRelay_DuplicatePairInviteRejected(t *testing.T) {
+	ts, st, _ := newTestRelay(t)
+	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")
+	befriend(t, st, ua, ub)
+	ca, cb := connect(t, ts, ua.ID, "sa"), connect(t, ts, ub.ID, "sb")
+	defer func() { _ = ca.Close() }()
+	defer func() { _ = cb.Close() }()
+
+	sid := invite(t, ca, cb, ub.ID, nil)
+
+	// pending pair: a→b again AND the reverse direction both rejected
+	send(t, ca, "relay.invite", map[string]any{"toUserId": ub.ID, "ttlSeconds": 120})
+	if f := read(t, ca); f.Type != "relay.error" || f.Data["code"] != "already_exists" {
+		t.Fatalf("dup a→b: want already_exists, got %v", f)
+	}
+	send(t, cb, "relay.invite", map[string]any{"toUserId": ua.ID, "ttlSeconds": 120})
+	if f := read(t, cb); f.Type != "relay.error" || f.Data["code"] != "already_exists" {
+		t.Fatalf("dup b→a: want already_exists, got %v", f)
+	}
+
+	// established pair is rejected too
+	establish(t, ca, cb, sid)
+	send(t, ca, "relay.invite", map[string]any{"toUserId": ub.ID, "ttlSeconds": 120})
+	if f := read(t, ca); f.Type != "relay.error" || f.Data["code"] != "already_exists" {
+		t.Fatalf("dup on live: want already_exists, got %v", f)
+	}
+
+	// after burn the pair is free again
+	send(t, ca, "relay.burn", map[string]any{"sessionId": sid})
+	fb, fa := read(t, cb), read(t, ca)
+	if fa.Type != "relay.closed" || fb.Type != "relay.closed" {
+		t.Fatalf("want closed ×2, got %v / %v", fa, fb)
+	}
+	_ = invite(t, ca, cb, ub.ID, nil) // must succeed now
+}
+
 func TestRelay_OfflineBuffersThenResumeFlushes(t *testing.T) {
 	ts, st, _ := newTestRelay(t)
 	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")

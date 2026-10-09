@@ -3,6 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { MsgPayload } from "./engine";
+
 import {
   decryptEnvelope,
   deriveSessionKey,
@@ -12,6 +14,8 @@ import {
   sasFingerprint,
 } from "./engine";
 
+const textOf = (p: MsgPayload): string => (p.k === "t" ? p.text : "");
+
 describe("private engine — ECDH + AES-GCM", () => {
   it("derives identical session keys on both sides", async () => {
     const a = await generateSessionKeyPair();
@@ -19,26 +23,26 @@ describe("private engine — ECDH + AES-GCM", () => {
     const keyA = await deriveSessionKey(a, b.rawPub);
     const keyB = await deriveSessionKey(b, a.rawPub);
     // derived keys are non-extractable — compare behavior, not bytes
-    const env = await encryptEnvelope(keyA, { text: "secret payload" });
+    const env = await encryptEnvelope(keyA, { k: "t", id: "m1", text: "secret payload" });
     const pt = await decryptEnvelope(keyB, env);
-    expect(pt.text).toBe("secret payload");
+    expect(pt.k === "t" ? pt.text : "").toBe("secret payload");
   });
 
   it("encrypt → decrypt round-trips", async () => {
     const a = await generateSessionKeyPair();
     const b = await generateSessionKeyPair();
     const key = await deriveSessionKey(a, b.rawPub);
-    const env = await encryptEnvelope(key, { text: "токен: ghp_abc" });
+    const env = await encryptEnvelope(key, { k: "t", id: "m2", text: "токен: ghp_abc" });
     expect(env.t).toBe("msg");
     expect(env.ct).not.toContain("ghp_abc");
-    expect((await decryptEnvelope(key, env)).text).toBe("токен: ghp_abc");
+    expect(textOf(await decryptEnvelope(key, env))).toBe("токен: ghp_abc");
   });
 
   it("tampered ciphertext fails to decrypt", async () => {
     const a = await generateSessionKeyPair();
     const b = await generateSessionKeyPair();
     const key = await deriveSessionKey(a, b.rawPub);
-    const env = await encryptEnvelope(key, { text: "x" });
+    const env = await encryptEnvelope(key, { k: "t", id: "m3", text: "x" });
     const bytes = fromB64(env.ct);
     bytes[0] ^= 0xff;
     const tampered = { ...env, ct: btoa(String.fromCharCode(...bytes)) };
@@ -52,7 +56,7 @@ describe("private engine — ECDH + AES-GCM", () => {
     // relay swaps b's pubkey for mitm's
     const keyA = await deriveSessionKey(a, mitm.rawPub);
     const keyB = await deriveSessionKey(b, a.rawPub);
-    const env = await encryptEnvelope(keyA, { text: "intercept me" });
+    const env = await encryptEnvelope(keyA, { k: "t", id: "m4", text: "intercept me" });
     await expect(decryptEnvelope(keyB, env)).rejects.toThrow();
   });
 });

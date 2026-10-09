@@ -37,10 +37,14 @@ export type PrivateStatus =
   | "closed";
 
 export interface PrivateMessage {
+  /** client-generated uuid inside the ciphertext — receipts reference it */
   id: string;
   fromMe: boolean;
   text: string;
   ts: number;
+  /** burn-on-read: peer must send a read receipt once displayed */
+  viewOnce?: boolean;
+  /** receipt sent (for peer's view-once msgs) — purged on view exit */
   read?: boolean;
 }
 
@@ -61,6 +65,9 @@ export interface PrivateSession {
   sas: string[] | null;
   messages: PrivateMessage[];
   lastSeq: number;
+  /** onEstablished is draining pre-session envelopes — live arrivals
+   *  must queue instead of jumping the seq watermark */
+  draining?: boolean;
 }
 
 const te = new TextEncoder();
@@ -77,8 +84,9 @@ export const usePrivateStore = defineStore("private", {
   state: () => ({
     client: null as RelayClient | null,
     sessions: new Map<string, PrivateSession>(),
-    /** envelopes that arrived before the session existed locally */
-    pendingEnvelopes: new Map<string, string[]>(),
+    /** envelopes that arrived before the session existed locally —
+     *  wire seq kept so replay-dedup still applies after the drain */
+    pendingEnvelopes: new Map<string, { seq: number; blob: string }[]>(),
     /** our outbound invites by peerId — the pre-ack window between
      *  relay.invite and the server's relay.invited echo. Entries expire
      *  (server invite TTL ≈60 s) so a rejected invite can't leak */
@@ -322,17 +330,30 @@ export const usePrivateStore = defineStore("private", {
       s.ttlEndsAt = d.ttlEndsAt;
       if (s.status !== "verified") s.status = "exchanging";
       this.sessions.set(d.sessionId, s);
-      if (!s.ownKeys) {
-        const own = await generateSessionKeyPair();
-        s.ownKeys = own;
-        this.client?.sendEnvelope(d.sessionId, encodeEnv({ t: "key", k: own.rawPub }));
-      }
-      // envelopes may have arrived before the session existed locally —
-      // drain in wire order (key envelope first, then msgs)
-      const queued = this.pendingEnvelopes.get(d.sessionId) ?? [];
-      this.pendingEnvelopes.delete(d.sessionId);
-      for (const blob of queued) {
-        await this.onMessage(d.sessionId, 0, blob);
+      // crypto awaits interleave with live traffic — while draining,
+      // onMessage must keep queueing or the seq watermark would skip
+      // ahead of the buffered envelopes and drop them
+      s.draining = true;
+      try {
+        if (!s.ownKeys) {
+          const own = await generateSessionKeyPair();
+          s.ownKeys = own;
+          this.client?.sendEnvelope(d.sessionId, encodeEnv({ t: "key", k: own.rawPub }));
+        }
+        // envelopes may have arrived before the session existed locally —
+        // drain in wire order (key envelope first, then msgs); arrivals
+        // during the drain re-queue via onMessage's draining check, so
+        // loop until the buffer stays empty
+        for (;;) {
+          const queued = this.pendingEnvelopes.get(d.sessionId) ?? [];
+          this.pendingEnvelopes.delete(d.sessionId);
+          if (!queued.length) break;
+          for (const e of queued) {
+            await this.deliverEnvelope(s, e.seq, e.blob);
+          }
+        }
+      } finally {
+        s.draining = false;
       }
       // peer's key may have arrived while our pair was generating
       if (s.pendingPeerPub) {
@@ -354,14 +375,29 @@ export const usePrivateStore = defineStore("private", {
       if (s.status !== "closed") s.status = "unverified";
     },
 
-    async onMessage(sessionId: string, _seq: number, blob: string): Promise<void> {
+    async onMessage(sessionId: string, seq: number, blob: string): Promise<void> {
       const s = this.sessions.get(sessionId);
-      if (!s) {
+      if (!s || s.draining) {
         const q = this.pendingEnvelopes.get(sessionId) ?? [];
-        q.push(blob);
+        q.push({ seq, blob });
         this.pendingEnvelopes.set(sessionId, q);
         return;
       }
+      await this.deliverEnvelope(s, seq, blob);
+    },
+
+    /** Wire→session delivery; callers queue via onMessage when the
+     *  session isn't ready (absent or mid-establishment drain). */
+    async deliverEnvelope(
+      s: PrivateSession,
+      seq: number,
+      blob: string,
+    ): Promise<void> {
+      const sessionId = s.id;
+      // server msgSeq is per-session monotonic; resume can replay the
+      // buffered tail — drop anything at-or-below the watermark
+      if (seq <= s.lastSeq) return;
+      s.lastSeq = seq;
       let env: Envelope;
       try {
         env = decodeEnv(blob);
@@ -378,12 +414,19 @@ export const usePrivateStore = defineStore("private", {
       }
       if (env.t === "msg" && s.sessionKey) {
         try {
-          const pt = await decryptEnvelope(s.sessionKey, env);
+          const p = await decryptEnvelope(s.sessionKey, env);
+          if (p.k === "r") {
+            // peer read our view-once messages — burn our copies now
+            const ids = new Set(p.ids);
+            s.messages = s.messages.filter((m) => !(m.fromMe && ids.has(m.id)));
+            return;
+          }
           s.messages.push({
-            id: `${sessionId}:${s.lastSeq++}`,
+            id: p.id,
             fromMe: false,
-            text: pt.text,
+            text: p.text,
             ts: Date.now(),
+            viewOnce: p.bor || undefined,
           });
         } catch {
           // undecryptable envelope — stale key after a re-keyed resume,
@@ -394,17 +437,56 @@ export const usePrivateStore = defineStore("private", {
 
     /** S12 send — requires a derived session key (unverified OK to send? —
      *  yes, but the UI must show the session as unverified). */
-    async send(sessionId: string, text: string): Promise<void> {
+    async send(
+      sessionId: string,
+      text: string,
+      opts: { viewOnce?: boolean } = {},
+    ): Promise<void> {
       const s = this.sessions.get(sessionId);
       if (!s?.sessionKey || !this.client) throw new Error("no session key");
-      const env = await encryptEnvelope(s.sessionKey, { text });
+      const id = crypto.randomUUID();
+      const env = await encryptEnvelope(s.sessionKey, {
+        k: "t",
+        id,
+        text,
+        bor: opts.viewOnce || undefined,
+      });
       this.client.sendEnvelope(sessionId, encodeEnv(env));
       s.messages.push({
-        id: `${sessionId}:${s.lastSeq++}`,
+        id,
         fromMe: true,
         text,
         ts: Date.now(),
+        viewOnce: opts.viewOnce || undefined,
       });
+    },
+
+    /** The UI displayed these messages — receipt the peer's view-once
+     *  ones. Called from S12 render, NOT from decrypt: a receipt means
+     *  "human saw it", and the server must not learn read timing. */
+    markDisplayed(sessionId: string): void {
+      const s = this.sessions.get(sessionId);
+      if (!s?.sessionKey || !this.client) return;
+      const ids: string[] = [];
+      for (const m of s.messages) {
+        if (!m.fromMe && m.viewOnce && !m.read) {
+          m.read = true;
+          ids.push(m.id);
+        }
+      }
+      if (!ids.length) return;
+      void encryptEnvelope(s.sessionKey, { k: "r", ids })
+        .then((env) => this.client?.sendEnvelope(sessionId, encodeEnv(env)))
+        .catch(() => undefined); // receipt loss → sender keeps its copy;
+      // ours is still purged on view exit — degraded, not broken
+    },
+
+    /** S12 unmount — purge peer's view-once messages we already read.
+     *  View-once means once: leaving the screen is the second view. */
+    purgeRead(sessionId: string): void {
+      const s = this.sessions.get(sessionId);
+      if (!s) return;
+      s.messages = s.messages.filter((m) => !(m.viewOnce && m.read));
     },
 
     /** User compared the emoji grid out-of-band — NOW the guarantee holds. */
