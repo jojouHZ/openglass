@@ -47,6 +47,7 @@ docs/PROJECT_CHECKUP.md
 # backend paths are committed (issue #12+)
 cmd/*
 !cmd/server/
+!cmd/e2e-server/
 internal/*
 !internal/api/
 !internal/auth/
@@ -55,3 +56,8 @@ internal/*
 !internal/store/
 !internal/ws/
 # go.mod/go.sum are required to build the committed backend
+
+# Playwright E2E artifacts (never committed)
+test-results/
+playwright-report/
+**/.e2e-state.json

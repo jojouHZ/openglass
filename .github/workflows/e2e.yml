@@ -1,0 +1,47 @@
+# Copyright (C) 2025 OpenGlass contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  private-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version: "1.26"
+          check-latest: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build E2E server binary
+        run: |
+          go build -o /tmp/openglass-e2e-server ./cmd/e2e-server
+          echo "GO_BINARY=/tmp/openglass-e2e-server" >> "$GITHUB_ENV"
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @openglass/pwa exec playwright install --with-deps chromium
+
+      - name: Run private-layer E2E
+        run: pnpm --filter @openglass/pwa e2e

@@ -8,6 +8,10 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
 // Backend skeleton serves /api/v1 on :8081 (TEI embedder owns :8080).
+// E2E can override the proxy target via OPENCGLASS_API_URL so the
+// pwa-dev server talks to the ephemeral Go test fixture.
+const apiTarget = process.env.OPENCGLASS_API_URL || "http://127.0.0.1:8081";
+
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
@@ -28,12 +32,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8081",
+        target: apiTarget,
         changeOrigin: true,
         ws: true,
       },
       "/healthz": {
-        target: "http://127.0.0.1:8081",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
