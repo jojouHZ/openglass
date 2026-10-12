@@ -102,10 +102,11 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await alice.getByTestId("priv-input").fill("burn after reading");
   await alice.getByTestId("priv-send").click();
 
+  // Alice's own copy renders immediately (before Bob's receipt arrives)
+  await expect(alice.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 5000 });
+
   // Bob sees it
   await expect(bob.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 15000 });
-  // Alice's copy is rendered too until the receipt arrives
-  await expect(alice.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 5000 });
 
   // Receipt from Bob removes Alice's copy
   await expect(alice.locator('[data-testid="priv-scroll"]')).not.toContainText("burn after reading", { timeout: 15000 });
