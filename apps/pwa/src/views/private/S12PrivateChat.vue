@@ -55,14 +55,17 @@ const viewOnce = ref(false);
 
 async function send() {
   const t = text.value.trim();
+  console.log("[S12 send] called", { t, hasSession: !!pSession.value, hasKey: !!pSession.value?.sessionKey });
   if (!t || !pSession.value) return;
   sendError.value = "";
   try {
     await priv.send(pSession.value.id, t, { viewOnce: viewOnce.value });
+    console.log("[S12 send] priv.send resolved, messages", pSession.value.messages.length);
     text.value = "";
     await nextTick();
     scrollEl.value?.scrollTo(0, scrollEl.value.scrollHeight);
-  } catch {
+  } catch (e) {
+    console.error("[S12 send] error", e);
     sendError.value = "send failed — no live session key";
   }
 }

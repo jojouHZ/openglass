@@ -442,16 +442,20 @@ export const usePrivateStore = defineStore("private", {
       text: string,
       opts: { viewOnce?: boolean } = {},
     ): Promise<void> {
+      console.log("[priv.send] start", sessionId);
       const s = this.sessions.get(sessionId);
       if (!s?.sessionKey || !this.client) throw new Error("no session key");
       const id = crypto.randomUUID();
+      console.log("[priv.send] encrypting", sessionId);
       const env = await encryptEnvelope(s.sessionKey, {
         k: "t",
         id,
         text,
         bor: opts.viewOnce || undefined,
       });
+      console.log("[priv.send] encrypted", sessionId);
       this.client.sendEnvelope(sessionId, encodeEnv(env));
+      console.log("[priv.send] pushed", sessionId, id);
       s.messages.push({
         id,
         fromMe: true,
