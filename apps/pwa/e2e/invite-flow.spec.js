@@ -9,6 +9,8 @@ import path from "node:path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const seed = JSON.parse(readFileSync(path.join(__dirname, ".e2e-state.json"), "utf8"));
 
+test.setTimeout(120000);
+
 async function seedSession(page, user) {
   await page.goto("/");
   await page.evaluate((u) => {
@@ -29,6 +31,9 @@ async function seedSession(page, user) {
     );
   }, user);
   await page.goto(`/chats/${seed.chatId}`);
+  // Wait for the private toggle — it only renders once the direct chat
+  // peer is loaded, which in turn requires the live REST call to return.
+  await expect(page.getByTestId("private-toggle")).toBeVisible({ timeout: 60000 });
 }
 
 test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) => {
@@ -44,7 +49,7 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await alice.getByTestId("private-toggle").click();
   await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/setup$/);
   const startBtn = alice.getByTestId("start-private");
-  await expect(startBtn).toBeEnabled({ timeout: 10000 });
+  await expect(startBtn).toBeEnabled({ timeout: 30000 });
   await startBtn.click();
   await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/invite$/);
   await expect(alice.getByTestId("invite-waiting")).toBeVisible();
