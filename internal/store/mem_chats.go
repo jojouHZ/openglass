@@ -165,6 +165,17 @@ func (m *Mem) summary(cs *memChats, c *memChat, userID string) ChatSummary {
 		MemberCount:    len(cs.members[c.ID]),
 		Pinned:         mm.pinned,
 	}
+	if c.Type == "direct" {
+		for uid := range cs.members[c.ID] {
+			if uid != userID || len(cs.members[c.ID]) == 1 {
+				if u, err := m.UserByID(context.Background(), uid); err == nil {
+					cp := *u
+					s.Peer = &cp
+				}
+				break
+			}
+		}
+	}
 	msgs := cs.messages[c.ID]
 	if n := len(msgs); n > 0 {
 		for i := n - 1; i >= 0; i-- {
