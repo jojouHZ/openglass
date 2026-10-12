@@ -126,6 +126,8 @@ const vite = spawn(
     env: {
       ...process.env,
       OPENCGLASS_API_URL: seed.apiUrl,
+      VITE_API_MODE: "live",
+      VITE_PRIVATE_MODULE: "1",
     },
   },
 );
