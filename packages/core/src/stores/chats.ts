@@ -367,7 +367,7 @@ export const useChatsStore = defineStore("chats", {
           if (s === "offline" && this.wsConnected) this.scheduleReconnect();
         }),
         ev.on("presence.snapshot", (e) => {
-          for (const id of e.data.onlineUserIds) this.online[id] = true;
+          for (const id of (e.data.onlineUserIds ?? [])) this.online[id] = true;
         }),
         ev.on("presence", (e) => {
           this.online[e.data.userId] = e.data.status === "online";
