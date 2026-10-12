@@ -109,7 +109,17 @@ console.log("[e2e runner] backend ready at", seed.apiUrl);
 
 const vite = spawn(
   "pnpm",
-  ["exec", "vite", "--mode", "pwa-dev", "--port", "5174", "--strictPort"],
+  [
+    "exec",
+    "vite",
+    "--mode",
+    "pwa-dev",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "5174",
+    "--strictPort",
+  ],
   {
     cwd: pwaRoot,
     stdio: ["ignore", "pipe", "pipe"],
@@ -121,6 +131,12 @@ const vite = spawn(
 );
 children.push(vite);
 vite.stderr.pipe(process.stderr);
+vite.stdout.pipe(process.stdout);
+vite.on("exit", (code) => {
+  if (code !== null && code !== 0) {
+    console.error(`[e2e runner] vite exited with code ${code}`);
+  }
+});
 
 await waitForURL("http://127.0.0.1:5174/", 60000);
 console.log("[e2e runner] pwa-dev ready at http://127.0.0.1:5174/");
