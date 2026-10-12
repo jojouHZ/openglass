@@ -12,6 +12,22 @@ const seed = JSON.parse(readFileSync(path.join(__dirname, ".e2e-state.json"), "u
 test.setTimeout(120000);
 
 async function seedSession(page, user) {
+  page.on("console", (msg) => console.log(`[${user.tag}] console:`, msg.text()));
+  page.on("pageerror", (err) => console.error(`[${user.tag}] pageerror:`, err.message));
+  page.on("requestfailed", (req) =>
+    console.error(`[${user.tag}] requestfailed:`, req.url(), req.failure()?.errorText),
+  );
+  page.on("response", async (resp) => {
+    const u = resp.url();
+    if (!u.includes("/api/v1/chats")) return;
+    try {
+      const text = await resp.text();
+      console.log(`[${user.tag}] response ${resp.status()} ${u}:`, text.slice(0, 2000));
+    } catch (e) {
+      console.log(`[${user.tag}] response ${resp.status()} ${u}: <could not read body>`);
+    }
+  });
+
   await page.goto("/");
   await page.evaluate((u) => {
     localStorage.setItem(
@@ -33,7 +49,14 @@ async function seedSession(page, user) {
   await page.goto(`/chats/${seed.chatId}`);
   // Wait for the private toggle — it only renders once the direct chat
   // peer is loaded, which in turn requires the live REST call to return.
-  await expect(page.getByTestId("private-toggle")).toBeVisible({ timeout: 60000 });
+  try {
+    await expect(page.getByTestId("private-toggle")).toBeVisible({ timeout: 60000 });
+  } catch (e) {
+    const url = page.url();
+    const body = await page.locator("body").innerText().catch(() => "<no body>");
+    console.error(`[${user.tag}] private-toggle not visible. url=${url} body=${body.slice(0, 1000)}`);
+    throw e;
+  }
 }
 
 test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) => {
