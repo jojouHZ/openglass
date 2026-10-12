@@ -88,9 +88,13 @@ async function waitForURL(url, timeoutMs = 60000) {
 }
 
 const goBin = findGo();
+const goArgs =
+  path.basename(goBin) === "go"
+    ? ["run", "./cmd/e2e-server", "-state", stateFile]
+    : ["-state", stateFile];
 const go = spawn(
   goBin,
-  ["run", "./cmd/e2e-server", "-state", stateFile],
+  goArgs,
   {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"],

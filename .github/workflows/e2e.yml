@@ -35,11 +35,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build E2E server binary
-        run: |
-          go build -o /tmp/openglass-e2e-server ./cmd/e2e-server
-          echo "GO_BINARY=/tmp/openglass-e2e-server" >> "$GITHUB_ENV"
-
       - name: Install Playwright Chromium
         run: pnpm --filter @openglass/pwa exec playwright install --with-deps chromium
 
