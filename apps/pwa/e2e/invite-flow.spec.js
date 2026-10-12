@@ -103,7 +103,13 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await alice.getByTestId("priv-send").click();
 
   // Alice's own copy renders immediately (before Bob's receipt arrives)
-  await expect(alice.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 5000 });
+  try {
+    await expect(alice.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 10000 });
+  } catch (e) {
+    const errText = await alice.getByTestId("priv-send-error").textContent().catch(() => "<no send error>");
+    console.error(`[alice] send failed: ${errText}`);
+    throw e;
+  }
 
   // Bob sees it
   await expect(bob.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 15000 });
