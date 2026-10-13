@@ -5,7 +5,8 @@
      private store; closing/burning/ttl-expiry wipes them for good. -->
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { getActivePinia, type Pinia } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 
 import { useChatsStore, useSessionStore } from "@openglass/core";
@@ -18,6 +19,8 @@ const router = useRouter();
 const chats = useChatsStore();
 const session = useSessionStore();
 const priv = usePrivateStore();
+const mainPinia = inject<Pinia | undefined>("og.pinia", undefined);
+const activePinia = getActivePinia();
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
@@ -55,17 +58,27 @@ const viewOnce = ref(false);
 
 async function send() {
   const t = text.value.trim();
-  console.log("[S12 send] called", { t, hasSession: !!pSession.value, hasKey: !!pSession.value?.sessionKey });
+  console.debug(
+    "[S12 send] identity",
+    {
+      textLen: t.length,
+      hasSession: !!pSession.value,
+      hasKey: !!pSession.value?.sessionKey,
+      mainPiniaSame: activePinia === mainPinia,
+      privId: priv.$id,
+      sessionsSize: priv.sessions.size,
+      pSessionId: pSession.value?.id,
+      messageCount: pSession.value?.messages.length ?? 0,
+    },
+  );
   if (!t || !pSession.value) return;
   sendError.value = "";
   try {
     await priv.send(pSession.value.id, t, { viewOnce: viewOnce.value });
-    console.log("[S12 send] priv.send resolved, messages", pSession.value.messages.length);
     text.value = "";
     await nextTick();
     scrollEl.value?.scrollTo(0, scrollEl.value.scrollHeight);
-  } catch (e) {
-    console.error("[S12 send] error", e);
+  } catch {
     sendError.value = "send failed — no live session key";
   }
 }

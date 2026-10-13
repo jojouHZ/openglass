@@ -5,7 +5,7 @@
 
 // Private screens S10–S12 — seeded private store, no live relay.
 
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
 import { afterAll, beforeAll, vi, describe, expect, it } from "vitest";
 
@@ -189,7 +189,7 @@ describe("S12 private chat", () => {
     await w.find('[data-testid="view-once-toggle"]').trigger("click");
     await w.find('[data-testid="priv-input"]').setValue("vanish");
     await w.find('[data-testid="priv-send"]').trigger("click");
-    await new Promise((r) => setTimeout(r, 0)); // encrypt is real async
+    await flushPromises(); // real AES-GCM encrypt is async
     await w.vm.$nextTick();
 
     const msgs = priv().sessions.get("ps-5")!.messages;

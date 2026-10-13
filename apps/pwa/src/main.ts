@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createApp } from "vue";
+import { getActivePinia } from "pinia";
 
 import {
   bindApiClient,
@@ -29,6 +30,7 @@ async function bootstrap() {
 
   const app = createApp(App);
   app.use(pinia);
+  app.provide("og.pinia", pinia);
 
   // Restored session → reopen realtime (fresh sessions connect on S4 mount)
   const session = useSessionStore(pinia);
@@ -49,6 +51,14 @@ async function bootstrap() {
     const { usePrivateStore } = await import("@openglass/core/private/store");
     const { wirePrivateLifecycle } = await import("./privateBoot");
     const priv = usePrivateStore(pinia);
+    console.debug(
+      "[main] pinia active",
+      getActivePinia() === pinia,
+      "priv id",
+      priv.$id,
+      "sessions",
+      priv.sessions.size,
+    );
     priv.boot("/api/v1/relay", () => session.accessToken);
     wirePrivateLifecycle(priv, session);
   }

@@ -98,9 +98,9 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await expect(bob).toHaveURL(/\/chats\/[^/]+\/private$/);
 
   // Alice sends a view-once message
-  await alice.getByTestId("view-once-toggle").click({ force: true });
-  await alice.getByTestId("priv-input").fill("burn after reading", { force: true });
-  await alice.getByTestId("priv-send").click({ force: true });
+  await alice.getByTestId("view-once-toggle").click();
+  await alice.getByTestId("priv-input").fill("burn after reading");
+  await alice.getByTestId("priv-send").click();
 
   // Alice's own copy renders immediately (before Bob's receipt arrives)
   try {
