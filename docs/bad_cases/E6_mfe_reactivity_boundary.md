@@ -22,6 +22,21 @@ encrypted`).
    directly instead of subscribing to a public contract such as
    `private:session-change` / `private:new-message`.
 
+## Evidence from the C diagnostic run
+
+CI run: https://github.com/jojouHZ/openglass/actions/runs/38376992880
+
+```
+[main] pinia active true priv id private sessions 0
+[S12 send] identity { textLen: 18, hasSession: true, hasKey: true,
+  mainPiniaSame: true, privId: "private" }
+```
+
+`mainPiniaSame: true` proves that `S12PrivateChat.vue` and `main.ts` share the
+same Pinia instance and the same `usePrivateStore()`. The failure is therefore
+not two independent stores; it is the fragile reactivity of a host that reads
+remote state directly.
+
 ## Error Pattern
 ```ts
 // BAD: host reaches into remote store

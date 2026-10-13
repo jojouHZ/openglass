@@ -52,6 +52,18 @@ never become permanent noise.
 - One CI run of `E2E` to capture the `console.debug` identity output and
   confirm whether the failure is one store or reactivity.
 
+## CI evidence
+
+- Run: https://github.com/jojouHZ/openglass/actions/runs/38376992880
+- `[main] pinia active true priv id private sessions 0` on both Alice and Bob.
+- `[S12 send] identity { textLen: 18, hasSession: true, hasKey: true,
+  mainPiniaSame: true, privId: "private" }`.
+- **Conclusion:** `S12` and `main.ts` use the *same* Pinia instance and the
+  same `usePrivateStore()`. The failure is not two stores. It is the MFE
+  boundary/reactivity interaction: the host directly reads a remote `Map`-based
+  `messages` array and `messages.push()` does not reliably trigger re-render in
+  the real Chromium/Vite build.
+
 ## Next steps
 
 - **B:** Implement the `PrivateEventBus`, make `usePrivateStore` internal, and
