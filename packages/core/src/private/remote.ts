@@ -147,16 +147,6 @@ export function createPrivateRemote(
   }
 
   function emit(): void {
-    // temporary E2E diagnosis — counts only, no ids/keys/content
-    console.debug(
-      "[og.remote] emit",
-      sessionSubs.size,
-      "session subs;",
-      inviteSubs.size,
-      "invite subs;",
-      relaySubs.size,
-      "relay subs",
-    );
     for (const [peerId, subs] of sessionSubs) {
       const view = toSessionView(store.sessionByPeer(peerId));
       for (const cb of subs) cb(view);
@@ -176,14 +166,7 @@ export function createPrivateRemote(
         sessionSubs.set(peerId, subs);
       }
       subs.add(cb);
-      const initial = toSessionView(store.sessionByPeer(peerId));
-      console.debug(
-        "[og.remote] watchSession subscribe — hasView:",
-        !!initial,
-        "msgs:",
-        initial?.messages.length ?? 0,
-      );
-      cb(initial);
+      cb(toSessionView(store.sessionByPeer(peerId)));
       return () => {
         subs.delete(cb);
         if (!subs.size) sessionSubs.delete(peerId);

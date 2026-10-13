@@ -60,6 +60,45 @@ s.messages.push({ id, fromMe: true, text, ts: Date.now() });
   `s.messages = [...s.messages, msg]` to force reactive reassignment, but treat
   this as a temporary workaround while the MFE contract is implemented.
 
+## Post-B evidence — the reactivity diagnosis was incomplete
+
+CI run: https://github.com/jojouHZ/openglass/actions/runs/38382435529
+(commit `97b4812`, facade + emit/subscribe counters)
+
+```
+[alice] [S12 send] {len: 18, hasView: true, canSend: true, msgs: 0}
+[alice] [og.remote] emit 1 session subs ...
+[alice] [S12 send] resolved, msgs 1        <- host ref HAS the message
+[alice] [og.remote] emit 1 session subs ... <- Bob's receipt arrives ~16ms later
+```
+
+The host-owned ref held `messages.length === 1` and the render effect was
+alive (the ttl countdown re-rendered every second), yet the DOM showed the
+empty placeholder at assertion time. The Playwright trace resolved it:
+
+- Bob's page screenshot renders the `burn after reading` bubble with the
+  view-once mark — delivery, decryption and rendering all worked.
+- The emit at +16ms after `send` is Alice's `k:"r"` receipt handler:
+  Bob's `watch(messages.length)` calls `markDisplayed` the instant the
+  decrypted snapshot arrives, the receipt envelope returns, and
+  `s.messages = s.messages.filter(m => !(m.fromMe && ids.has(m.id)))`
+  burns Alice's copy — the designed zero-trace semantics
+  (`store.ts`: "peer read our view-once messages — burn our copies now").
+
+So the DOM was empty because the message was **legitimately burned**, not
+because reactivity failed. The spec's "Alice's own copy renders immediately"
+assertion asked Playwright to observe a sub-20ms transient — un-observable
+by construction. The B refactor was still the right architectural fix (the
+host must not read remote state), but it was not the E2E blocker.
+
+## Spec fix (post-B)
+
+`invite-flow.spec.js` no longer asserts Alice's outgoing bubble. Instead:
+`priv-input` clearing proves `remote.send()` resolved; Bob's
+`toContainText("burn after reading")` proves E2E delivery; Alice's
+`not.toContainText(...)` proves the receipt burn. The burn assertion is the
+real guarantee — the transient bubble was never a user-facing contract.
+
 ## Impact
 - The E2E private flow (invite → SAS → message → burn) could not be validated
   in a real browser.

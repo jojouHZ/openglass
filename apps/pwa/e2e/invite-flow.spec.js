@@ -102,14 +102,13 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await alice.getByTestId("priv-input").fill("burn after reading");
   await alice.getByTestId("priv-send").click();
 
-  // Alice's own copy renders immediately (before Bob's receipt arrives)
-  try {
-    await expect(alice.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 10000 });
-  } catch (e) {
-    const errText = await alice.getByTestId("priv-send-error").textContent().catch(() => "<no send error>");
-    console.error(`[alice] send failed: ${errText}`);
-    throw e;
-  }
+  // Send resolved — the composer clears only after remote.send() resolves.
+  // NOTE: Alice's own bubble is NOT asserted. By design the sender's
+  // view-once copy burns the moment the peer's client receipts the
+  // display (store.ts: "peer read our view-once messages — burn our
+  // copies now"). Bob's S12 marks displayed on arrival, so the copy
+  // dies in ~ms — asserting it would test a race, not a guarantee.
+  await expect(alice.getByTestId("priv-input")).toHaveValue("");
 
   // Bob sees it
   await expect(bob.locator('[data-testid="priv-scroll"]')).toContainText("burn after reading", { timeout: 15000 });

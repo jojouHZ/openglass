@@ -56,6 +56,15 @@ state never re-rendered the real Chromium build.
    `enableAutoUnmount` was added because remote subscribers are real
    callbacks: an un-unmounted wrapper with a live subscription can navigate
    the shared router mid-test.
+4. **The reactivity story was a red herring.** Post-B CI diagnostics
+   (emit/subscriber counters only, no content) showed the host ref already
+   held `messages.length === 1` while the DOM showed the empty state. The
+   Playwright trace revealed the truth: Bob's client sent a display receipt
+   ~16ms after delivery, and Alice's `k:"r"` handler burned her own
+   view-once copy exactly as designed. The spec was asserting a sub-20ms
+   transient bubble. Lesson: when "the ref has it but the DOM doesn't",
+   check whether the data legitimately changed again before assuming a
+   render bug — log the emitted view, not just the send path.
 
 ## Test surface
 
@@ -67,6 +76,7 @@ state never re-rendered the real Chromium build.
 
 ## Next steps
 
-- **E:** Re-run the real-browser E2E — Alice's sent message should now
-  render because the DOM is driven by a host-owned ref the remote pushes
-  into. Then resume the remaining E.6 scope (pagehide/IndexedDB teardown).
+- **E:** Re-run the real-browser E2E with the corrected assertion — Bob's
+  render proves delivery; Alice's `priv-empty` reappearance proves the
+  receipt burn. Then resume the remaining E.6 scope (pagehide/IndexedDB
+  teardown).
