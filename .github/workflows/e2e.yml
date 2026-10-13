@@ -40,3 +40,11 @@ jobs:
 
       - name: Run private-layer E2E
         run: pnpm --filter @openglass/pwa e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-e2e
+          path: apps/pwa/test-results/
+          retention-days: 7

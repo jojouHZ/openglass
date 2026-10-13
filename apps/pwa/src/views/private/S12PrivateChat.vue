@@ -54,10 +54,18 @@ const viewOnce = ref(false);
 
 async function send() {
   const t = text.value.trim();
+  // temporary E2E diagnosis — counters only, no plaintext
+  console.debug("[S12 send]", {
+    len: t.length,
+    hasView: !!pSession.value,
+    canSend: pSession.value?.canSend,
+    msgs: pSession.value?.messages.length ?? 0,
+  });
   if (!t || !pSession.value) return;
   sendError.value = "";
   try {
     await remote.send(pSession.value.sessionId, t, { viewOnce: viewOnce.value });
+    console.debug("[S12 send] resolved, msgs", pSession.value?.messages.length);
     text.value = "";
     await nextTick();
     scrollEl.value?.scrollTo(0, scrollEl.value.scrollHeight);
