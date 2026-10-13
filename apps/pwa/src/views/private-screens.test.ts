@@ -5,14 +5,15 @@
 
 // Private screens S10–S12 — seeded private store, no live relay.
 
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, vi, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, vi, describe, expect, it } from "vitest";
 
 import { bindApiClient, useChatsStore, useSessionStore } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
 import { directChatId, wife } from "@openglass/core/api/mock/fixtures";
 import { usePrivateStore } from "@openglass/core/private/store";
+import { createPrivateRemote } from "@openglass/core/private/remote";
 import type { RelayClient } from "@openglass/core/private/relay";
 
 import { pinia } from "../pinia";
@@ -49,6 +50,14 @@ for (const [name, path, component] of [
 const session = () => useSessionStore(pinia);
 const chats = () => useChatsStore(pinia);
 const priv = () => usePrivateStore(pinia);
+/** the remote facade the views actually consume — tests exercise the
+ *  real host↔remote boundary, not a mock of it */
+const remote = () => createPrivateRemote(priv());
+/** every mount gets the facade the way main.ts provides it */
+const globals = () => ({
+  plugins: [router, pinia],
+  provide: { "og.private": remote() },
+});
 
 function fakeRelay() {
   const sent: { type: string; data: Record<string, unknown> }[] = [];
@@ -71,6 +80,10 @@ function fakeRelay() {
 }
 
 const { stub: relay, sent } = fakeRelay();
+
+// remote subscribers live behind unmount hooks — auto-unmount keeps
+// a leaked watcher in an orphan component from navigating mid-test
+enableAutoUnmount(afterEach);
 
 // send() runs real AES-GCM — the seed needs a working session key
 let seededKey: CryptoKey;
@@ -117,7 +130,7 @@ describe("S11b verify", () => {
   it("renders the 12-emoji SAS grid and marks verified", async () => {
     seedSession();
     await router.push({ name: "s11b-verify", params: { chatId: directChatId } });
-    const w = mount(S11bVerify, { global: { plugins: [router, pinia] } });
+    const w = mount(S11bVerify, { global: globals() });
     await w.vm.$nextTick();
 
     const grid = w.find('[data-testid="sas-grid"]');
@@ -133,7 +146,7 @@ describe("S11b verify", () => {
   it("'doesn't match' burns the session and leaves private mode", async () => {
     seedSession({ id: "ps-2" });
     await router.push({ name: "s11b-verify", params: { chatId: directChatId } });
-    const w = mount(S11bVerify, { global: { plugins: [router, pinia] } });
+    const w = mount(S11bVerify, { global: globals() });
     await w.vm.$nextTick();
     await w.find('[data-testid="sas-mismatch"]').trigger("click");
     await new Promise((r) => setTimeout(r, 0));
@@ -149,7 +162,7 @@ describe("S12 private chat", () => {
   it("shows the unverified banner until SAS is confirmed", async () => {
     seedSession({ id: "ps-3" });
     await router.push({ name: "s12-private-chat", params: { chatId: directChatId } });
-    const w = mount(S12PrivateChat, { global: { plugins: [router, pinia] } });
+    const w = mount(S12PrivateChat, { global: globals() });
     await w.vm.$nextTick();
     expect(w.find('[data-testid="unverified-banner"]').exists()).toBe(true);
     expect(w.find('[data-testid="ttl-count"]').exists()).toBe(true);
@@ -169,7 +182,7 @@ describe("S12 private chat", () => {
       ],
     });
     await router.push({ name: "s12-private-chat", params: { chatId: directChatId } });
-    const w = mount(S12PrivateChat, { global: { plugins: [router, pinia] } });
+    const w = mount(S12PrivateChat, { global: globals() });
     await w.vm.$nextTick();
 
     await w.find('[data-testid="burn-btn"]').trigger("click");
@@ -183,7 +196,7 @@ describe("S12 private chat", () => {
   it("view-once toggle marks the outgoing message", async () => {
     seedSession({ id: "ps-5", status: "verified" });
     await router.push({ name: "s12-private-chat", params: { chatId: directChatId } });
-    const w = mount(S12PrivateChat, { global: { plugins: [router, pinia] } });
+    const w = mount(S12PrivateChat, { global: globals() });
     await w.vm.$nextTick();
 
     await w.find('[data-testid="view-once-toggle"]').trigger("click");
@@ -203,7 +216,9 @@ describe("S11 session setup", () => {
   it("passes ttl/burnOnRead/strict to the invite and waits on S10", async () => {
     priv().relayState = "online";
     await router.push({ name: "s11-session-setup", params: { chatId: directChatId } });
-    const w = mount(S11SessionSetup, { global: { plugins: [router, pinia] } });
+    const w = mount(S11SessionSetup, { global: globals() });
+    // watchRelayState emits the current state on subscribe — no notify
+    // needed for the initial mount
     await w.vm.$nextTick();
 
     await w.find('[data-testid="ttl-300"]').trigger("click");
@@ -223,13 +238,15 @@ describe("S11 session setup", () => {
 
   it("is disabled with an honest message while the relay is offline", async () => {
     priv().relayState = "offline";
+    priv().notify();
     await router.push({ name: "s11-session-setup", params: { chatId: directChatId } });
-    const w = mount(S11SessionSetup, { global: { plugins: [router, pinia] } });
+    const w = mount(S11SessionSetup, { global: globals() });
     await w.vm.$nextTick();
     const btn = w.find('[data-testid="start-private"]');
     expect(btn.attributes("disabled")).toBeDefined();
     expect(btn.text()).toContain("live backend required");
     priv().relayState = "online";
+    priv().notify();
   });
 });
 
@@ -237,7 +254,7 @@ describe("S10 private invite", () => {
   it("incoming state: accept sends relay.accept, decline exits to S5", async () => {
     seedSession({ id: "ps-in3", status: "incoming" });
     await router.push({ name: "s10-private-invite", params: { chatId: directChatId } });
-    const w = mount(S10PrivateInvite, { global: { plugins: [router, pinia] } });
+    const w = mount(S10PrivateInvite, { global: globals() });
     await w.vm.$nextTick();
     expect(w.find('[data-testid="invite-incoming"]').exists()).toBe(true);
 
@@ -248,12 +265,13 @@ describe("S10 private invite", () => {
   it("a declined/expired invite (session gone) leaves to S5", async () => {
     seedSession({ id: "ps-out", status: "inviting" });
     await router.push({ name: "s10-private-invite", params: { chatId: directChatId } });
-    const w = mount(S10PrivateInvite, { global: { plugins: [router, pinia] } });
+    const w = mount(S10PrivateInvite, { global: globals() });
     await w.vm.$nextTick();
     expect(w.find('[data-testid="invite-waiting"]').exists()).toBe(true);
 
     // relay.declined → dropSession deletes the record entirely
     priv().sessions.delete("ps-out");
+    priv().notify(); // raw mutation — the facade emits only on notify
     await w.vm.$nextTick();
     await new Promise((r) => setTimeout(r, 0));
     expect(router.currentRoute.value.name).toBe("s5-chat-view");
@@ -265,7 +283,7 @@ describe("PrivateInviteCard", () => {
     seedSession({ id: "ps-in", status: "incoming" });
     const w = mount(PrivateInviteCard, {
       props: { peerId: wife.id, chatId: directChatId },
-      global: { plugins: [router, pinia] },
+      global: globals(),
     });
     await w.vm.$nextTick();
     expect(w.find('[data-testid="private-invite-card"]').exists()).toBe(true);
@@ -278,7 +296,7 @@ describe("PrivateInviteCard", () => {
     seedSession({ id: "ps-in2", status: "incoming" });
     const w = mount(PrivateInviteCard, {
       props: { peerId: wife.id, chatId: directChatId },
-      global: { plugins: [router, pinia] },
+      global: globals(),
     });
     await w.find('[data-testid="private-decline"]').trigger("click");
     expect(relay.decline).toHaveBeenCalledWith("ps-in2");
@@ -292,9 +310,10 @@ describe("PrivateInviteCard", () => {
       strict: true,
       expiresAt: Date.now() + 60_000,
     });
+    priv().notify();
     const w = mount(PrivateInviteCard, {
       props: { peerId: wife.id, chatId: directChatId },
-      global: { plugins: [router, pinia] },
+      global: globals(),
     });
     await w.vm.$nextTick();
     expect(w.find('[data-testid="private-outgoing"]').exists()).toBe(true);

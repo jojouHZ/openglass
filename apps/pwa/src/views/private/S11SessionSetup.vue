@@ -4,16 +4,18 @@
 <!-- S11 private session setup — pwa-dev only. -->
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { useChatsStore } from "@openglass/core";
-import { usePrivateStore } from "@openglass/core/private/store";
+import type { ConnState } from "@openglass/core/private/remote";
+
+import { usePrivateRemote } from "../../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
-const priv = usePrivateStore();
+const remote = usePrivateRemote();
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
@@ -27,11 +29,15 @@ const TTL_OPTIONS = [
 const ttl = ref(900);
 const strict = ref(false);
 
+const relayState = ref<ConnState>("offline");
+const stopRelay = remote.watchRelayState((s) => (relayState.value = s));
+onBeforeUnmount(stopRelay);
+
 function start() {
   if (!peer.value) return;
   // burn-on-read is per-message (composer flame in S12), not a
   // session flag — the invite frame keeps the field for compat
-  priv.startInvite(peer.value, {
+  remote.startInvite(peer.value, {
     ttlSeconds: ttl.value,
     strict: strict.value,
   });
@@ -78,11 +84,11 @@ function start() {
 
     <button
       class="mt-10 h-12 rounded-pill bg-ink text-msg text-bg disabled:opacity-40"
-      :disabled="!peer || priv.relayState !== 'online'"
+      :disabled="!peer || relayState !== 'online'"
       data-testid="start-private"
       @click="start"
     >
-      {{ priv.relayState === "online" ? "send private invite" : "relay offline — live backend required" }}
+      {{ relayState === "online" ? "send private invite" : "relay offline — live backend required" }}
     </button>
     <p class="mt-4 text-center text-micro text-muted">
       dev host — keys live in this browser's memory only

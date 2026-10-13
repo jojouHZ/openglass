@@ -10,29 +10,28 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { useChatsStore } from "@openglass/core";
-import { usePrivateStore } from "@openglass/core/private/store";
+
+import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
-const priv = usePrivateStore();
+const remote = usePrivateRemote();
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
 
-const session = computed(() =>
-  peer.value ? priv.sessionByPeer(peer.value.id) : null,
-);
+const session = usePrivateSession(() => peer.value?.id);
 
 function confirm() {
   if (!session.value) return;
-  priv.markVerified(session.value.id);
+  remote.confirmSas(session.value.sessionId);
   router.replace({ name: "s12-private-chat", params: { chatId: chatId.value } });
 }
 
 function notMatching() {
-  if (session.value) priv.burn(session.value.id);
+  if (session.value) remote.burn(session.value.sessionId);
   router.replace({ name: "s5-chat-view", params: { chatId: chatId.value } });
 }
 </script>

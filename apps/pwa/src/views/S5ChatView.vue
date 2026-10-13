@@ -14,12 +14,15 @@ import {
   useSessionStore,
 } from "@openglass/core";
 
+import type { PrivateSessionView } from "@openglass/core/private/remote";
+
 import type { StagedAttachment } from "../components/chat/attachment";
 import { MAX_ATTACHMENT } from "../components/chat/attachment";
 import AttachmentView from "../components/chat/AttachmentView.vue";
 import Composer from "../components/chat/Composer.vue";
 import ChatSearch from "../components/chat/ChatSearch.vue";
 import MessageMenu from "../components/chat/MessageMenu.vue";
+import { injectPrivateRemote } from "../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
@@ -35,14 +38,6 @@ const PrivateInviteCard = privateEnabled
       () => import("../components/private/PrivateInviteCard.vue"),
     )
   : null;
-const privStore = shallowRef<{
-  sessionByPeer: (id: string) => { id: string; status: string } | null;
-} | null>(null);
-if (privateEnabled) {
-  void import("@openglass/core/private/store").then((m) => {
-    privStore.value = m.usePrivateStore();
-  });
-}
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
@@ -59,6 +54,28 @@ const dayLabels = computed(() => {
   return out;
 });
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
+
+// the host never touches the private store — only the remote facade's
+// snapshot of this peer's session (null in the mvp build)
+const privateRemote = injectPrivateRemote();
+const privSession = shallowRef<PrivateSessionView | null>(null);
+let stopPrivateWatch: (() => void) | null = null;
+watch(
+  () => (privateEnabled ? peer.value?.id : undefined),
+  (peerId) => {
+    stopPrivateWatch?.();
+    stopPrivateWatch = null;
+    privSession.value = null;
+    if (peerId && privateRemote) {
+      stopPrivateWatch = privateRemote.watchSession(
+        peerId,
+        (v) => (privSession.value = v),
+      );
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => stopPrivateWatch?.());
 const typing = computed(() => chats.typingIn(chatId.value));
 const offline = computed(() => chats.connState !== "online");
 const peerReadSeq = computed(() => chats.peerReadSeq[chatId.value] ?? 0);
@@ -267,7 +284,7 @@ async function openPinned() {
 function onPrivateToggle() {
   const p = peer.value;
   if (!p) return;
-  const s = privStore.value?.sessionByPeer(p.id);
+  const s = privSession.value;
   router.push(
     !s
       ? { name: "s11-session-setup", params: { chatId: chatId.value } }
@@ -422,7 +439,7 @@ watch(
       <button
         v-if="privateEnabled && peer && peer.id !== session.user?.id"
         class="p-1"
-        :class="privStore?.sessionByPeer(peer.id) ? 'text-accent' : 'text-muted'"
+        :class="privSession ? 'text-accent' : 'text-muted'"
         aria-label="private session"
         data-testid="private-toggle"
         @click="onPrivateToggle"

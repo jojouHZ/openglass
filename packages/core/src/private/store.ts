@@ -99,6 +99,10 @@ export const usePrivateStore = defineStore("private", {
     reconnectDelay: 1000,
     relayUrl: "",
     getAccessToken: null as null | (() => string | null),
+    /** remote facade listeners — callbacks only, no private data; the
+     *  imperative tick keeps host↔remote updates independent of Vue's
+     *  deep reactivity across the module boundary */
+    listeners: new Set<() => void>(),
   }),
 
   getters: {
@@ -175,6 +179,7 @@ export const usePrivateStore = defineStore("private", {
           lastSeq: 0,
         };
         this.sessions.set(s.id, s);
+        this.notify();
       });
 
       // ack: server accepted our invite — the session now has a real
@@ -202,6 +207,7 @@ export const usePrivateStore = defineStore("private", {
           lastSeq: 0,
         };
         this.sessions.set(s.id, s);
+        this.notify();
       });
 
       c.on("relay.established", (ev) => {
@@ -221,12 +227,18 @@ export const usePrivateStore = defineStore("private", {
 
       c.on("relay.peer-offline", (ev) => {
         const s = this.sessions.get(ev.data.sessionId);
-        if (s) s.peerOfflineUntil = ev.data.graceEndsAt;
+        if (s) {
+          s.peerOfflineUntil = ev.data.graceEndsAt;
+          this.notify();
+        }
       });
 
       c.on("relay.peer-online", (ev) => {
         const s = this.sessions.get(ev.data.sessionId);
-        if (s) s.peerOfflineUntil = null;
+        if (s) {
+          s.peerOfflineUntil = null;
+          this.notify();
+        }
       });
 
       c.on("relay.closed", (ev) => {
@@ -238,12 +250,14 @@ export const usePrivateStore = defineStore("private", {
           this.sessions.delete(ev.data.sessionId);
         }
         this.pendingEnvelopes.delete(ev.data.sessionId);
+        this.notify();
       });
 
       c.onStateChange((s) => {
         this.relayState = s;
         if (s === "online") this.reconnectDelay = 1000;
         if (s === "offline") this.scheduleReconnect();
+        this.notify();
       });
     },
 
@@ -272,6 +286,25 @@ export const usePrivateStore = defineStore("private", {
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     },
 
+    /** Remote-facing change tick — the facade rebuilds host-safe
+     *  snapshots on each call. Invoked after every mutation below. */
+    notify(): void {
+      for (const fn of this.listeners) fn();
+    },
+    /** Subscribe to mutations — the remote facade's only inlet. */
+    onChange(fn: () => void): () => void {
+      this.listeners.add(fn);
+      return () => {
+        this.listeners.delete(fn);
+      };
+    },
+    /** S10 cancel — drop the pre-ack invite marker; no relay frame
+     *  exists for cancellation, the server-side invite dies on its TTL. */
+    cancelInvite(peerId: string): void {
+      this.pendingInvites.delete(peerId);
+      this.notify();
+    },
+
     /** Inviter flow — S10. The session appears on relay.established;
      *  our own flags travel via pendingInvites (the contract doesn't
      *  echo them back to the inviter). */
@@ -287,6 +320,7 @@ export const usePrivateStore = defineStore("private", {
         expiresAt: Date.now() + 70_000,
       });
       this.client?.invite(peer.id, opts);
+      this.notify();
     },
 
     accept(sessionId: string): void {
@@ -330,6 +364,7 @@ export const usePrivateStore = defineStore("private", {
       s.ttlEndsAt = d.ttlEndsAt;
       if (s.status !== "verified") s.status = "exchanging";
       this.sessions.set(d.sessionId, s);
+      this.notify();
       // crypto awaits interleave with live traffic — while draining,
       // onMessage must keep queueing or the seq watermark would skip
       // ahead of the buffered envelopes and drop them
@@ -359,6 +394,7 @@ export const usePrivateStore = defineStore("private", {
       if (s.pendingPeerPub) {
         await this.onPeerKey(d.sessionId, s.pendingPeerPub);
       }
+      this.notify();
       // reconnect path — drain anything buffered for us
       this.client?.resume(d.sessionId, d.resumeToken);
     },
@@ -373,6 +409,7 @@ export const usePrivateStore = defineStore("private", {
       // re-established session MUST be re-verified, a "verified" flag
       // can never survive a key change
       if (s.status !== "closed") s.status = "unverified";
+      this.notify();
     },
 
     async onMessage(sessionId: string, seq: number, blob: string): Promise<void> {
@@ -419,6 +456,7 @@ export const usePrivateStore = defineStore("private", {
             // peer read our view-once messages — burn our copies now
             const ids = new Set(p.ids);
             s.messages = s.messages.filter((m) => !(m.fromMe && ids.has(m.id)));
+            this.notify();
             return;
           }
           s.messages.push({
@@ -428,6 +466,7 @@ export const usePrivateStore = defineStore("private", {
             ts: Date.now(),
             viewOnce: p.bor || undefined,
           });
+          this.notify();
         } catch {
           // undecryptable envelope — stale key after a re-keyed resume,
           // or a forged blob. Drop, don't surface: plaintext safety first.
@@ -459,6 +498,7 @@ export const usePrivateStore = defineStore("private", {
         ts: Date.now(),
         viewOnce: opts.viewOnce || undefined,
       });
+      this.notify();
     },
 
     /** The UI displayed these messages — receipt the peer's view-once
@@ -475,6 +515,7 @@ export const usePrivateStore = defineStore("private", {
         }
       }
       if (!ids.length) return;
+      this.notify();
       void encryptEnvelope(s.sessionKey, { k: "r", ids })
         .then((env) => this.client?.sendEnvelope(sessionId, encodeEnv(env)))
         .catch(() => undefined); // receipt loss → sender keeps its copy;
@@ -487,12 +528,16 @@ export const usePrivateStore = defineStore("private", {
       const s = this.sessions.get(sessionId);
       if (!s) return;
       s.messages = s.messages.filter((m) => !(m.viewOnce && m.read));
+      this.notify();
     },
 
     /** User compared the emoji grid out-of-band — NOW the guarantee holds. */
     markVerified(sessionId: string): void {
       const s = this.sessions.get(sessionId);
-      if (s?.sessionKey) s.status = "verified";
+      if (s?.sessionKey) {
+        s.status = "verified";
+        this.notify();
+      }
     },
 
     burn(sessionId: string): void {
@@ -502,6 +547,7 @@ export const usePrivateStore = defineStore("private", {
         s.status = "closed";
         this.wipeSessionSecrets(s);
       }
+      this.notify();
     },
 
     resume(sessionId: string): void {
@@ -524,6 +570,7 @@ export const usePrivateStore = defineStore("private", {
       if (s) this.wipeSessionSecrets(s);
       this.sessions.delete(sessionId);
       this.pendingEnvelopes.delete(sessionId);
+      this.notify();
     },
 
     /**
@@ -545,6 +592,7 @@ export const usePrivateStore = defineStore("private", {
       this.pendingEnvelopes.clear();
       this.pendingInvites.clear();
       this.relayState = "offline";
+      this.notify();
       await wipeIdentityStore();
     },
   },

@@ -6,22 +6,26 @@
      VITE_PRIVATE_MODULE; the mvp bundle never sees this file). -->
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 
-import { usePrivateStore } from "@openglass/core/private/store";
+import type { PrivateInvitesView } from "@openglass/core/private/remote";
+
+import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 
 const props = defineProps<{ peerId: string; chatId: string }>();
 const emit = defineEmits<{ verify: [sessionId: string] }>();
-const priv = usePrivateStore();
+const remote = usePrivateRemote();
+
+const session = usePrivateSession(() => props.peerId);
+const invites = ref<PrivateInvitesView>({ incoming: [], outgoing: [] });
+const stopInvites = remote.watchInvites((v) => (invites.value = v));
+onBeforeUnmount(stopInvites);
 
 /** incoming invite from this peer, or our outgoing pending invite */
 const incoming = computed(() =>
-  priv.incomingInvites.find((s) => s.peer.id === props.peerId) ?? null,
+  invites.value.incoming.find((i) => i.peerId === props.peerId) ?? null,
 );
-const session = computed(() => priv.sessionByPeer(props.peerId));
-const outgoing = computed(() =>
-  priv.outgoingInvites.includes(props.peerId),
-);
+const outgoing = computed(() => invites.value.outgoing.includes(props.peerId));
 /** a live session — past the invite phase (key exchange or later) */
 const live = computed(() => {
   const s = session.value;
@@ -30,10 +34,10 @@ const live = computed(() => {
 
 function accept() {
   if (!incoming.value) return;
-  priv.accept(incoming.value.id);
+  remote.accept(incoming.value.sessionId);
 }
 function decline() {
-  if (incoming.value) priv.decline(incoming.value.id);
+  if (incoming.value) remote.decline(incoming.value.sessionId);
 }
 </script>
 
@@ -73,7 +77,7 @@ function decline() {
     <button
       class="rounded-pill bg-ink px-4 py-1.5 text-meta text-bg"
       data-testid="private-accept"
-      @click="accept(); emit('verify', incoming!.id)"
+      @click="accept(); emit('verify', incoming!.sessionId)"
     >
       accept
     </button>

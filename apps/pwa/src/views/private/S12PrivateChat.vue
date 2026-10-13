@@ -5,29 +5,25 @@
      private store; closing/burning/ttl-expiry wipes them for good. -->
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { getActivePinia, type Pinia } from "pinia";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { useChatsStore, useSessionStore } from "@openglass/core";
-import { usePrivateStore } from "@openglass/core/private/store";
+import { useChatsStore } from "@openglass/core";
 
 import ConfirmDialog from "../../components/ConfirmDialog.vue";
+import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
-const session = useSessionStore();
-const priv = usePrivateStore();
-const mainPinia = inject<Pinia | undefined>("og.pinia", undefined);
-const activePinia = getActivePinia();
+const remote = usePrivateRemote();
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
-const pSession = computed(() =>
-  peer.value ? priv.sessionByPeer(peer.value.id) : null,
-);
+// host-owned ref fed by remote snapshots — the private store never
+// crosses the MFE boundary into this component
+const pSession = usePrivateSession(() => peer.value?.id);
 
 // --- ttl countdown ---
 const now = ref(Date.now());
@@ -44,7 +40,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (ticker) clearInterval(ticker);
   // view-once means once — leaving the private screen is the second view
-  if (pSession.value) priv.purgeRead(pSession.value.id);
+  if (pSession.value) remote.purgeRead(pSession.value.sessionId);
 });
 
 // --- composer ---
@@ -58,23 +54,10 @@ const viewOnce = ref(false);
 
 async function send() {
   const t = text.value.trim();
-  console.debug(
-    "[S12 send] identity",
-    {
-      textLen: t.length,
-      hasSession: !!pSession.value,
-      hasKey: !!pSession.value?.sessionKey,
-      mainPiniaSame: activePinia === mainPinia,
-      privId: priv.$id,
-      sessionsSize: priv.sessions.size,
-      pSessionId: pSession.value?.id,
-      messageCount: pSession.value?.messages.length ?? 0,
-    },
-  );
   if (!t || !pSession.value) return;
   sendError.value = "";
   try {
-    await priv.send(pSession.value.id, t, { viewOnce: viewOnce.value });
+    await remote.send(pSession.value.sessionId, t, { viewOnce: viewOnce.value });
     text.value = "";
     await nextTick();
     scrollEl.value?.scrollTo(0, scrollEl.value.scrollHeight);
@@ -85,27 +68,24 @@ async function send() {
 
 function burn() {
   confirmBurn.value = false;
-  if (pSession.value) priv.burn(pSession.value.id);
+  if (pSession.value) remote.burn(pSession.value.sessionId);
   router.replace({ name: "s5-chat-view", params: { chatId: chatId.value } });
 }
 
 // session death (peer burned / ttl / revoked) → back to the public chat
-watch(
-  () => pSession.value,
-  (s) => {
-    if (!s || s.status === "closed") {
-      router.replace({ name: "s5-chat-view", params: { chatId: chatId.value } });
-    }
-  },
-);
+watch(pSession, (s) => {
+  if (!s || s.status === "closed") {
+    router.replace({ name: "s5-chat-view", params: { chatId: chatId.value } });
+  }
+});
 
 // displaying is the read act — receipt the peer's view-once messages.
 // Receipts ride inside AES-GCM envelopes: the relay can't tell a
 // receipt from an ordinary message.
 watch(
-  () => [pSession.value?.id, pSession.value?.messages.length] as const,
-  ([id]) => {
-    if (id) priv.markDisplayed(id);
+  () => pSession.value?.messages.length,
+  () => {
+    if (pSession.value) remote.markDisplayed(pSession.value.sessionId);
   },
   { immediate: true },
 );
@@ -209,8 +189,8 @@ function fmtTs(ts: number) {
       <input
         v-model="text"
         class="h-11 min-w-0 flex-1 rounded-pill bg-bubble-in px-4 text-msg text-ink outline-none"
-        :class="{ 'opacity-50': !pSession?.sessionKey }"
-        :disabled="!pSession?.sessionKey"
+        :class="{ 'opacity-50': !pSession?.canSend }"
+        :disabled="!pSession?.canSend"
         placeholder="private message…"
         data-testid="priv-input"
         @keyup.enter="send"

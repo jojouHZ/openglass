@@ -5,33 +5,34 @@
      pwa-dev only. Auto-advances to S11b when the session is live. -->
 
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { useChatsStore } from "@openglass/core";
-import { usePrivateStore } from "@openglass/core/private/store";
+import type { PrivateInviteView } from "@openglass/core/private/remote";
+
+import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
-const priv = usePrivateStore();
+const remote = usePrivateRemote();
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
 
-const session = computed(() =>
-  peer.value ? priv.sessionByPeer(peer.value.id) : null,
-);
+const session = usePrivateSession(() => peer.value?.id);
 /** the invitee view needs THE incoming invite, not the best-ranked
  *  session — a live session may coexist with a stray second invite */
-const incoming = computed(() =>
-  priv.incomingInvites.find((s) => s.peer.id === peer.value?.id) ?? null,
-);
+const incoming = ref<PrivateInviteView | null>(null);
+const stopInvites = remote.watchInvites((v) => {
+  incoming.value = v.incoming.find((i) => i.peerId === peer.value?.id) ?? null;
+});
+onBeforeUnmount(stopInvites);
 
-// "gone" = the session object vanished — peer declined, invite expired,
-// or teardown wiped it. Status mutations arrive in-place, deletion
-// swaps the ref to null — watch the derived status so both fire.
+// "gone" = the remote emitted null — peer declined, invite expired, or
+// teardown wiped it. Watch the derived status so both transitions fire.
 watch(
   () => session.value?.status ?? "gone",
   (st) => {
@@ -47,15 +48,15 @@ function cancel() {
   // no cancel frame in the relay contract — the server-side invite dies
   // on its TTL; we just drop our local pending marker. If the server
   // already acked (inviting session exists) leave it to expire.
-  if (peer.value) priv.pendingInvites.delete(peer.value.id);
+  if (peer.value) remote.cancelInvite(peer.value.id);
   router.push({ name: "s5-chat-view", params: { chatId: chatId.value } });
 }
 
 function accept() {
-  if (incoming.value) priv.accept(incoming.value.id);
+  if (incoming.value) remote.accept(incoming.value.sessionId);
 }
 function declineIncoming() {
-  if (incoming.value) priv.decline(incoming.value.id); // drops the session
+  if (incoming.value) remote.decline(incoming.value.sessionId); // drops the session
 }
 </script>
 

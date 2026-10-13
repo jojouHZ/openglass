@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createApp } from "vue";
-import { getActivePinia } from "pinia";
 
 import {
   bindApiClient,
   createApiClient,
+  PRIVATE_REMOTE_KEY,
   useChatsStore,
   useSessionStore,
 } from "@openglass/core";
@@ -30,7 +30,6 @@ async function bootstrap() {
 
   const app = createApp(App);
   app.use(pinia);
-  app.provide("og.pinia", pinia);
 
   // Restored session → reopen realtime (fresh sessions connect on S4 mount)
   const session = useSessionStore(pinia);
@@ -49,16 +48,12 @@ async function bootstrap() {
     import.meta.env.VITE_API_MODE !== "mock"
   ) {
     const { usePrivateStore } = await import("@openglass/core/private/store");
+    const { createPrivateRemote } = await import("@openglass/core/private/remote");
     const { wirePrivateLifecycle } = await import("./privateBoot");
     const priv = usePrivateStore(pinia);
-    console.debug(
-      "[main] pinia active",
-      getActivePinia() === pinia,
-      "priv id",
-      priv.$id,
-      "sessions",
-      priv.sessions.size,
-    );
+    // the host sees only the facade — the store itself stays inside the
+    // private module and never crosses the MFE boundary
+    app.provide(PRIVATE_REMOTE_KEY, createPrivateRemote(priv));
     priv.boot("/api/v1/relay", () => session.accessToken);
     wirePrivateLifecycle(priv, session);
   }
