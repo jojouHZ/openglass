@@ -63,7 +63,7 @@ func (l *rateLimiter) allow(key string) (retryAfter time.Duration, ok bool) {
 	b.last = now
 
 	if b.tokens < 1 {
-		return time.Duration((1-b.tokens)/l.rate*float64(time.Second)), false
+		return time.Duration((1 - b.tokens) / l.rate * float64(time.Second)), false
 	}
 	b.tokens--
 	return 0, true
