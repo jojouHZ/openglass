@@ -68,6 +68,34 @@ export async function getOrCreateIdentity(): Promise<CryptoKeyPair> {
 }
 
 /**
+ * Boot sweep — the zero-trace guarantee for unclean shutdowns.
+ *
+ * teardown() deletes the whole DB, so a DB that still exists at boot
+ * means the previous session died without teardown (hard kill, crash,
+ * power loss — or a pagehide the browser cut short). Wipe it before any
+ * identity work so a deliberately-burned identity is never reused.
+ */
+export function prepareIdentityStore(): Promise<void> {
+  if (typeof indexedDB === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    let created = false;
+    const req = idb().open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      // fires only when the DB is created — i.e. none existed before
+      created = true;
+      req.result.createObjectStore(STORE);
+    };
+    req.onsuccess = () => {
+      req.result.close();
+      if (created) resolve();
+      else resolve(wipeIdentityStore());
+    };
+    // degraded, not broken — a failed sweep must never block boot
+    req.onerror = () => resolve();
+  });
+}
+
+/**
  * Zero-trace teardown — deletes the WHOLE database, not just the key row:
  * no leftover stores or allocated-but-empty schema folders.
  */

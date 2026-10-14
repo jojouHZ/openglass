@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Private-layer lifecycle wiring — pwa-dev only (VITE_PRIVATE_MODULE=1).
-// Extracted from main.ts so the pagehide/logout teardown contract is
-// unit-testable without booting the whole app.
+// The host owns platform lifecycle and drives it through the remote
+// contract; the core never touches window/document itself. Other shells
+// (Capacitor pause, Electron before-quit, native suspend) map their own
+// events onto the same two commands.
 
 import { watch } from "vue";
 
-import type { usePrivateStore } from "@openglass/core/private/store";
+import type { PrivateRemote } from "@openglass/core/private/remote";
 
 type SessionLike = { authed: boolean };
-type PrivateLike = Pick<
-  ReturnType<typeof usePrivateStore>,
-  "connect" | "teardown"
->;
+type PrivateLike = Pick<PrivateRemote, "connect" | "teardown">;
 
 /** Connect the relay while authed; wipe all private state on logout and
  *  on pagehide (the browser kills the tab — fire-and-forget teardown). */

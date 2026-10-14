@@ -138,7 +138,7 @@ describe("S11b verify", () => {
     expect(grid.findAll("span")).toHaveLength(12);
 
     await w.find('[data-testid="sas-confirm"]').trigger("click");
-    await new Promise((r) => setTimeout(r, 0)); // router.replace is async
+    await flushPromises(); // router.replace is async
     expect(priv().sessions.get("ps-1")!.status).toBe("verified");
     expect(router.currentRoute.value.name).toBe("s12-private-chat");
   });
@@ -149,7 +149,7 @@ describe("S11b verify", () => {
     const w = mount(S11bVerify, { global: globals() });
     await w.vm.$nextTick();
     await w.find('[data-testid="sas-mismatch"]').trigger("click");
-    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
     expect(sent.some((f) => f.type === "relay.burn" && f.data.sessionId === "ps-2"))
       .toBe(true);
     expect(priv().sessions.get("ps-2")!.status).toBe("closed");
@@ -187,7 +187,7 @@ describe("S12 private chat", () => {
 
     await w.find('[data-testid="burn-btn"]').trigger("click");
     await w.find('[data-testid="confirm-action"]').trigger("click");
-    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
     expect(priv().sessions.get("ps-4")!.status).toBe("closed");
     expect(priv().sessions.get("ps-4")!.messages).toHaveLength(0);
     expect(router.currentRoute.value.name).toBe("s5-chat-view");
@@ -202,7 +202,11 @@ describe("S12 private chat", () => {
     await w.find('[data-testid="view-once-toggle"]').trigger("click");
     await w.find('[data-testid="priv-input"]').setValue("vanish");
     await w.find('[data-testid="priv-send"]').trigger("click");
-    await flushPromises(); // real AES-GCM encrypt is async
+    // real AES-GCM resolves outside one flushPromises turn under load —
+    // wait on the condition, not on a timer
+    await vi.waitFor(() => {
+      expect(priv().sessions.get("ps-5")!.messages.at(-1)?.text).toBe("vanish");
+    });
     await w.vm.$nextTick();
 
     const msgs = priv().sessions.get("ps-5")!.messages;
@@ -232,7 +236,7 @@ describe("S11 session setup", () => {
       strict: true,
     });
     expect(priv().outgoingInvites).toContain(wife.id);
-    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
     expect(router.currentRoute.value.name).toBe("s10-private-invite");
   });
 
@@ -272,8 +276,7 @@ describe("S10 private invite", () => {
     // relay.declined → dropSession deletes the record entirely
     priv().sessions.delete("ps-out");
     priv().notify(); // raw mutation — the facade emits only on notify
-    await w.vm.$nextTick();
-    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
     expect(router.currentRoute.value.name).toBe("s5-chat-view");
   });
 });

@@ -25,7 +25,7 @@ import {
   type Envelope,
   type SessionKeyPair,
 } from "./engine";
-import { wipeIdentityStore } from "./keys";
+import { prepareIdentityStore, wipeIdentityStore } from "./keys";
 import { RelayClient, type ConnState, type PeerUser } from "./relay";
 
 export type PrivateStatus =
@@ -156,6 +156,9 @@ export const usePrivateStore = defineStore("private", {
       client?: RelayClient,
     ): void {
       if (this.client) return;
+      // a surviving identity DB means the last session died dirty —
+      // wipe before any identity work (fire-and-forget, never blocks)
+      void prepareIdentityStore();
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
       this.client = client ?? new RelayClient(relayUrl);

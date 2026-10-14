@@ -47,15 +47,16 @@ async function bootstrap() {
     import.meta.env.VITE_PRIVATE_MODULE === "1" &&
     import.meta.env.VITE_API_MODE !== "mock"
   ) {
-    const { usePrivateStore } = await import("@openglass/core/private/store");
-    const { createPrivateRemote } = await import("@openglass/core/private/remote");
+    const { createPrivateRemoteFor } = await import(
+      "@openglass/core/private/remote"
+    );
     const { wirePrivateLifecycle } = await import("./privateBoot");
-    const priv = usePrivateStore(pinia);
-    // the host sees only the facade — the store itself stays inside the
-    // private module and never crosses the MFE boundary
-    app.provide(PRIVATE_REMOTE_KEY, createPrivateRemote(priv));
-    priv.boot("/api/v1/relay", () => session.accessToken);
-    wirePrivateLifecycle(priv, session);
+    // the host sees only the facade — even bootstrap wiring goes through
+    // the contract; the store instance never crosses the MFE boundary
+    const remote = createPrivateRemoteFor(pinia);
+    app.provide(PRIVATE_REMOTE_KEY, remote);
+    remote.boot("/api/v1/relay", () => session.accessToken);
+    wirePrivateLifecycle(remote, session);
   }
 
   app.use(createAppRouter());

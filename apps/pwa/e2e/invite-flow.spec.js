@@ -59,18 +59,12 @@ async function seedSession(page, user) {
   }
 }
 
-test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) => {
-  const aliceCtx = await browser.newContext();
-  const alice = await aliceCtx.newPage();
-  const bobCtx = await browser.newContext();
-  const bob = await bobCtx.newPage();
-
-  await seedSession(alice, seed.users.alice);
-  await seedSession(bob, seed.users.bob);
-
+// Invite → accept → SAS → verify — both pages land on the private chat.
+async function establishSession(alice, bob, { strict = false } = {}) {
   // Alice starts the private session
   await alice.getByTestId("private-toggle").click();
   await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/setup$/);
+  if (strict) await alice.getByTestId("opt-strict").click();
   const startBtn = alice.getByTestId("start-private");
   await expect(startBtn).toBeEnabled({ timeout: 30000 });
   await startBtn.click();
@@ -96,6 +90,17 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
 
   await expect(alice).toHaveURL(/\/chats\/[^/]+\/private$/);
   await expect(bob).toHaveURL(/\/chats\/[^/]+\/private$/);
+}
+
+test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) => {
+  const aliceCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bobCtx = await browser.newContext();
+  const bob = await bobCtx.newPage();
+
+  await seedSession(alice, seed.users.alice);
+  await seedSession(bob, seed.users.bob);
+  await establishSession(alice, bob);
 
   // Alice sends a view-once message
   await alice.getByTestId("view-once-toggle").click();
@@ -134,6 +139,58 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 10000 });
   await expect(bob).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 10000 });
 
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test("zero-trace teardown: tab close ejects peer and leaves no IndexedDB", async ({ browser }) => {
+  const aliceCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bobCtx = await browser.newContext();
+  const bob = await bobCtx.newPage();
+
+  await seedSession(alice, seed.users.alice);
+  await seedSession(bob, seed.users.bob);
+  // strict session: the relay closes it instantly on peer disconnect —
+  // no 60 s grace wait in the test
+  await establishSession(alice, bob, { strict: true });
+
+  // Give teardown something real to wipe: stand up the private identity
+  // DB the dev-tier keystore uses. (The runtime store is volatile-only
+  // today; this exercises the real wipe path, not a trivial absence.)
+  await bob.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open("openglass-private", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("identity");
+        req.onsuccess = () => {
+          req.result.close();
+          resolve(undefined);
+        };
+        req.onerror = () => reject(req.error);
+      }),
+  );
+
+  // Hard close — pagehide → teardown() (or a dirty kill; either way the
+  // next boot's prepareIdentityStore sweep must leave nothing behind)
+  await bob.close();
+
+  // Strict peer-gone: relay.closed ejects Alice from the private screen
+  await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 15000 });
+
+  // A fresh page in Bob's context boots the module — whichever path ran
+  // (graceful teardown or the dirty-boot sweep), the DB must be gone
+  const probe = await bobCtx.newPage();
+  await probe.goto("/");
+  await expect
+    .poll(
+      async () =>
+        (await probe.evaluate(() => indexedDB.databases())).map((d) => d.name),
+      { timeout: 15000 },
+    )
+    .not.toContain("openglass-private");
+
+  await probe.close();
   await aliceCtx.close();
   await bobCtx.close();
 });

@@ -15,11 +15,13 @@
  * reactivity across the module boundary.
  */
 
+import type { Pinia } from "pinia";
+
 import type { ConnState, PeerUser } from "./relay";
-import type {
-  PrivateSession,
-  PrivateStatus,
+import {
   usePrivateStore,
+  type PrivateSession,
+  type PrivateStatus,
 } from "./store";
 
 export type { PrivateStatus } from "./store";
@@ -71,6 +73,15 @@ export interface PrivateInvitesView {
 
 /** Everything a host may ask of the private module. */
 export interface PrivateRemote {
+  // lifecycle — the host owns platform lifecycle (pagehide, app pause,
+  // logout) and maps it to these commands; the core never touches
+  // window/document itself, so every shell can drive the same contract.
+  boot(relayUrl: string, getAccessToken: () => string | null): void;
+  connect(): void;
+  /** zero-trace: wipe all volatile state, disconnect, delete the
+   *  IndexedDB identity store. Fire-and-forget on pagehide. */
+  teardown(): Promise<void>;
+
   /** Subscribe to the session view for a peer — immediate snapshot plus
    *  every subsequent mutation. Returns an unsubscribe handle. */
   watchSession(
@@ -159,6 +170,15 @@ export function createPrivateRemote(
   store.onChange(emit);
 
   return {
+    boot(relayUrl, getAccessToken) {
+      store.boot(relayUrl, getAccessToken);
+    },
+    connect() {
+      store.connect();
+    },
+    teardown() {
+      return store.teardown();
+    },
     watchSession(peerId, cb) {
       let subs = sessionSubs.get(peerId);
       if (!subs) {
@@ -211,4 +231,10 @@ export function createPrivateRemote(
       store.purgeRead(sessionId);
     },
   };
+}
+
+/** Composition-root helper — the host builds the remote through this
+ *  factory and never holds the store instance at all. */
+export function createPrivateRemoteFor(pinia: Pinia): PrivateRemote {
+  return createPrivateRemote(usePrivateStore(pinia));
 }

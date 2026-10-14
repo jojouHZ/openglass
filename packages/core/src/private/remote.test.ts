@@ -216,4 +216,24 @@ describe("PrivateRemote — host boundary", () => {
     store.notify();
     expect(seen.at(-1)).toBe("online");
   });
+
+  it("lifecycle: boot/connect/teardown are contract commands — the host never holds the store", async () => {
+    setActivePinia(createPinia());
+    const store = usePrivateStore();
+    const remote = createPrivateRemote(store);
+
+    // boot delegates: relay client is created through the contract only
+    remote.boot("/relay", () => "tok");
+    expect(store.client).not.toBeNull();
+
+    // connect is fire-and-forget safe even without a live socket
+    expect(() => remote.connect()).not.toThrow();
+
+    // teardown is the zero-trace command: volatile state + client gone
+    seeded(store);
+    await remote.teardown();
+    expect(store.sessions.size).toBe(0);
+    expect(store.client).toBeNull();
+    expect(store.relayState).toBe("offline");
+  });
 });
