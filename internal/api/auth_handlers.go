@@ -33,6 +33,13 @@ func (s *Server) requestOtp(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.ToLower(body.Email)
 
+	// per-email bucket — a victim's inbox can't be spammed through
+	// rotated/spoofed source IPs (the IP bucket ran in middleware)
+	if wait, ok := s.otpRequestMail.allow("mail|" + email); !ok {
+		rateLimited(w, wait)
+		return
+	}
+
 	// unknown email → invite gates account creation (contract: invite is
 	// validated here but consumed only at successful verifyOtp)
 	_, uerr := s.store.UserByEmail(r.Context(), email)

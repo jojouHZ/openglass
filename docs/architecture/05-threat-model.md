@@ -40,7 +40,7 @@ Two honest scoping conditions, no asterisks:
 | Stolen refresh token | Refresh rotation; server stores sha256(refresh) only | implemented |
 | Revoked session still using a live JWT | `SessionActive` re-check on WS attach + `session.revoked` → close 4401 | implemented |
 | Expired JWT keeping a live WS | `afterExpiry` drops the conn at token death | implemented |
-| API / auth endpoint flooding | **Rate limiting not wired yet** — OTP attempt limits exist, but no IP-level rate limit | **known gap** |
+| API / auth endpoint flooding | IP token-buckets on `otp/request`, `otp/verify`, `auth/refresh` + a per-email OTP bucket; `429 rate_limited` + `Retry-After` | implemented |
 | Presence leaking non-contact status | Mutual-contact scoping only | implemented |
 
 ## Private-Layer Attack Surface (dev tier)

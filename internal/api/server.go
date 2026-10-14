@@ -29,6 +29,12 @@ type Server struct {
 	hub    *ws.Hub      // nil in tests that don't exercise realtime
 	relay  *relay.Relay // nil when the private layer isn't wired
 
+	// auth rate buckets — see ratelimit.go; in-memory, IP/email keyed
+	otpRequestIP   *rateLimiter
+	otpRequestMail *rateLimiter
+	otpVerifyIP    *rateLimiter
+	refreshIP      *rateLimiter
+
 	// optional probes for /healthz — nil dep reports "down"
 	pgPing    func(context.Context) error
 	redisPing func(context.Context) error
@@ -71,6 +77,7 @@ func New(cfg *config.Config, st store.Store, sender auth.OtpSender, opts ...Opti
 		tokens: auth.NewTokens(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL),
 		sender: sender,
 	}
+	WithAuthRateLimits(DefaultAuthRateLimits())(s)
 	for _, o := range opts {
 		o(s)
 	}
@@ -87,9 +94,9 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("GET /healthz", s.healthz)
 
 	// auth — public
-	v1.HandleFunc("POST /auth/otp/request", s.requestOtp)
-	v1.HandleFunc("POST /auth/otp/verify", s.verifyOtp)
-	v1.HandleFunc("POST /auth/refresh", s.refreshTokens)
+	v1.HandleFunc("POST /auth/otp/request", s.limitIP(s.otpRequestIP, s.requestOtp))
+	v1.HandleFunc("POST /auth/otp/verify", s.limitIP(s.otpVerifyIP, s.verifyOtp))
+	v1.HandleFunc("POST /auth/refresh", s.limitIP(s.refreshIP, s.refreshTokens))
 
 	// auth — bearer
 	v1.HandleFunc("POST /auth/profile", s.requireAuth(s.completeProfile))
