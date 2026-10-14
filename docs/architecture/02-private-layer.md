@@ -1,10 +1,12 @@
 # Private Layer — Ephemeral Live Sessions
 
-> **Status: DESIGN — not implemented.** No relay endpoint, no key exchange,
-> no private messaging ships today. The screens exist only inside the
-> internal `pwa-dev` demo build (`VITE_PRIVATE_MODULE=1`), gated out of the
-> production bundle. Everything below is the intended contract, not a
-> guarantee — treat it as a spec under review, not shipped behavior.
+> **Status: IMPLEMENTED — dev tier.** The relay endpoint, key exchange, SAS
+> verification, view-once burn and zero-trace teardown all ship inside the
+> internal `pwa-dev` demo build (`VITE_PRIVATE_MODULE=1` + live API) and are
+> covered by real-browser E2E. The production PWA bundle still excludes the
+> module. Dev-tier caveats: session keys are ephemeral in-memory CryptoKeys
+> (no hardware keystore yet), single-tab per browser, and the guarantee
+> applies only after SAS verification.
 
 The private layer provides **burnable end-to-end encrypted chats**: live
 sessions that exist only while both parties are present, where the server acts

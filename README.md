@@ -6,7 +6,7 @@ communities and private deployments.
 - **Public layer** — a full messenger with server-side history. Server-trusted
   by design (see [Security model](#security-model)).
 - **Private layer** — ephemeral E2EE sessions where the server is a blind
-  relay. **Designed, not yet shipped** — see
+  relay. **Dev tier — ships in the dev host only** — see
   [docs/architecture/02-private-layer.md](docs/architecture/02-private-layer.md).
 
 ## Status
@@ -26,8 +26,10 @@ communities and private deployments.
 - Sessions: per-device list and revoke (per-session + logout)
 - PWA shell: installable, offline connectivity states
 
-**Designed, not shipped:** private layer (E2EE, SAS verification,
-burnable chats).
+**Dev tier (dev host only):** private layer — ephemeral E2EE sessions,
+SAS verification, view-once burn, zero-trace teardown. Requires
+`VITE_PRIVATE_MODULE=1` + `VITE_API_MODE=live`; gated out of the
+production PWA bundle.
 
 **Stubbed (501 `not_implemented`):** push notifications, abuse reports.
 
@@ -75,8 +77,9 @@ The public layer is **server-trusted**: messages are stored and readable
 by the host (TLS in transit, access control server-side). That is a
 deliberate MVP trade-off, documented in
 [docs/architecture/05-threat-model.md](docs/architecture/05-threat-model.md).
-The confidentiality guarantee lives in the private layer — which is not
-shipped yet, so treat every current conversation as host-readable.
+The confidentiality guarantee lives in the private layer — which today
+exists only as a dev-tier build in the dev host. Until it reaches
+production tier, treat every conversation as host-readable.
 
 ## Documentation
 
@@ -85,7 +88,7 @@ shipped yet, so treat every current conversation as host-readable.
 - [Threat model](docs/architecture/05-threat-model.md)
 - [API contract](docs/api/public-api.openapi.yaml) ·
   [WS events](docs/api/ws-events.md) · [Errors](docs/api/errors.md) ·
-  [Relay events](docs/api/relay-events.md) *(design)*
+  [Relay events](docs/api/relay-events.md)
 - [UI Kit](docs/ux/ui-kit.md) · [Components](docs/ux/components.md) ·
   [Design tokens](docs/ux/design-tokens.md)
 - [AI workflow](docs/ai-workflow.md) — RAG knowledge pipeline and

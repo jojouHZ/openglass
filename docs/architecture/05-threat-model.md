@@ -3,7 +3,8 @@
 ## Core Guarantee — scoped honestly
 
 The guarantee this document describes applies **to the private layer only**,
-which is **designed, not shipped**:
+which today ships as a **dev-tier build in the dev host** (gated out of the
+production PWA bundle):
 
 > Even in the worst case — a fully compromised relay — the attacker obtains
 > **ciphertext + metadata, never plaintext** — *provided the two clients
@@ -11,21 +12,22 @@ which is **designed, not shipped**:
 
 Two honest scoping conditions, no asterisks:
 
-1. **Today, every conversation is public-layer.** Public chats are stored
-   and readable by the host. TLS protects transit; the server itself is a
-   trusted party by design. Nothing shipped today is end-to-end encrypted.
-2. **Even once private ships, the guarantee is conditional on SAS
-   verification.** An unverified private session is MITM-able by the relay.
-   Without verification there is encryption-against-passive-observers —
-   not end-to-end security.
+1. **Every production-deployed conversation is public-layer.** Public chats
+   are stored and readable by the host. TLS protects transit; the server
+   itself is a trusted party by design. The private layer exists only in
+   the dev host (`VITE_PRIVATE_MODULE=1` + live API) as a dev-tier build —
+   ephemeral in-memory session keys, no hardware keystore yet.
+2. **The guarantee is conditional on SAS verification.** An unverified
+   private session is MITM-able by the relay. Without verification there
+   is encryption-against-passive-observers — not end-to-end security.
 
 ## What the Server Sees
 
 | Layer | Server sees | Server does NOT see |
 |-------|-------------|---------------------|
 | Public (shipped) | Full content (trusted by design) | — |
-| Private (designed, verified pair) | Ciphertext blobs, session existence, timing, sizes | Content, keys |
-| Private (designed, **unverified** pair) | Ciphertext blobs **it can re-key itself** — MITM-able | — |
+| Private (dev tier, verified pair) | Ciphertext blobs, session existence, timing, sizes | Content, keys |
+| Private (dev tier, **unverified** pair) | Ciphertext blobs **it can re-key itself** — MITM-able | — |
 
 ## Public-Layer Attack Surface (shipped today)
 
@@ -41,7 +43,7 @@ Two honest scoping conditions, no asterisks:
 | API / auth endpoint flooding | **Rate limiting not wired yet** — OTP attempt limits exist, but no IP-level rate limit | **known gap** |
 | Presence leaking non-contact status | Mutual-contact scoping only | implemented |
 
-## Private-Layer Attack Surface (designed)
+## Private-Layer Attack Surface (dev tier)
 
 | Threat | Mitigation |
 |--------|------------|
@@ -97,6 +99,6 @@ a post-MVP upgrade path.
 ## Trust Statement (user-facing)
 
 > Public chats are stored on the server of your community — trust your host.
-> Private chats *(when shipped)* are encrypted on your device, relayed
-> blindly, and die with the session — trust no one, **verify the fingerprint,
-> or the guarantee does not apply.**
+> Private chats are encrypted on your device, relayed blindly, and die with
+> the session — trust no one, **verify the fingerprint, or the guarantee
+> does not apply.**
