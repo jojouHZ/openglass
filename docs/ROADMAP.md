@@ -43,13 +43,17 @@ sound — the gaps are consent semantics and UI/UX polish.
 | U-4 | Chat list → Telegram-style row: avatar, name+preview, date/pin/mute, unread badge |
 | U-5 | displayName stays editable; tag immutable forever (rename-notify-mutuals is post-MVP) |
 
-### SAS verification — open decision
+### SAS verification — decided
 
 Grid shrinks to **5 emoji** (≈30 bits — minimum honest entropy for
 out-of-band MITM detection) plus an explicit hint: "compare out loud or
 in person — never send it in chat". GitHub-style asymmetric
 code-entry was rejected: it structurally invites sending the code over
 the channel being protected, which a MITM can rewrite.
+
+**QR verification** (both devices show/scan the SAS as a QR — Signal
+style) is the planned second mode; it lands with the private layer's
+production-tier work since it needs camera access and a QR dependency.
 
 ### Stub removal (new MVP scope)
 
@@ -63,7 +67,8 @@ the channel being protected, which a MITM can rewrite.
 
 - **Private layer → production tier**: hardware keystore
   (Keychain/Keystore/safeStorage), persistent signed identity
-  (trust-on-first-use), multi-tab support, HKDF domain separation
+  (trust-on-first-use), QR-code SAS verification, multi-tab support,
+  HKDF domain separation
 - **Shells**: Capacitor, Electron, then native iOS/Android/Desktop
 - **Group private chats** (currently 1-to-1 only)
 - **Double Ratchet** for private sessions
