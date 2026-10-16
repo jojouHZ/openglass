@@ -60,8 +60,8 @@ production-tier work since it needs camera access and a QR dependency.
 | Stub | Disposition |
 |------|-------------|
 | Fake folder tabs | remove (U-3) |
-| `POST /reports` (501) | implement: table + endpoint, owner-readable |
-| Push (VAPID/subscriptions 501) | either real web-push slice or routes leave the contract — no middle ground |
+| `POST /reports` (501) | implement: table + endpoint, operator-visible via DB until admin surface |
+| Push (VAPID/subscriptions 501) | **decided: routes leave the contract now**; real web-push returns post-MVP as a complete feature |
 
 ## Post-MVP Backlog
 
@@ -91,14 +91,15 @@ production-tier work since it needs camera access and a QR dependency.
 - Private layer inside the host chat window (F-3) keeps one mental
   model: a conversation that can go private, not a separate app mode.
 
-## Slicing Order
+## Slicing Order — decided
 
-| Slice | Contents |
-|-------|----------|
-| **F1** | Contacts consent model (F-1 + B1 + B2 + B4) — schema, contract, WS events, UI |
-| **F3** | UI polish pass (B6–B11 + U-3/U-4 + setup-screen visibility) |
-| **F2** | Private UX rework (B3, B5 + F-2/F-3/F-4/F-5 + SAS size) |
-| **F4** | Stub removal (folders, reports, push decision) |
+| Slice | Contents | Plan |
+|-------|----------|------|
+| **F3 first** | UI polish pass (B6–B11 + U-3/U-4 + S1 hint + S11 visibility) | `docs/plans/F3-ui-polish.md` |
+| **F1** | Contacts consent model (F-1 + B1 + B2 + B4) | `docs/plans/F1-contacts-consent.md` |
+| **F2** | Private UX rework (B3, B5 + F-2/F-3/F-4/F-5 + SAS=5) | `docs/plans/F2-private-ux.md` |
+| **F4** | Stub removal (push routes out, reports real, placeholders gone) | `docs/plans/F4-stub-removal.md` |
 
-F1 first — contacts gate every other flow. Private rework lands last so
-it builds on the finished consent + shell UX.
+UI polish leads: the visual surface is the weakest part and the other
+slices build on its finished components. Private rework lands last so
+it inherits the consent model and polished shell.
