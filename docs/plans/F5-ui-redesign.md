@@ -1,85 +1,97 @@
 # Slice F5 — UI Redesign Pass (LAST)
 
 Goal: replace the hand-rolled visual surface with a disciplined design
-system, using `stream-chat-vue` / `stream-chat-css` (GetStream) and
-Telegram as structural references — **structure only, no code, no
-runtime dependency** (their SDKs are React/Vue wrappers around the
-Stream service, which we do not use; we borrow the component
-architecture and CSS layering discipline).
+system. **Decided foundation: shadcn-vue + Reka UI** — owned
+copy-paste components (MIT), Radix-port primitives, Tailwind v4
+compatible, strict business aesthetic out of the box. Visual
+references remain Telegram (information density) and
+`stream-chat-vue`/`stream-chat-css` (chat-component structure — no
+code, no dependency).
+
+Rejected alternatives: daisyUI (weak overlay primitives), PrimeVue
+(heavy, opinionated behavior), advanced-chat (RC + owns behavior —
+duplicates our logic), Naive UI/Vuetify (non-Tailwind style systems).
 
 ## Why a dedicated slice
 
 F3 was a polish pass on the existing token system — it fixed defects,
 it did not redesign. The owner rates the visual surface as the weakest
-part of the product. A redesign belongs last: F1 introduces consent
-screens, F2 rebuilds the private surface, F4 deletes stubs — all must
-exist before they are restyled.
+part of the product (button placement especially). A redesign belongs
+last: F1 introduces consent screens, F2 rebuilds the private surface,
+F4 deletes stubs — all must exist before they are restyled.
+
+## What shadcn-vue + Reka UI buys us
+
+- **Correct overlay primitives** — Dialog, Sheet, Popover,
+  DropdownMenu, ContextMenu powered by floating-ui: the B6/B9 class
+  of bugs (detached menu, off-viewport sheet) is solved at the
+  primitive level, not patched per screen.
+- **a11y by default** — focus trap, ARIA, keyboard nav, focus rings.
+- **Owned code** — components are copied into the repo, not imported
+  from a package; zero lock-in, matches the "no stubs, owned code"
+  principle.
+- **Strict business look** — shadcn defaults are Linear/Vercel-style
+  minimalism; our token layer maps onto its CSS-variable theming.
 
 ## Scope
 
 ### 1. Design tokens v2 (`apps/pwa/src/styles/tokens.css`)
 
-- Audit the current scale (Source Code Pro mono, monochrome, 8pt grid)
-  against the redesign target — decide whether mono stays as brand or
-  becomes content-only.
-- Elevation tokens (shadows) — currently absent; sheets/menus use
-  ad-hoc `shadow-lg`.
-- Semantic tokens: `surface-1/2/3`, `text-primary/secondary/danger`,
-  `accent`, `state-*` — replacing literal color names so themes swap
-  cleanly.
-- **Theme layering** à la `stream-chat-css`: base layer + theme
-  overrides through CSS custom properties. `light`, `dark`,
-  `private` as peer themes — `.private-mode` stops being a special
-  snowflake and becomes a theme applied the same way.
+- Adopt the shadcn CSS-variable model (`--background`,
+  `--foreground`, `--primary`, `--muted`, `--border`, `--ring`,
+  `--destructive`, `--radius`) mapped onto our semantic names so
+  existing utilities keep resolving.
+- Keep or retire the Source Code Pro mono identity — owner decision
+  at slice start (mono = brand quirk vs readability).
+- Elevation tokens (shadows) — currently absent.
+- **Theme layering**: `light`, `dark`, `private` as peer themes via
+  CSS vars — `.private-mode` stops being a special snowflake.
 
-### 2. Canonical component inventory
+### 2. Primitive replacement (Reka/shadcn first)
 
-One component per role, screen files compose them (stream-chat's
-component discipline — ChannelList/Channel/MessageList/Message/
-Composer as separable units):
+In priority order — these are the components that hurt:
 
-| Ours today | Canonical target |
+| Current | Replacement |
 |---|---|
-| S4 rows inline | `ChannelList` + `ChannelListItem` (exists — formalise) |
-| S5 header | `ChannelHeader` (extracted component) |
-| `msg-scroll` block | `MessageList` + `Message` (sequence grouping, avatar-trail, meta row, date separators as data) |
-| Composer.vue | keep, restyle (reply/edit states, attachment strip) |
-| scattered modals/sheets | `Sheet`/`Modal` primitives with consistent placement rules |
-| — | `EmptyState`, `Skeleton`, `ErrorState` primitives — per component, not per screen |
+| `MessageMenu.vue` (manual clamp) | `ContextMenu` + `DropdownMenu` |
+| Member rights sheet (S9a) | `Sheet` (bottom/side variants) |
+| `ConfirmDialog` | `AlertDialog` |
+| Private setup modal (F2) | `Dialog` |
+| Tabs/folder strip | `Tabs` |
+| Toggles (strict, view-once) | `Switch` |
+| Toasts/errors | `Sonner`-style toast (if in scope) |
 
-### 3. Message grouping rules (stream-chat reference)
+### 3. Canonical chat inventory (stream-chat structure)
 
-Consecutive same-sender messages collapse avatar+name; meta row only
-on last-of-group; day separators as list items; time-gap threshold
-(~5 min) breaks a group. Current implementation approximates this —
-align to the reference rules exactly.
+One component per role — ChannelList/Item, ChannelHeader,
+MessageList + Message (sequence grouping, avatar-trail, meta row),
+Composer, DateSeparator, TypingIndicator — screens compose, never
+reimplement. Grouping rules: consecutive same-sender collapse,
+meta on last-of-group, ~5min gap threshold.
 
 ### 4. Interaction & a11y pass
 
-- Touch targets ≥44px, visible focus rings (keyboard nav).
-- Motion: 150–200ms ease transitions on sheets/menus/hover states —
-  none today.
-- Skeleton loading for chat list + message list (currently blank or
-  spinner-less).
-- Empty states: no chats, no contacts, no messages — designed, not
-  blank.
+- Touch targets ≥44px, keyboard-only navigation S4→S5→menu.
+- Motion: 150–200ms transitions on sheets/menus/hover.
+- Skeleton loading + designed empty states (no chats/contacts/
+  messages) — per component, not per screen.
 
 ### 5. Screens sweep
 
-S1–S14 + private surface against the new inventory — find and kill
-one-off styles, dead visual variants, inconsistent paddings.
+S1–S14 + private surface against the new inventory — kill one-off
+styles and dead visual variants. **Button placement audit** is a
+named requirement (owner flagged it specifically).
 
 ## Explicitly out of scope
 
-- No new features — this restyles what exists.
-- No stream-chat dependency or API — reference repo only.
+- No new features — restyle only what exists.
+- No stream-chat/shadcn runtime dependency — components live in-repo.
 - Private-layer crypto/state untouched (theme only).
-- Dark theme ships if cheap via token layering; otherwise post-MVP.
+- Dark theme ships via token layering if cheap; otherwise post-MVP.
 
 ## Verification
 
-- Visual checklist per screen (owner review, 3-browser pass like the
-  Oct 16 manual test).
-- All existing tests must stay green — testids are the contract.
+- Visual checklist per screen (owner review, 3-browser pass).
+- All existing tests stay green — testids are the contract.
 - `check-mvp-bundle`, typecheck, build, E2E.
 - a11y spot-check: keyboard-only navigation through S4→S5→menu.
