@@ -50,8 +50,12 @@ part of the product (button placement especially).
   `--foreground`, `--primary`, `--muted`, `--border`, `--ring`,
   `--destructive`, `--radius`) mapped onto our semantic names so
   existing utilities keep resolving.
-- Keep or retire the Source Code Pro mono identity — owner decision
-  at slice start (mono = brand quirk vs readability).
+- **Typography (owner decision): Source Code Pro mono only for
+  headings** (screen titles, section headers, tags/identifiers).
+  Body text, message bubbles, inputs, buttons and meta use a
+  readable sans (system UI stack / Inter-class — final face picked
+  in M1, self-hosted, no CDN). Font tokens split into
+  `--font-heading` (mono) and `--font-sans`.
 - Elevation tokens (shadows) — currently absent.
 - **Theme layering**: `light`, `dark`, `private` as peer themes via
   CSS vars — `.private-mode` stops being a special snowflake.
