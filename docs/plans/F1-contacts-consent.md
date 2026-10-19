@@ -65,6 +65,16 @@ for them. Decline → row removed.
 - B1: contacts list screen renders the store (`mutualContacts`)
 - B4: S1 invite hint (lands with F3) + verify UserByEmail path
 
+## Carried from F3 manual pass
+
+- B13: own-bubble alignment — F3's `w-full` highlight wrapper broke
+  `items-end` pushing; fixed in `3038a79` (wrapper owns
+  `justify-end`/`justify-start`). Listed here so the slice journal
+  records the regression origin.
+- Testing note from F3 review: add unit tests for `headerTarget`
+  (S5) and `signOut` (S14) — cheap additions while the contact
+  screens are being touched anyway.
+
 ## Store/mem mirror
 
 `Mem` implements identical semantics — contract tests must cover both
