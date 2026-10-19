@@ -23,8 +23,11 @@
   --color-canvas: #f8f8f8;
   --color-burn: #e03131;
 
-  /* Typography — Source Code Pro only, weight-flat 400 */
+  /* Typography v2 — Source Code Pro for headings only, Inter for
+     everything else (both self-hosted via @fontsource). */
+  --font-heading: "Source Code Pro", ui-monospace, monospace;
   --font-mono: "Source Code Pro", ui-monospace, monospace;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --text-screen-title: 24px;
   --text-header: 19px;
   --text-name: 15px;
@@ -34,6 +37,29 @@
   --text-sub: 11px;
   --text-sender: 10px;
   --text-micro: 9px;
+
+  /* shadcn-vue semantic aliases — map the shadcn CSS-variable model
+     onto our tokens so copied components resolve without edits. */
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-ink);
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-bg);
+  --color-secondary: var(--color-bubble-in);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted-foreground: var(--color-muted);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-accent);
+  --color-destructive: var(--color-danger);
+  --color-popover: var(--color-bg);
+  --color-popover-foreground: var(--color-ink);
+  --color-card: var(--color-bg);
+  --color-card-foreground: var(--color-ink);
+  --color-accent-foreground: var(--color-bg);
+
+  /* Elevation */
+  --shadow-pop: 0 4px 16px rgb(0 0 0 / 0.12);
+  --shadow-sheet: 0 -4px 24px rgb(0 0 0 / 0.14);
 
   /* Radius */
   --radius-input: 8px;
@@ -55,10 +81,20 @@
 /* Base layer */
 @layer base {
   html {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-weight: 400;
     color: var(--color-ink);
     background: var(--color-bg);
+  }
+
+  /* mono is reserved for headings, titles and identifiers */
+  h1,
+  h2,
+  h3,
+  .font-heading,
+  .text-screen-title,
+  .text-header {
+    font-family: var(--font-heading);
   }
 
   body {

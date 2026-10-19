@@ -16,6 +16,8 @@ import { pinia } from "./pinia";
 import { initInstallPrompt } from "./pwa/install";
 import { ApiClientKey } from "./provide";
 import { createAppRouter } from "./router";
+import "@fontsource-variable/inter";
+import "@fontsource/source-code-pro/400.css";
 import "./styles/tokens.css";
 
 async function bootstrap() {
