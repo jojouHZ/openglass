@@ -85,21 +85,38 @@ production-tier work since it needs camera access and a QR dependency.
 
 ## UX/UI Direction
 
-- Reference: Telegram's information density (row = avatar + name +
+- References: Telegram's information density (row = avatar + name +
   preview + right-side meta rail) and GetStream's component discipline
-  (`stream-chat-react`/`stream-chat-css` — structure only, no code).
+  (`stream-chat-react`/`stream-chat-css`/`stream-chat-vue` —
+  structure only, no code, no dependency).
+- What F5 borrows from stream-chat's architecture:
+  - **Component inventory**: their ChannelList → our S4, ChannelHeader
+    → S5 header, VirtualMessageList → msg-scroll, Message (sequence
+    grouping, avatar-trail, timestamp meta) → bubbles, Composer →
+    Composer.vue, DateSeparator, TypingIndicator, Avatar — one
+    canonical component per role, no screen-specific one-offs.
+  - **Theme layering**: `stream-chat-css` ships a base layer + theme
+    overrides via CSS custom properties — our `tokens.css` already
+    does this for `.private-mode`; F5 generalises it (light/dark/
+    private as peer themes, not ad-hoc overrides).
+  - **Message grouping rules**: consecutive same-sender messages
+    collapse avatar/name/timestamp — we do a weak version today;
+    their rules (time-gap threshold, last-of-group meta) are the
+    reference.
+  - **Empty/loading/error states per component**, not per screen.
 - Private layer inside the host chat window (F-3) keeps one mental
   model: a conversation that can go private, not a separate app mode.
 
 ## Slicing Order — decided
 
-| Slice | Contents | Plan |
-|-------|----------|------|
-| **F3 first** | UI polish pass (B6–B11 + U-3/U-4 + S1 hint + S11 visibility) | `docs/plans/F3-ui-polish.md` |
-| **F1** | Contacts consent model (F-1 + B1 + B2 + B4) | `docs/plans/F1-contacts-consent.md` |
-| **F2** | Private UX rework (B3, B5 + F-2/F-3/F-4/F-5 + SAS=5) | `docs/plans/F2-private-ux.md` |
-| **F4** | Stub removal (push routes out, reports real, placeholders gone) | `docs/plans/F4-stub-removal.md` |
+| Slice | Contents | Plan | Status |
+|-------|----------|------|--------|
+| **F3** | UI polish pass (B6–B11 + U-3/U-4 + S1 hint + S11 visibility) | `docs/plans/F3-ui-polish.md` | done (`de8acc1`+`3038a79`) |
+| **F1** | Contacts consent model (F-1 + B1 + B2 + B4) | `docs/plans/F1-contacts-consent.md` | next |
+| **F2** | Private UX rework (B3, B5 + F-2/F-3/F-4/F-5 + SAS=5) | `docs/plans/F2-private-ux.md` | |
+| **F4** | Stub removal (push routes out, reports real, placeholders gone) | `docs/plans/F4-stub-removal.md` | |
+| **F5** | **UI redesign pass** — full visual rework on stream-chat/Telegram references: tokens v2, canonical component inventory, theme layering, a11y/motion pass across all screens | `docs/plans/F5-ui-redesign.md` | |
 
-UI polish leads: the visual surface is the weakest part and the other
-slices build on its finished components. Private rework lands last so
-it inherits the consent model and polished shell.
+F5 lands last deliberately: consent-model screens (F1) and the
+reworked private surface (F2) should exist before they're restyled —
+repainting walls after the rooms are built, not before.
