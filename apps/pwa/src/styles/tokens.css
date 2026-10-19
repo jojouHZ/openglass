@@ -71,11 +71,15 @@
     min-height: 100dvh;
   }
 
-  /* Private-mode inversion — applied on a scoped root, never globally */
+  /* Private-mode inversion — applied on a scoped root, never globally.
+     The element MUST paint its own background: redefining --color-ink
+     to white over the body's white background makes everything
+     invisible otherwise. */
   .private-mode {
     --color-bg: #0e0e10;
     --color-bubble-in: #3c3c43;
     --color-bubble-own: #c4c4c4;
     --color-ink: #ffffff;
+    background: var(--color-bg);
   }
 }

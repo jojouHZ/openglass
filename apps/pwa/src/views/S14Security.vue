@@ -15,6 +15,13 @@ const busy = ref(false);
 const loadError = ref("");
 const confirmTarget = ref<DeviceSession | null>(null);
 const confirmRevokeAll = ref(false);
+const confirmSignOut = ref(false);
+
+async function signOut() {
+  confirmSignOut.value = false;
+  await session.logout().catch(() => undefined);
+  router.push({ name: "s1-invite" });
+}
 
 const others = computed(() => session.sessions.filter((s) => !s.current));
 
@@ -98,7 +105,16 @@ onMounted(async () => {
           <div class="text-meta text-muted">{{ fmtLastSeen(s.lastSeenAt) }}</div>
         </div>
         <button
-          v-if="!s.current"
+          v-if="s.current"
+          class="text-meta text-danger"
+          :disabled="busy"
+          data-testid="sign-out-this"
+          @click="confirmSignOut = true"
+        >
+          sign out
+        </button>
+        <button
+          v-else
           class="text-meta text-danger"
           :disabled="busy"
           :data-testid="`revoke-${s.id}`"
@@ -131,6 +147,14 @@ onMounted(async () => {
       confirm-label="revoke"
       @confirm="revoke"
       @cancel="confirmTarget = null"
+    />
+    <ConfirmDialog
+      v-else-if="confirmSignOut"
+      title="sign out?"
+      body="your session on this device will be closed"
+      confirm-label="sign out"
+      @confirm="signOut"
+      @cancel="confirmSignOut = false"
     />
     <ConfirmDialog
       v-else-if="confirmRevokeAll"

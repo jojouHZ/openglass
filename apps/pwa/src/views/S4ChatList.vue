@@ -12,17 +12,8 @@ const chats = useChatsStore();
 const session = useSessionStore();
 const router = useRouter();
 
-const folder = ref<"all" | "groups" | "private">("all");
-const privateModule = import.meta.env.VITE_PRIVATE_MODULE === "1";
-
-const filtered = computed(() => {
-  if (folder.value === "groups") return chats.chats.filter((c) => c.type === "group");
-  // private / work folders are placeholders — no folder semantics in contract
-  return chats.chats;
-});
-
 const sorted = computed(() =>
-  [...filtered.value].sort(
+  [...chats.chats].sort(
     (a, b) =>
       Number(b.pinned ?? false) - Number(a.pinned ?? false) ||
       b.lastActivityAt.localeCompare(a.lastActivityAt),
@@ -60,27 +51,15 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
       </button>
     </div>
 
-    <div class="flex gap-4 border-b border-line px-6 pb-2 text-meta">
+    <div class="flex items-center gap-4 border-b border-line px-6 pb-2 text-meta">
+      <span class="text-ink underline underline-offset-4" data-testid="tab-all">all</span>
       <button
-        :class="folder === 'all' ? 'text-ink underline underline-offset-4' : 'text-muted'"
-        data-testid="tab-all"
-        @click="folder = 'all'"
+        class="ml-auto text-muted/60"
+        disabled
+        title="chat folders — post-MVP"
+        data-testid="new-folder"
       >
-        all
-      </button>
-      <button
-        v-if="privateModule"
-        :class="folder === 'private' ? 'text-ink underline underline-offset-4' : 'text-muted'"
-        @click="folder = 'private'"
-      >
-        private
-      </button>
-      <button
-        :class="folder === 'groups' ? 'text-ink underline underline-offset-4' : 'text-muted'"
-        data-testid="tab-groups"
-        @click="folder = 'groups'"
-      >
-        groups
+        + new folder
       </button>
     </div>
 

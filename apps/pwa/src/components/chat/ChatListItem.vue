@@ -4,12 +4,13 @@
 import { computed } from "vue";
 
 import type { ChatSummary } from "@openglass/core";
-import { useChatsStore } from "@openglass/core";
+import { useChatsStore, useSessionStore } from "@openglass/core";
 
 const props = defineProps<{ chat: ChatSummary }>();
 const emit = defineEmits<{ open: [] }>();
 
 const chats = useChatsStore();
+const session = useSessionStore();
 
 const saved = computed(() => chats.isSaved(props.chat));
 const title = computed(() => chats.chatTitle(props.chat));
@@ -20,6 +21,11 @@ const preview = computed(() => {
   if (!m) return "";
   return m.text ?? "[attachment]";
 });
+
+// Telegram-style "you: " prefix on own outgoing last message.
+const ownLast = computed(
+  () => !!props.chat.lastMessage && props.chat.lastMessage.senderId === session.user?.id,
+);
 
 const time = computed(() => {
   const ts = props.chat.lastActivityAt;
@@ -50,8 +56,23 @@ const time = computed(() => {
     <span class="min-w-0 flex-1">
       <span class="flex items-center gap-1 text-name text-ink">
         {{ title }}
+      </span>
+      <span
+        v-if="typing"
+        class="block truncate text-msg text-accent"
+        data-testid="typing"
+      >
+        typing…
+      </span>
+      <span v-else class="block truncate text-msg text-muted" data-testid="preview">
+        <span v-if="ownLast" class="text-sub">you: </span>{{ preview }}
+      </span>
+    </span>
+    <span class="flex shrink-0 flex-col items-end gap-1">
+      <span class="text-meta text-muted">{{ time }}</span>
+      <span class="flex items-center gap-1.5">
         <svg
-          v-if="chat.pinned && !saved"
+          v-if="chat.pinned && !chat.unreadCount"
           viewBox="0 0 24 24"
           class="size-3 text-muted"
           fill="none"
@@ -62,28 +83,12 @@ const time = computed(() => {
             d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"
           />
         </svg>
-      </span>
-      <span
-        v-if="typing"
-        class="block truncate text-msg text-accent"
-        data-testid="typing"
-      >
-        typing…
-      </span>
-      <span v-else class="block truncate text-msg text-muted" data-testid="preview">
         <span
-          v-if="chat.type === 'group'"
-          class="mr-1 rounded-input bg-soft px-1 text-sub text-muted"
-        >group</span>{{ preview }}
+          v-if="chat.unreadCount"
+          class="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 py-0.5 text-sub text-bg"
+          data-testid="unread"
+        >{{ chat.unreadCount }}</span>
       </span>
-    </span>
-    <span class="flex shrink-0 flex-col items-end gap-1">
-      <span class="text-meta text-muted">{{ time }}</span>
-      <span
-        v-if="chat.unreadCount"
-        class="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 py-0.5 text-sub text-bg"
-        data-testid="unread"
-      >{{ chat.unreadCount }}</span>
     </span>
   </button>
 </template>

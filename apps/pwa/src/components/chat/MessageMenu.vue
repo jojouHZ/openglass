@@ -1,6 +1,7 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
+import { computed } from "vue";
 import type { LocalMessage } from "@openglass/core";
 
 // Message context menu — s5a. Reactions are NOT in the API contract,
@@ -30,6 +31,16 @@ const act = (fn: () => void) => () => {
   fn();
   emit("close");
 };
+
+// Anchor at the pointer, clamped inside the viewport — menu is w-44
+// (176 px) and up to ~5 rows (~50 px each).
+const MENU_W = 176;
+const MENU_H = 260;
+const PAD = 8;
+const pos = computed(() => ({
+  left: Math.max(PAD, Math.min(props.x, window.innerWidth - MENU_W - PAD)) + "px",
+  top: Math.max(PAD, Math.min(props.y, window.innerHeight - MENU_H - PAD)) + "px",
+}));
 </script>
 
 <template>
@@ -42,7 +53,7 @@ const act = (fn: () => void) => () => {
     >
       <div
         class="absolute w-44 rounded-card border border-line bg-bg py-2 shadow-lg"
-        :style="{ left: Math.min(x, 200) + 'px', top: Math.min(y, 320) + 'px' }"
+        :style="pos"
         data-testid="message-menu"
         @click.stop
       >

@@ -306,11 +306,11 @@ onMounted(async () => {
     <!-- member action sheet -->
     <div
       v-if="sheet"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-ink/30"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 sm:items-center"
       data-testid="member-sheet"
       @click.self="sheet = null"
     >
-      <div class="w-full max-w-md rounded-t-card bg-bg p-6 pb-8">
+      <div class="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-card bg-bg p-6 pb-8 sm:rounded-card">
         <div class="flex items-center gap-3">
           <span class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted">
             {{ sheet.user.displayName.slice(0, 1) }}

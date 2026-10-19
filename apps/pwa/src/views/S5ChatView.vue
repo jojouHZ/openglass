@@ -55,6 +55,15 @@ const dayLabels = computed(() => {
 });
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
 
+// Header title tap → group manage / peer profile (saved-messages: none).
+const headerTarget = computed(() => {
+  if (chat.value?.type === "group")
+    return { name: "s9a-group-manage", params: { chatId: chatId.value } };
+  if (peer.value && peer.value.id !== session.user?.id)
+    return { name: "s7-contact-profile", params: { userId: peer.value.id } };
+  return null;
+});
+
 // the host never touches the private store — only the remote facade's
 // snapshot of this peer's session (null in the mvp build)
 const privateRemote = injectPrivateRemote();
@@ -410,12 +419,16 @@ watch(
           <path d="M19 12H5" />
         </svg>
       </button>
-      <div class="min-w-0 flex-1">
+      <component
+        :is="headerTarget ? 'button' : 'div'"
+        class="min-w-0 flex-1 text-left"
+        @click="headerTarget && router.push(headerTarget)"
+      >
         <div class="truncate text-name text-ink">{{ title }}</div>
         <div class="text-sub" :class="typing ? 'text-accent' : 'text-muted'">
           {{ subtitle }}
         </div>
-      </div>
+      </component>
       <button
         v-if="chat?.type === 'direct' && peer && peer.id !== session.user?.id"
         class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
@@ -574,6 +587,10 @@ watch(
           <div
             v-for="(m, mi) in s"
             :key="m.id"
+            class="w-full"
+            :class="highlightId === m.id ? '-mx-6 bg-soft px-6 py-0.5' : ''"
+          >
+          <div
             :data-mid="m.id"
             class="flex max-w-[80%] items-end gap-2"
             @contextmenu.prevent="openMenu(m, $event)"
@@ -583,9 +600,9 @@ watch(
           >
             <span
               v-if="s[0]!.senderId !== session.user?.id"
-              class="size-7 shrink-0 rounded-full bg-bubble-in"
+              class="grid size-7 shrink-0 place-items-center rounded-full bg-bubble-in text-sub text-muted"
               :class="mi === s.length - 1 ? 'opacity-100' : 'opacity-0'"
-            />
+            >{{ (senderName(m) ?? "?").slice(0, 1) }}</span>
             <div
               class="rounded-card px-3 py-2 text-msg"
               :class="[
@@ -626,6 +643,7 @@ watch(
                 </span>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </template>

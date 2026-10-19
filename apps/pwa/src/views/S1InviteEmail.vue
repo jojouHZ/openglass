@@ -48,7 +48,7 @@ async function submit() {
       <h1 class="text-screen-title text-ink">OpenGlass</h1>
       <AppInput
         v-model="invite"
-        label="Invite code"
+        label="Invite code (new accounts only)"
         placeholder="invite code"
         autocomplete="off"
       />
