@@ -16,9 +16,18 @@ duplicates our logic), Naive UI/Vuetify (non-Tailwind style systems).
 
 F3 was a polish pass on the existing token system — it fixed defects,
 it did not redesign. The owner rates the visual surface as the weakest
-part of the product (button placement especially). A redesign belongs
-last: F1 introduces consent screens, F2 rebuilds the private surface,
-F4 deletes stubs — all must exist before they are restyled.
+part of the product (button placement especially).
+
+## Execution model (owner decision)
+
+- **Branch `f5-ui-redesign`** off `main` — all work lands there,
+  never on main.
+- Sequential milestones pushed to the branch; CI runs per push.
+- **Manual test gate**: owner reviews the running app, then gives an
+  explicit merge command — no merge without it.
+- If F1/F2/F4 land on main while F5 is in flight, the branch is
+  rebased before the manual gate so the redesign covers their
+  screens too.
 
 ## What shadcn-vue + Reka UI buys us
 

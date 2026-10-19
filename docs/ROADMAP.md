@@ -108,6 +108,7 @@ production-tier work since it needs camera access and a QR dependency.
 | **F4** | Stub removal (push routes out, reports real, placeholders gone) | `docs/plans/F4-stub-removal.md` | |
 | **F5** | **UI redesign pass** — shadcn-vue+Reka primitives, tokens v2, canonical component inventory, theme layering, a11y/motion pass across all screens | `docs/plans/F5-ui-redesign.md` | |
 
-F5 lands last deliberately: consent-model screens (F1) and the
-reworked private surface (F2) should exist before they're restyled —
-repainting walls after the rooms are built, not before.
+F5 runs on branch `f5-ui-redesign` — never merged without an
+explicit owner command after a manual-test gate. If it runs before
+F1/F2/F4 complete, it is rebased so the redesign also covers their
+screens.
