@@ -587,8 +587,11 @@ watch(
           <div
             v-for="(m, mi) in s"
             :key="m.id"
-            class="w-full"
-            :class="highlightId === m.id ? '-mx-6 bg-soft px-6 py-0.5' : ''"
+            class="flex w-full"
+            :class="[
+              m.senderId === session.user?.id ? 'justify-end' : 'justify-start',
+              highlightId === m.id ? '-mx-6 bg-soft px-6 py-0.5' : '',
+            ]"
           >
           <div
             :data-mid="m.id"
