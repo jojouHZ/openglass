@@ -1,13 +1,22 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
-import { computed } from "vue";
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+} from "reka-ui";
+
 import type { LocalMessage } from "@openglass/core";
 
 // Message context menu — s5a. Reactions are NOT in the API contract,
 // so the kit's react-bar is intentionally omitted (no invented fields).
+// Positioning is delegated to Reka/floating-ui: the menu anchors to a
+// 1x1 virtual trigger at the pointer and flips/shifts inside the viewport.
 
-const props = defineProps<{
+defineProps<{
   message: LocalMessage;
   own: boolean;
   /** group pinMessages right / owner — server still enforces */
@@ -27,77 +36,67 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const act = (fn: () => void) => () => {
-  fn();
-  emit("close");
-};
-
-// Anchor at the pointer, clamped inside the viewport — menu is w-44
-// (176 px) and up to ~5 rows (~50 px each).
-const MENU_W = 176;
-const MENU_H = 260;
-const PAD = 8;
-const pos = computed(() => ({
-  left: Math.max(PAD, Math.min(props.x, window.innerWidth - MENU_W - PAD)) + "px",
-  top: Math.max(PAD, Math.min(props.y, window.innerHeight - MENU_H - PAD)) + "px",
-}));
+const ITEM =
+  "flex w-full cursor-default items-center px-4 py-2.5 text-left text-msg text-body outline-none data-[highlighted]:bg-canvas";
 </script>
 
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 bg-ink/30"
+      class="fixed inset-0 z-40 bg-ink/30"
       data-testid="menu-scrim"
       @click="emit('close')"
       @contextmenu.prevent="emit('close')"
-    >
-      <div
-        class="absolute w-44 rounded-card border border-line bg-bg py-2 shadow-lg"
-        :style="pos"
+    />
+  </Teleport>
+  <DropdownMenuRoot :open="true" :modal="false" @update:open="(v) => !v && emit('close')">
+    <DropdownMenuTrigger
+      class="pointer-events-none fixed size-px opacity-0"
+      :style="{ left: x + 'px', top: y + 'px' }"
+      tabindex="-1"
+      aria-hidden="true"
+    />
+    <DropdownMenuPortal>
+      <DropdownMenuContent
+        class="z-50 w-44 rounded-card border border-line bg-bg py-2 shadow-pop outline-none"
+        side="bottom"
+        align="start"
+        :side-offset="4"
+        :collision-padding="8"
         data-testid="message-menu"
-        @click.stop
+        @close-auto-focus.prevent
       >
-        <button class="menu-item" data-testid="mi-reply" @click="act(() => emit('reply'))()">
+        <DropdownMenuItem :class="ITEM" data-testid="mi-reply" @select="emit('reply'), emit('close')">
           reply
-        </button>
-        <button class="menu-item" data-testid="mi-copy" @click="act(() => emit('copy'))()">
+        </DropdownMenuItem>
+        <DropdownMenuItem :class="ITEM" data-testid="mi-copy" @select="emit('copy'), emit('close')">
           copy
-        </button>
-        <button
+        </DropdownMenuItem>
+        <DropdownMenuItem
           v-if="own"
-          class="menu-item"
+          :class="ITEM"
           data-testid="mi-edit"
-          @click="act(() => emit('edit'))()"
+          @select="emit('edit'), emit('close')"
         >
           edit
-        </button>
-        <button v-if="canPin" class="menu-item" data-testid="mi-pin" @click="act(() => emit('pin'))()">
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          v-if="canPin"
+          :class="ITEM"
+          data-testid="mi-pin"
+          @select="emit('pin'), emit('close')"
+        >
           {{ message.pinned ? "unpin" : "pin" }}
-        </button>
-        <button
+        </DropdownMenuItem>
+        <DropdownMenuItem
           v-if="canDelete"
-          class="menu-item text-danger"
+          :class="[ITEM, 'text-danger']"
           data-testid="mi-delete"
-          @click="act(() => emit('delete'))()"
+          @select="emit('delete'), emit('close')"
         >
           delete
-        </button>
-      </div>
-    </div>
-  </Teleport>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenuPortal>
+  </DropdownMenuRoot>
 </template>
-
-<style scoped>
-.menu-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  padding: 10px 16px;
-  font-size: var(--text-msg);
-  color: var(--color-body);
-  text-align: left;
-}
-.menu-item:hover {
-  background: var(--color-canvas);
-}
-</style>

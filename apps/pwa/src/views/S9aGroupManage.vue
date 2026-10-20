@@ -15,6 +15,7 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppInput from "../components/AppInput.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import Sheet from "../components/ui/Sheet.vue";
 import UserRow from "../components/UserRow.vue";
 
 const route = useRoute();
@@ -304,13 +305,13 @@ onMounted(async () => {
     </div>
 
     <!-- member action sheet -->
-    <div
-      v-if="sheet"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 sm:items-center"
+    <Sheet
+      :open="!!sheet"
+      title="member actions"
       data-testid="member-sheet"
-      @click.self="sheet = null"
+      @update:open="(v) => !v && (sheet = null)"
     >
-      <div class="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-card bg-bg p-6 pb-8 sm:rounded-card">
+      <template v-if="sheet">
         <div class="flex items-center gap-3">
           <span class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted">
             {{ sheet.user.displayName.slice(0, 1) }}
@@ -358,8 +359,8 @@ onMounted(async () => {
           <button class="py-2 text-left text-name text-muted" @click="sheet = null">close</button>
         </div>
         <div v-if="sheetError" class="mt-2 text-meta text-danger" data-testid="sheet-error">{{ sheetError }}</div>
-      </div>
-    </div>
+      </template>
+    </Sheet>
 
     <ConfirmDialog
       v-if="confirmKind"
