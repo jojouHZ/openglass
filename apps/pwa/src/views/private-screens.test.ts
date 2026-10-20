@@ -226,7 +226,7 @@ describe("S11 session setup", () => {
     await w.vm.$nextTick();
 
     await w.find('[data-testid="ttl-300"]').trigger("click");
-    await w.find('[data-testid="opt-strict"]').setValue(true);
+    await w.find('[data-testid="opt-strict"]').trigger("click");
     await w.find('[data-testid="start-private"]').trigger("click");
 
     // burn-on-read moved to the per-message composer toggle — the

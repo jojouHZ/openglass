@@ -10,6 +10,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useChatsStore } from "@openglass/core";
 import type { ConnState } from "@openglass/core/private/remote";
 
+import Switch from "../../components/ui/Switch.vue";
 import { usePrivateRemote } from "../../privateRemote";
 
 const route = useRoute();
@@ -76,7 +77,7 @@ function start() {
 
     <!-- flags -->
     <label class="mt-6 flex items-center gap-3">
-      <input v-model="strict" type="checkbox" class="size-4 accent-current" data-testid="opt-strict" />
+      <Switch v-model="strict" data-testid="opt-strict" />
       <span class="text-msg text-ink">strict mode
         <span class="text-meta text-muted">— any disconnect kills the session instantly</span>
       </span>
