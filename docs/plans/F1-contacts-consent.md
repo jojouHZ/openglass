@@ -1,101 +1,119 @@
-# Slice F1 — Contacts Consent Model (SECOND)
+# Slice F1 — Contacts Consent Model
 
 Goal: replace one-way `AddContact` with request → accept → mutual.
-Closes the group-spam vector (B2), the invisible-contacts UI gap (B1)
-and the returning-user invite confusion (B4) in one coherent model.
+Closes the group-spam vector (B2), the invisible-contacts UI gap (B1) and
+the returning-user invite confusion (B4) in one coherent model. Runs on
+`main` (no redesign dependency); the Contacts tab is restyled later by
+F5-M4.
+
+## Step 0 — Dependabot alert #2 (chore)
+
+`vite` 8.3.0–8.3.2 carries GHSA-698v-4r3x-3vcv (launch-editor
+`escapeCmdArgs()` omits `%` escaping on Windows; dev-server only, patched
+in **8.3.3**; Dependabot PR #45 proposes the same bump). Applied as the
+first commit of this slice: bump `vite` to `8.3.3` via pnpm, verify
+build/tests/bundle guard. No security-policy or release-age settings are
+touched.
 
 ## Model
 
 ```
-A ── POST /contacts (B) ──► contact_requests row (pending)
-B ── accept ──► both contact edges created atomically → mutual
-B ── decline ──► request dead; A can re-request later
-No response ──► nothing visible except B's incoming-requests list
+A ── POST /contacts {B} ──► contact_requests (pending)        WS contact.request → B
+B ── accept ──► ONE tx: both contacts rows + request deleted  WS contact.accepted → A, B
+B ── decline ──► request marked declined (SILENT)             requester still sees "pending"
+A  ── resend ──► no-op while pending/declined; rate limited
+A ── cancel ──► request deleted                               WS contact.request.withdrawn → B
+B ── POST /contacts {A} while A→B is pending ──► auto-accept (mutual)
 ```
 
-One-way edges stop existing: a contact is either pending or mutual.
-Mutual remains the gate for direct chats and group invites.
+`contacts` rows now exist **only as mutual pairs** (structural: both edges
+written in one transaction). Mutual remains the gate for direct chats and
+group invites.
+
+### Decisions taken in this plan (reversible, flagged for review)
+1. **Silent decline.** A declined request is hidden from the requester
+   (still shown as pending; a resend is a silent no-op). No rejection
+   signal, no re-spam loop, nothing to leak. Replaces the old draft
+   `request_declined (403)`.
+2. **Group invites live in their own table** (`group_invites`), **not** as
+   a `chat_members.state` column. Every existing membership query (chat
+   list, fan-out, message permissions, unread counts) stays untouched, so
+   an invited user can never read a group by a forgotten filter.
+3. **Same silent-decline rule for group invites.**
+4. **Mutual gate everywhere** (create group, add members, direct chat);
+   the old gate accepted a one-way outgoing edge.
+5. **Unfriend removes both edges**; existing chats are not deleted and
+   message gating is unchanged (documented limitation, not part of F1).
+6. **Rate limiting** reuses the in-memory token bucket from the auth
+   limiter on `POST /contacts` and group invites (per user).
+7. `Contact.verifiedAt` is untouched here (removed in F7).
 
 ## Schema (migration 0003)
 
 ```sql
-CREATE TABLE contact_requests (
-  requester_id uuid REFERENCES users(id) ON DELETE CASCADE,
-  target_id    uuid REFERENCES users(id) ON DELETE CASCADE,
-  status       text NOT NULL DEFAULT 'pending'
-               CHECK (status IN ('pending','declined')),
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (requester_id, target_id)
-);
+contact_requests(requester_id, target_id, status 'pending'|'declined',
+                 created_at, updated_at, PK(requester_id,target_id),
+                 CHECK(requester_id <> target_id))
+group_invites(chat_id, invitee_id, inviter_id, status 'pending'|'declined',
+              created_at, PK(chat_id,invitee_id))
+-- data: existing one-way edges become pending requests (consent is not
+-- silently granted); only mutual pairs remain in contacts.
 ```
 
-Accept inserts BOTH `contacts` rows in one transaction — mutual is
-structural, not inferred. Existing one-way rows migrate to pending
-requests (data is dev-tier anyway).
+## API deltas (contract-first: openapi + ws-events + errors before code)
 
-## API deltas (contract-first — openapi.yaml before code)
+- `POST /contacts {userId}` → 201 `{relationship, request?|contact?}`
+  (`contact_outgoing` or auto-accepted `contact_mutual`); 200 on an
+  already-pending resend; 409 already contacts; 400 self; 404 unknown;
+  429 rate limited.
+- `GET /contacts` → **mutual only**.
+- `GET /contacts/requests` → `{incoming: ContactRequest[], outgoing: ContactRequest[]}`
+- `POST /contacts/requests/{userId}/accept` → 200 `{contact}`
+- `POST /contacts/requests/{userId}/decline` → 204
+- `DELETE /contacts/requests/{userId}` → 204 (cancel outgoing)
+- `DELETE /contacts/{userId}` → 204 (removes both edges)
+- `POST /groups`, `POST /groups/{id}/members`: members must be **mutual**;
+  non-owner members become invites. `Chat.invited?: User[]` for members.
+- `GET /group-invites` → `{invites: GroupInvite[]}`
+- `POST /group-invites/{chatId}/accept` → 200 `{chat}`; `.../decline` → 204
+- `GET /users/{id}.relationship` keeps its enum, now request-derived.
 
-- `POST /contacts` → sends request (201 `contact_request`)
-- `POST /contacts/requests/{userId}/accept` / `/decline`
-- `GET /contacts/requests` → `{incoming, outgoing}`
-- `GET /contacts` → accepted mutuals only
-- `POST /groups` memberIds gate: mutuals only, members land as
-  `invited` (B2 fix below)
-- Errors: `request_pending` (409), `request_declined` (403)
-
-## WS events
-
+### WS events
 `contact.request` (target), `contact.accepted` (both),
-`contact.declined` (requester), `group.invite` (invitee),
-`group.invite.accepted` (group members), `contact.request` badge in
-chat list.
+`contact.request.withdrawn` (target), `contact.request.resolved` (actor's
+other devices), `contact.removed`, `group.invite` (invitee),
+`group.invite.resolved` (invitee's other devices), `chat.new` /
+`chat.updated` on accept. `contact.added` is retired.
 
-## B2 — group consent
+## Frontend
+- Core: contacts store gains `incoming`/`outgoing`, `sendRequest`,
+  `accept`, `decline`, `cancel`, `requestCount`; chats store gains
+  `invites`, `acceptInvite`, `declineInvite`; WS handlers; mock client and
+  generated schema updated together.
+- PWA (current styling): **Contacts root** (`/contacts`: requests, sent,
+  contacts), S6 relationship-aware actions, S7 states (stranger /
+  outgoing / incoming with Accept·Decline / mutual), S4 header badge +
+  "Group invitations" strip, S8/S9a pickers use mutuals and show invited.
+  F5-M4 later moves Contacts under the tab bar (concept 07).
+- B4: S1 hint already shipped (F3); returning-user path covered by an E2E.
 
-`chat_members.state`: `invited` → `member`. Invitees see a pending
-invite banner/list entry, not the group. Accept → `member` + `chat.new`
-for them. Decline → row removed.
-
-## UI
-
-- S6: "Send contact request" + pending state on results
-- New: **Contacts root screen** (`/contacts`): requests (accept/decline),
-  sent (pending, resend), contacts list. Built in the current styling
-  here; F5-M4 puts it under the bottom tab bar (Contacts tab, badge =
-  pending requests). Design: `docs/ux/concept-07/02-navigation.html`.
-- `Contact.verifiedAt` is not touched here — it is removed from the
-  contract in F7 (verification is local and device-bound).
-- S7: relationship states — stranger / outgoing pending / incoming
-  pending (accept-decline buttons) / mutual
-- B1: contacts list screen renders the store (`mutualContacts`)
-- B4: S1 invite hint (lands with F3) + verify UserByEmail path
-
-## Carried from F3 manual pass
-
-- B13: own-bubble alignment — F3's `w-full` highlight wrapper broke
-  `items-end` pushing; fixed in `3038a79` (wrapper owns
-  `justify-end`/`justify-start`). Listed here so the slice journal
-  records the regression origin.
-- Testing note from F3 review: add unit tests for `headerTarget`
-  (S5) and `signOut` (S14) — cheap additions while the contact
-  screens are being touched anyway.
-
-## Store/mem mirror
-
-`Mem` implements identical semantics — contract tests must cover both
-stores (existing `pg_test` + `mem` parity harness).
+## Security
+- Request spam: per-user bucket + silent decline + no stranger can reach
+  a group without accepting.
+- Existence privacy: invitees get 404 for the group until they accept
+  (invites are not memberships); decline reveals nothing.
+- No new PII in events; user objects only.
 
 ## Tests
+- Store (pg + mem parity): request→accept→mutual, silent decline, resend
+  no-op, cancel, reverse auto-accept, migration of one-way edges,
+  unfriend, group invite → accept/decline, mutual gate on direct chat and
+  group create/add, invitee 404.
+- API/WS: all endpoints and every event assertable.
+- Core: store + mock contract tests. PWA: view tests.
+- E2E `contact-flow.spec.js`: request → accept → direct chat; group invite
+  accept; non-contact invite impossible.
 
-- Contract: request→accept→mutual, decline→invisible, re-request after
-  decline, group invite flow, mutual gate on `openDirectChat`.
-- WS: all four events assertable.
-- E2E: add `contact-flow.spec.js` — request/accept → group invite
-  accept → direct chat unlock.
-
-## Risks
-
-- Migration on populated DB: existing one-way edges → pending requests
-  (don't silently mutate consent).
-- Event ordering: `contact.accepted` must reach both sides before any
-  direct-chat `chat.new`.
+## Carried
+- B13 own-bubble alignment (fixed `3038a79`); unit tests for `headerTarget`
+  and `signOut` added alongside the contact screens.
