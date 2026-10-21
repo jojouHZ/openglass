@@ -57,7 +57,7 @@ Two honest scoping conditions, no asterisks:
 |--------|------------|
 | MITM on key exchange | Device identity keys + out-of-band verification ritual (5 emoji / QR) pin each peer device once; every handshake is signed by the pinned key — a relay cannot substitute ephemeral keys. Unpinned pairs cannot open a private session at all |
 | Public-key directory lies | The directory is untrusted storage; substitution is caught by the ritual |
-| Stolen/lost device with an unlocked browser profile | Device lock (F7b): identity wrapped at rest, attempt-limited unlock, wipe on repeated failures; remote revoke wipes on next contact. Deters casual physical access; **does not** stop an offline attacker who copies the profile and brute-forces the wrapper (hardware-backed unlock only in native shells) |
+| Stolen/lost device with an unlocked browser profile | Device vault + lock (F8): secrets wrapped at rest with a PIN/passkey-derived key, exponential delay, wipe on repeated failures (dev tier first), remote revoke wipes on next contact. Deters casual physical access; **does not** stop an offline attacker who copies the profile and brute-forces the wrapper (hardware-backed unlock only in native shells) |
 | Mode confusion (sending a secret publicly / mistaking the layer) | Private palette differs by hue in both app themes, mask glyph on every private bubble, ringed composer, private-only composer while a session is live |
 | Buffer hijack in grace window | Per-session resume token issued at accept |
 | Blob flooding / DoS | Per-session quota + rate limiting |

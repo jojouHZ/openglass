@@ -83,7 +83,7 @@ native-shell item.
   (Keychain/Keystore/safeStorage) with OS-enforced unlock limits and
   biometrics, hoster-signed identity keys, multi-tab support, HKDF domain
   separation (device identity, pinning, QR/emoji verification and the
-  device lock are **built earlier**, in dev-PWA slice F7)
+  device lock are **built earlier**: F7 identity/pins, F8 vault + lock, F9 device trust)
 - **Shells**: Capacitor, Electron, then native iOS/Android/Desktop
 - **Group private chats** (currently 1-to-1 only)
 - **Double Ratchet** for private sessions
@@ -93,6 +93,9 @@ native-shell item.
 - **Offline send queue**, server-side message search (public only —
   E2EE history search is impossible by design)
 - **Real chat folders**
+- **Auth hardening** (F8/F9 remainder): wipe-after-failures in release
+  builds, hardware-backed unlock, passkey device binding, risk-based
+  step-up, token binding + rotation-reuse detection, instance lock policy
 - **Rename notification to mutual contacts**
 - **Desktop split view** (list | chat | info panel) — slice F6
 - **Admin surface**: reports review, moderation, rare direct-DB
@@ -116,10 +119,18 @@ native-shell item.
 | 1 | **F1** Contacts consent (F-1, B1, B2, B4) — also unblocks the Contacts tab | main | `docs/plans/F1-contacts-consent.md` |
 | 2 | **F4** Stub removal (push routes out, reports real) | main | `docs/plans/F4-stub-removal.md` |
 | 3 | **F5 core** M3–M5: tokens/themes, tab bar, Contacts root, list + chat | branch `f5-ui-redesign` (not pushed) | `docs/plans/F5-ui-redesign.md` |
-| 4 | **F7** Device identity & verified contacts (+ F7b device lock, pending owner confirmation) | branch | `docs/plans/F7-device-identity.md` |
+| 4 | **F7** Device identity & verified contacts (wipe on sign-out until F8) | branch | `docs/plans/F7-device-identity.md` |
+| 4b | **F8** Device vault & lock — optional lock (PIN/passkey), vault for tokens + identity, auto-lock; sign-out keeps the encrypted vault | branch | `docs/plans/F8-device-vault-lock.md` |
+| 4c | **F9** Device trust & step-up auth (server): MVP = new-device email notification only; rest after MVP | main/branch | `docs/plans/F9-device-trust-stepup.md` |
 | 5 | **F5-M6 = F2** private pane in the new design | branch | `docs/plans/F2-private-ux.md` |
 | 6 | F5 M7–M8 sweep + local gate; owner manual test; merge **on owner command only** | branch → main | |
 | later | F6 desktop split view | | |
+
+Release-MVP boundary for auth/lock (owner-confirmed): optional app lock
+(PIN + passkey where supported), email+OTP on every new device,
+sessions list, new-device login email. After MVP — and implemented fully
+on **desktop first**: wipe-after-failures in release builds, hardware
+unlock, passkey device binding, risk-based step-up, instance lock policy.
 
 Rationale: F1 is a security fix (group spam) and a hard dependency of the
 Contacts tab; F2 would be built twice if done on the old styling, so it

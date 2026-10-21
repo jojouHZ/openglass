@@ -29,9 +29,14 @@ this entry — decisions and documentation only.
   (an unpinned pair cannot open a session).
 - Zero-trace is split: session data = zero trace; device identity + pins =
   the single persistent, per-user, wipe-on-sign-out store.
-- Device lock (PIN/passkey-PRF wrapper, attempt-limited wipe, OTP
-  re-enrol) is proposed as F7b with honest limits; awaiting owner
-  confirmation.
+- Device lock became its own slices after the owner clarified the
+  model: **F8** vault + optional lock (layers: account auth / app lock /
+  vault), **F9** server device trust and step-up (device continuity, not
+  IP, is the trust signal — VPN-friendly). Release-MVP gets only the
+  optional lock, OTP on new device and a new-login email; wipe-after-
+  failures, hardware unlock, risk-based step-up and passkey binding wait
+  for desktop. Sign-out wipes identity until the vault exists, then
+  keeps the encrypted vault.
 - Order: F1 → F4 on `main`; F5 core → F7 → F2-in-F5 → gate on the
   unpushed branch; merge only on owner command.
 

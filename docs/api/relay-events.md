@@ -186,8 +186,9 @@ signed-in user, because IndexedDB is the only browser persistence that can
 hold non-extractable keys. This store contains **no messages and no
 session keys** — an automated E2E scan asserts exactly that. It is
 destroyed (`indexedDB.deleteDatabase`, no empty shells left behind) on:
-sign-out, "revoke this device" from Security & sessions, device-lock wipe
-(F7), or an explicit "forget this device". Native shells use platform
+sign-out (until the F8 vault exists; afterwards sign-out only *locks* the
+encrypted vault), "revoke this device" from Security & sessions, vault
+wipe (F8), or an explicit "forget this device". Native shells use platform
 keystores instead.
 
 Additionally:

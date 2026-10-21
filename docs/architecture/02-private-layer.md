@@ -67,7 +67,7 @@ session lifetime.
   dedicated IndexedDB** (`openglass-private`) holding the **device identity
   and the pinned peer keys** — never messages or session keys. The store is
   scoped per signed-in user and is **wiped on sign-out / device revoke /
-  device-lock wipe** (see `docs/plans/F7-device-identity.md`). Weakest
+  vault wipe** (see `docs/plans/F7-device-identity.md` and `docs/plans/F8-device-vault-lock.md`). Weakest
   tier of all shells — no enclave, XSS-compromisable (a script can *use*
   the key to sign but cannot export it) — and it exists **only** in the
   `pwa-dev` build; `pwa-mvp` ships no private code at all. Zero-trace

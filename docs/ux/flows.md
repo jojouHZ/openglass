@@ -352,6 +352,26 @@ per-chat mute), so that I control interruptions.
 **US-6.4** As a user, I want to see the platform security tier of my
 current device, so that I understand my local protection level.
 
+**US-6.5** As a user, I want an **optional device lock** (prompted at
+first login, never forced): biometrics via passkey where the browser
+supports it, otherwise a PIN/passcode, with auto-lock (immediately / 1 /
+5 min / 1 h), so that someone holding my device cannot open the app. The
+lock gates the whole app when on (public chats included) and protects the
+stored secrets (session tokens, device identity, pins) — see
+`docs/plans/F8-device-vault-lock.md`.
+
+**US-6.6** As a user on a new device, I always sign in with email + OTP;
+afterwards the app asks for the most convenient unlock (biometrics → PIN).
+A suspicious sign-in (new device, repeated failures, several anomalies at
+once) asks for a stronger check (passkey or an email code); **an IP or
+country change alone never does** — VPN use must stay frictionless
+(`docs/plans/F9-device-trust-stepup.md`; the full policy ships after MVP).
+
+**US-6.7** As a user, if the device wipes after too many wrong PINs
+(post-MVP for release builds), I want to recover the account with an
+email OTP, understanding that contacts will see a new, unverified device
+and I must verify them again — keys are never backed up.
+
 **Transitions**
 - `S4 → S13 → S14` and back
 - `S14`: session list → revoke → confirmation → session killed
@@ -407,6 +427,11 @@ silent.
 - **Fonts**: Inter (UI, messages) + Source Code Pro (headings,
   identifiers), both self-hosted (OFL). No third-party font CDN anywhere
   in the app.
+- **Device lock**: optional, prompted at first login; the same factor
+  unlocks the app and the encrypted vault. In a browser "Face ID" means a
+  passkey with user verification — there is no direct biometric API. The
+  PWA lock is a deterrent against casual access, not hardware-grade
+  protection; do not claim otherwise in UI copy.
 - **Verification ritual placement**: verification happens **before** a
   private session — from the header lock, from S7, or from Contacts —
   never inside a session. Verified pairs are pinned per device pair and

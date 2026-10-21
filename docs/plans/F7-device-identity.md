@@ -68,42 +68,20 @@ persistent store (see `docs/api/relay-events.md`). The old assertion
 database contains only identity + pins, no message or session material".
 The dirty-boot sweep wipes session material but keeps identity.
 
-### Sign-out / switch user
-Identity and pins are scoped per user and destroyed on sign-out and on
-"revoke this device" (otherwise a second person signing in on the same
-browser would see the first user's verified-contact graph).
+### Sign-out / switch user (owner-confirmed)
+Until the F8 vault exists, identity and pins are scoped per user and
+**destroyed on sign-out** and on "revoke this device" — otherwise a
+second person signing in on the same browser would read the first user's
+verified-contact graph in plaintext. After F8, sign-out *locks* the
+encrypted vault and keeps it (see F8), so the same user re-verifies
+nothing after logging back in.
 
-## F7b — device lock (PM + Security proposal, awaiting owner confirmation)
+## Device lock → moved to F8
 
-Owner idea: unlock factor on entry (passkey / 2FA / Face ID); repeated
-wrong entries wipe the identity; recovery via email OTP.
-
-Recommended shape:
-- **Scope of the lock:** gates *private features only* (layer switch,
-  verification, sessions) — not the whole app; public chat is already
-  protected by the server session. Re-lock after N minutes in background.
-- **Factor:** local PIN/passphrase by default (login stays email OTP — no
-  new account password); **passkey with WebAuthn PRF** as the unlock
-  factor where the browser supports it; native shells use biometrics via
-  platform keystores later.
-- **At-rest protection:** identity private key is wrapped (AES-GCM) with a
-  key from the PIN (PBKDF2, high iteration count) or the passkey PRF
-  output; unwrapped at unlock into a non-extractable runtime key. The key
-  exists as extractable material only inside the creation call.
-- **Attempts:** delay after 3 failures (exponential), **wipe identity +
-  pins after 10**; counter and wrapper metadata in the private DB.
-- **Recovery:** email OTP restores the **account session** and creates a
-  **new device identity**; peers see an unknown device and must re-verify.
-  Old keys/pins are never recoverable (consistent with "no key backup").
-- **Remote revoke** (S14) wipes the identity on the device's next contact
-  with the server (best-effort; an offline device is not reached).
-- **Honest limits (documented in the threat model):** the attempt counter
-  is enforced in JavaScript — it deters casual physical access (unlocked
-  laptop, borrowed phone), **not** an offline attacker who copies the
-  profile and brute-forces the wrapper; PBKDF2 cost and PRF raise that
-  bar, hardware-backed attempt limits arrive with native shells. An
-  attacker can also *trigger* the wipe on purpose (self-DoS) — bounded:
-  public chats are unaffected, only local private identity is lost.
+The unlock factor, encrypted vault and attempt-limited wipe are their own
+slice (`docs/plans/F8-device-vault-lock.md`) because they also protect
+session tokens and apply to the **release** PWA. Until F8 exists, F7
+keeps the simple rule below.
 
 ## Tests
 - Core unit: identity create/load, fingerprint symmetry, pin store, key
@@ -114,7 +92,6 @@ Recommended shape:
   ritual; DB scan (no messages/session keys); sign-out wipes the DB;
   second user on the same browser sees no pins.
 - Backend contract tests for the directory (mutual-only read, revoke).
-- F7b: wrong-PIN delay/wipe, OTP re-enrol creates a new identity.
 
 ## Risks
 - Largest security change since the private layer shipped: protocol
