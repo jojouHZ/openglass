@@ -70,7 +70,7 @@ the frontend as components during implementation.
 | Chat screen | status-bar / header / day-group / composer / bottom-nav stack |
 | Bubble anatomy | tray grid: name / chip / privacy / body / time / state / reaction |
 | Chat-item anatomy | avatar / name+preview / time+badge / divider |
-| Private session | dark screen, private header, masked bubbles, dark composer |
+| Private session | private palette (violet-ink hue, mask-pattern background), mask glyph on every private bubble, ringed composer — see `concept-07` |
 
 ## Component library (local)
 

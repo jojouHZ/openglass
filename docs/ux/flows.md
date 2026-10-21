@@ -28,7 +28,7 @@ navigation event, every screen lists the data it needs.
 | S10 | Private session invite (in-chat card) | Private | pwa-dev only |
 | S11 | Private session setup + mutual verify | Private | pwa-dev only |
 | S11b | Device-pair verification ritual (emoji grid / QR) | Private | pwa-dev only |
-| S12 | Chat view in PRIVATE MODE (same window, private messages styled dark/muted with lock icon, dark header w/ countdown + BURN) | Private | pwa-dev only |
+| S12 | Chat view in PRIVATE MODE (same window — a pane of S5, not a route; private palette, mask glyph on every private bubble, header chips: Verified · countdown · strict, BURN) | Private | pwa-dev only |
 | S13 | Profile & settings | Public | shipped |
 | S14 | Security & sessions | Public | shipped |
 | S15 | PWA install / push / offline | Public | shipped — install prompt + offline banner live; push card hidden (backend is `501`) |
@@ -230,8 +230,9 @@ actions are hidden or explained, not silently failing.
 **Core concept**: a private session is NOT a separate chat window — it is
 a **mode of the existing 1-1 conversation**. A privacy toggle in the chat
 header switches the conversation between public and private mode. Private
-messages render inline in the same timeline, visually distinct (dark
-muted bubbles + lock icon), and burn without leaving the window.
+messages render inline in the same timeline, visually distinct (private
+palette, mask glyph on every private bubble), and burn without leaving
+the window. The conversation never changes screen.
 
 **US-5.1** As a user in a 1-1 chat, I want to flip a privacy toggle, so
 that I can start exchanging sensitive data without leaving the
@@ -240,13 +241,17 @@ conversation.
 **US-5.2** As the invited user, I want to accept or decline the invite
 inside the same chat, so that I control when the mode activates.
 
-**US-5.3** As the inviter, I want to set session lifetime (1 min–24 h,
-default 10 min, remember last choice) in a modal before the session
-starts.
+**US-5.3** As the inviter, I want to set the session in a sheet (modal
+on desktop) before it starts: lifetime presets 5 min / 15 min / 1 hour
+(server accepts 1 min–24 h), a strict-mode switch, and a "remember these
+settings" checkbox. The sheet states plainly what the server sees
+(session existence, timing, size — never content).
 
-**US-5.3b** As a participant, I want a flame (burn) icon on every private
-message, so that I can destroy individual messages manually — full
-point-level control instead of a session-wide flag.
+**US-5.3b** As a participant, I want a compact vertical **view-once
+switch** (flame) in the private composer and a "Burn" action in every
+private message's menu, so that I control destruction per message
+instead of per session. Until the contact is verified the switch slot
+shows a lock.
 
 **US-5.3a** As BOTH participants, I want verification to follow a
 per-device TOFU (trust-on-first-use) model:
@@ -276,31 +281,47 @@ per-device TOFU (trust-on-first-use) model:
 | QR code | "Maximum — verify in person" | Face-to-face anchor; paranoid mode |
 | Hoster-signed identity keys | "Verified by instance" — automatic | Only for previously verified device pairs (pinned keys) |
 
+> **Implementation status (owner decision):** this model is built **now**
+> in the dev PWA (slice F7, `docs/plans/F7-device-identity.md`) — device
+> identity key, signed handshake, local pins, directory of public keys.
+> The release PWA contains no private layer and therefore none of it.
+> Native/desktop shells later swap IndexedDB for platform keystores.
+
 **Trust indicators**: contacts and chats show a binary verification
 chip — `unverified` (no pinned key or key changed) / `verified`
 (key pinned, matches). Device details surface on tap ("verified:
 my iOS ↔ their iOS · my desktop: unverified"), keeping the chip clean.
 
-**US-5.3c** As a participant, I want session setup and verification to
-appear as an in-chat system card (not a modal), so that the flow stays
-inside the conversation timeline — same visual language as invite cards
-and session markers.
+**US-5.3c** As a participant, I want the session's *settings* in a sheet
+(US-5.3) and every other stage — invite sent, waiting, verification
+ritual, session started, session ended — as in-chat cards/dividers, so
+that the flow stays inside the conversation timeline with one visual
+language. There is no separate verification screen inside a session.
 
 **US-5.4** As a participant, I want an unmistakable private-mode
-indicator: dark header with countdown + lock, muted message styling,
-and a BURN action — so that I can never mistake which mode I'm in.
+indicator: the private palette (a violet-ink hue that exists in both app
+themes), a mask pattern background, a mask glyph on every private bubble,
+a ringed composer with a mask placeholder, and header chips (Verified ·
+countdown · strict) — so that I can never mistake which mode I'm in,
+including in the dark app theme and without relying on colour alone. In
+private mode the composer sends **private only**; to write publicly the
+layer is switched off.
 
 **US-5.5** As a participant, I want to toggle private mode OFF and back
 ON while the session is alive (lifetime not expired, not burned), so
 that I can mix public and private messages in one conversation.
 
 **Transitions**
-- `S5 (toggle ON) → S11`: setup modal — lifetime only
-- `S11 → verify screen`: mutual fingerprint check, both sides
-- `S11 → S10`: partner sees invite card in chat → accept/decline
-- `S10 accept → verify` for invitee → both toggles ON
-- `private mode ON → S12 state`: dark header, countdown, BURN, private
-  messages inline (dark bubbles + lock)
+- `S5, contact unverified`: the header shows a **lock** ("Verify")
+  instead of the layer switch → tap runs the device-bound verification
+  ritual (US-5.3a) as an in-chat card → on success the switch appears
+- `S5 (switch ON) → setup sheet`: lifetime / strict / remember
+- `send invite`: in-chat divider "invite sent", composer stays public
+- `peer accepts`: the chrome flips to the private palette **at accept**;
+  both sides are already verified (an invite can only be sent/accepted
+  between verified device pairs), so the session starts encrypted at once
+- `private mode ON → S12 state`: countdown, BURN, private messages
+  inline with mask glyph, ringed composer
 - `toggle OFF (session alive)`: back to public mode, private history
   stays visible until burn/expiry
 - `burn / expiry / grace exceeded`: private messages destroyed, toggle
@@ -311,8 +332,11 @@ that I can mix public and private messages in one conversation.
 - Disconnect mid-session → 60 s grace, visible "waiting" state → auto-burn
 - App killed → same as disconnect; no session restore (zero persistence)
 - Mode-confusion guard: private mode must be visually unmistakable —
-  dark header, lock icon on every private bubble, changed composer
-  placeholder ("Ephemeral message…")
+  private palette + mask pattern, mask glyph on every private bubble,
+  ringed composer, placeholder "Private message", a divider where the
+  session started, public history recessed
+- Page reload / app kill: private messages are memory-only and are gone —
+  the timeline shows "private session lost" instead of vanishing silently
 
 ## Flow 6 — Profile & Settings
 
@@ -369,14 +393,25 @@ silent.
 - **Push payload privacy**: notifications carry no message content —
   "New message" + sender display name at most. Private sessions never
   trigger push (relay-only, no server-readable content anyway).
-- **Dark theme**: deferred post-MVP. Dark surfaces are reserved for the
-  private layer as a mode-confusion guard; a general dark theme would
-  weaken that signal. Tokens are structured so a `.theme-dark` can be
-  added later without refactoring.
-- **Fonts**: Source Code Pro is self-hosted (`docs/ux/fonts/`, OFL).
-  No third-party font CDN anywhere in the app.
-- **Verification ritual placement**: S11b is reachable both inside the
-  session-setup flow and standalone from S7 contact profile (US-2.5).
+- **Dark theme**: shipped with the redesign (Light / Dark / System in
+  Settings → Appearance). The old rule "dark surfaces are reserved for the
+  private layer" is **retired**: private is distinguished by hue (violet),
+  mask glyph, pattern and ringed composer in both themes. An automated
+  test asserts the private tokens stay hue-distinct from the public ones.
+- **Navigation**: a bottom tab bar (Chats · Contacts · Settings) on root
+  screens only; hidden in an open chat and on detail/sub-screens (group
+  info, devices & sessions, verification, PWA prompts). Tab badges: unread
+  chats, pending contact requests.
+- **Layer vs encryption icons**: mask = the private *layer* (switch,
+  bubble marker, pattern); lock = *encryption/verification status*.
+- **Fonts**: Inter (UI, messages) + Source Code Pro (headings,
+  identifiers), both self-hosted (OFL). No third-party font CDN anywhere
+  in the app.
+- **Verification ritual placement**: verification happens **before** a
+  private session — from the header lock, from S7, or from Contacts —
+  never inside a session. Verified pairs are pinned per device pair and
+  stored locally (dev PWA now; native shells on platform keystores). The
+  release PWA has no private layer and therefore no verification.
 - **Two PWA builds**: `pilot` — full build incl. the private layer
   (demo/testing track); `regular` — public layer only, private module
   is tree-shaken out (no code, no UI entry points). Build-time flag,

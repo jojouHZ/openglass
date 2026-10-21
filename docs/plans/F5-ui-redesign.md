@@ -1,110 +1,64 @@
-# Slice F5 — UI Redesign Pass (LAST)
+# Slice F5 — UI Redesign (concept 07 "Slate Tabs")
 
-Goal: replace the hand-rolled visual surface with a disciplined design
-system. **Decided foundation: shadcn-vue + Reka UI** — owned
-copy-paste components (MIT), Radix-port primitives, Tailwind v4
-compatible, strict business aesthetic out of the box. Visual
-references remain Telegram (information density) and
-`stream-chat-vue`/`stream-chat-css` (chat-component structure — no
-code, no dependency).
-
-Rejected alternatives: daisyUI (weak overlay primitives), PrimeVue
-(heavy, opinionated behavior), advanced-chat (RC + owns behavior —
-duplicates our logic), Naive UI/Vuetify (non-Tailwind style systems).
-
-## Why a dedicated slice
-
-F3 was a polish pass on the existing token system — it fixed defects,
-it did not redesign. The owner rates the visual surface as the weakest
-part of the product (button placement especially).
+Goal: bring the product to the approved visual concept —
+`docs/ux/concept-07/` (open `index.html`; generator + data in the same
+folder; ten exploration variants in `docs/ux/mockups-f5/`). Foundation:
+**shadcn-vue + Reka UI** (owned copy-paste components, floating-ui
+overlays, a11y defaults); stream-chat is a structure reference only.
 
 ## Execution model (owner decision)
+- Branch `f5-ui-redesign`, **never pushed and never merged without an
+  explicit owner command**; all verification (unit, typecheck, build,
+  bundle guard, E2E) runs locally; the owner does a manual test gate,
+  then compares old vs new UI, then merges on command.
+- Rebased onto `main` after F1/F4 land so the redesign covers their
+  screens.
+- Milestones M1 (foundation) and M2 (Reka primitives: ConfirmDialog,
+  MessageMenu, Sheet, Switch) are done on the branch.
 
-- **Branch `f5-ui-redesign`** off `main` — all work lands there,
-  never on main.
-- Sequential milestones pushed to the branch; CI runs per push.
-- **Manual test gate**: owner reviews the running app, then gives an
-  explicit merge command — no merge without it.
-- If F1/F2/F4 land on main while F5 is in flight, the branch is
-  rebased before the manual gate so the redesign covers their
-  screens too.
+## Slice order (decided)
+`F1 contacts → F4 stubs (main)` → `F5 core (M3–M5)` → `F7 device identity`
+→ `F5-M6 private pane (= F2, in the new design)` → `M7 sweep` → `M8 gate`.
+Desktop split view is a separate later slice (F6).
 
-## What shadcn-vue + Reka UI buys us
+## Decisions embedded in the concept
+- **Palette**: four modes — Light, Dark, Private-on-light, Private-on-dark;
+  slate base, one blue primary, violet reserved for the private layer;
+  every pair AA-checked (`docs/ux/design-tokens.md`, `palette.mjs`).
+- **Typography**: Inter for UI/messages, Source Code Pro for headings and
+  identifiers; weights 400–700.
+- **Navigation**: bottom tab bar (Chats · Contacts · Settings) on root
+  screens only, hidden in chats and sub-screens; tab badges (unread,
+  pending contact requests). Settings root shows the bar.
+- **Dark theme** ships (Settings → Appearance: Light / Dark / System);
+  private mode is hue + mask glyph + pattern + ringed composer in both.
+- **Identity cues**: avatars coloured by tag hash; chat-list `private`
+  chip and Contacts shield from device pins (dev PWA only).
+- **Mask = private layer; lock = encryption/verification status.**
 
-- **Correct overlay primitives** — Dialog, Sheet, Popover,
-  DropdownMenu, ContextMenu powered by floating-ui: the B6/B9 class
-  of bugs (detached menu, off-viewport sheet) is solved at the
-  primitive level, not patched per screen.
-- **a11y by default** — focus trap, ARIA, keyboard nav, focus rings.
-- **Owned code** — components are copied into the repo, not imported
-  from a package; zero lock-in, matches the "no stubs, owned code"
-  principle.
-- **Strict business look** — shadcn defaults are Linear/Vercel-style
-  minimalism; our token layer maps onto its CSS-variable theming.
+## Milestones
+| # | Scope |
+|---|-------|
+| M1 ✅ | shadcn stack, fonts, token aliases |
+| M2 ✅ | Reka primitives: ConfirmDialog, MessageMenu, Sheet, Switch |
+| M3 | Tokens v3 (four modes as CSS variables), theme store + Appearance setting + `theme-color` meta, Avatar (hash colour), Chip, contrast + hue tests |
+| M4 | App shell + tab bar (route meta `nav`), Contacts root (requests / sent / contacts — needs F1), Settings root restyle |
+| M5 | Chat list rows, chat view: header, bubbles (tail style), grouping, pinned bar, attachments (photo/file cards), reply quote, typing, composer |
+| M6 | Private pane + sheet + lock/switch states (= F2 plan, after F7) |
+| M7 | Remaining screens (S1–S3, S7–S9a, S14, S15), motion, a11y pass, empty/loading/error states |
+| M8 | Local gate: unit, typecheck, build, bundle guard, E2E, concept-vs-app side-by-side review, owner manual test |
 
-## Scope
-
-### 1. Design tokens v2 (`apps/pwa/src/styles/tokens.css`)
-
-- Adopt the shadcn CSS-variable model (`--background`,
-  `--foreground`, `--primary`, `--muted`, `--border`, `--ring`,
-  `--destructive`, `--radius`) mapped onto our semantic names so
-  existing utilities keep resolving.
-- **Typography (owner decision): Source Code Pro mono only for
-  headings** (screen titles, section headers, tags/identifiers).
-  Body text, message bubbles, inputs, buttons and meta use a
-  readable sans (system UI stack / Inter-class — final face picked
-  in M1, self-hosted, no CDN). Font tokens split into
-  `--font-heading` (mono) and `--font-sans`.
-- Elevation tokens (shadows) — currently absent.
-- **Theme layering**: `light`, `dark`, `private` as peer themes via
-  CSS vars — `.private-mode` stops being a special snowflake.
-
-### 2. Primitive replacement (Reka/shadcn first)
-
-In priority order — these are the components that hurt:
-
-| Current | Replacement |
-|---|---|
-| `MessageMenu.vue` (manual clamp) | `ContextMenu` + `DropdownMenu` |
-| Member rights sheet (S9a) | `Sheet` (bottom/side variants) |
-| `ConfirmDialog` | `AlertDialog` |
-| Private setup modal (F2) | `Dialog` |
-| Tabs/folder strip | `Tabs` |
-| Toggles (strict, view-once) | `Switch` |
-| Toasts/errors | `Sonner`-style toast (if in scope) |
-
-### 3. Canonical chat inventory (stream-chat structure)
-
-One component per role — ChannelList/Item, ChannelHeader,
-MessageList + Message (sequence grouping, avatar-trail, meta row),
-Composer, DateSeparator, TypingIndicator — screens compose, never
-reimplement. Grouping rules: consecutive same-sender collapse,
-meta on last-of-group, ~5min gap threshold.
-
-### 4. Interaction & a11y pass
-
-- Touch targets ≥44px, keyboard-only navigation S4→S5→menu.
-- Motion: 150–200ms transitions on sheets/menus/hover.
-- Skeleton loading + designed empty states (no chats/contacts/
-  messages) — per component, not per screen.
-
-### 5. Screens sweep
-
-S1–S14 + private surface against the new inventory — kill one-off
-styles and dead visual variants. **Button placement audit** is a
-named requirement (owner flagged it specifically).
-
-## Explicitly out of scope
-
-- No new features — restyle only what exists.
-- No stream-chat/shadcn runtime dependency — components live in-repo.
-- Private-layer crypto/state untouched (theme only).
-- Dark theme ships via token layering if cheap; otherwise post-MVP.
+## Out of scope
+- No new features beyond the concept (F1/F7/F2 carry the logic).
+- Desktop split view (F6), real chat folders, push.
+- No runtime stream-chat dependency.
 
 ## Verification
-
-- Visual checklist per screen (owner review, 3-browser pass).
-- All existing tests stay green — testids are the contract.
-- `check-mvp-bundle`, typecheck, build, E2E.
-- a11y spot-check: keyboard-only navigation through S4→S5→menu.
+- All existing testids stay the contract; E2E selectors updated only
+  where flows change (F2).
+- Automated contrast test over all four palettes; hue-distinctness test
+  for private vs public tokens.
+- Bundle guard: private palette, mask pattern and all private UI stay in
+  the private chunk.
+- Visual review: screenshots of key screens beside the matching concept
+  frames (human comparison, not pixel diff).

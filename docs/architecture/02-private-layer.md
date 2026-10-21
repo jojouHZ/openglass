@@ -64,10 +64,14 @@ session lifetime.
   iOS/macOS Keychain (Secure Enclave), Android Keystore, Electron `safeStorage`.
 - **Dev-tier exception (pwa-dev only)**: the internal demo host has no
   keystore, so identity keys are **non-extractable `CryptoKey` objects in a
-  dedicated IndexedDB** (`openglass-private`). Weakest tier of all shells —
-  no enclave, XSS-compromisable — and it exists **only** in the `pwa-dev`
-  build; `pwa-mvp` ships no private code at all. Full teardown deletes the
-  database itself (see zero-trace discipline in `docs/api/relay-events.md`).
+  dedicated IndexedDB** (`openglass-private`) holding the **device identity
+  and the pinned peer keys** — never messages or session keys. The store is
+  scoped per signed-in user and is **wiped on sign-out / device revoke /
+  device-lock wipe** (see `docs/plans/F7-device-identity.md`). Weakest
+  tier of all shells — no enclave, XSS-compromisable (a script can *use*
+  the key to sign but cannot export it) — and it exists **only** in the
+  `pwa-dev` build; `pwa-mvp` ships no private code at all. Zero-trace
+  rules: `docs/api/relay-events.md`.
 - **Message encryption**: blobs encrypted client-side before they reach the
   relay; the server sees ciphertext only.
 - **No Double Ratchet for v1**: a single ECDH session key is sufficient for
@@ -81,18 +85,41 @@ public keys, terminates the encryption on itself, and re-encrypts onward.
 The "blind relay" guarantee does not exist unless the clients authenticate
 the key exchange.
 
-Mitigation designed for MVP-private: after accept, both clients display a
-short **verification fingerprint** (emoji/numeric code, derived from both
-parties' session public keys — S11b). Users compare it out-of-band; the UI
-shows it prominently but does not force it.
+> **Status:** the target model below is owner-approved and lands with
+> slice F7 (`docs/plans/F7-device-identity.md`). Until then the dev tier
+> compares a per-session SAS fingerprint (derived from both *session*
+> public keys) and labels unverified sessions as such.
+
+Mitigation, in two tiers:
+
+1. **Out-of-band verification ritual (before any session).** Each device
+   has a long-term **identity key** (ECDSA P-256, non-extractable in the
+   dev tier). Two devices compare a short fingerprint derived from *both
+   identity public keys* — 5 emoji (compare out loud or in person) or a
+   QR when meeting — and each side **pins** the other's identity key
+   locally (device pair, TOFU; US-5.3a). The ritual never takes place
+   inside a session and the server never learns that it happened.
+2. **Signed handshake.** Every session's ephemeral ECDH public key is
+   signed by the sender's identity key; the receiver verifies the
+   signature against the *pinned* key. A relay that substitutes ephemeral
+   keys cannot forge the signature, so for pinned pairs the MITM is
+   mathematically closed — no per-session emoji comparison is needed.
 
 Consequences, honestly:
 
-- **Verified pair** → relay is blind. Ciphertext and metadata only.
-- **Unverified pair** → the session is encrypted against passive sniffing
-  but remains MITM-able by the relay. The guarantee is not "partial" — it
-  simply does not apply. The UI must never imply otherwise: an unverified
-  session is labeled unverified, not "encrypted".
+- **Pinned pair** → relay is blind. Ciphertext and metadata only.
+- **Unpinned pair** → no private session can be sent or accepted: the UI
+  shows a lock instead of the layer switch until the ritual is done. The
+  old "unverified but encrypted" session state no longer exists.
+- **Key change** (a pinned user presents an unknown identity key) → shown
+  as an unknown new device; private sessions with it are blocked until it
+  is verified. A pinned key that *itself* changes for a known device is
+  treated the same (prominent banner, re-verification required).
+- The public-key **directory** (backend) is untrusted storage: it only
+  helps devices find each other's public keys. A malicious server can lie
+  to it — exactly what the ritual catches.
+- Loss of a device or its local data = loss of its identity and pins =
+  re-verify (no key backup, by design).
 
 ## Relay Semantics
 

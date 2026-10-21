@@ -7,8 +7,13 @@ which today ships as a **dev-tier build in the dev host** (gated out of the
 production PWA bundle):
 
 > Even in the worst case — a fully compromised relay — the attacker obtains
-> **ciphertext + metadata, never plaintext** — *provided the two clients
-> verified the SAS fingerprint out-of-band.*
+> **ciphertext + metadata, never plaintext** — *provided the two devices
+> verified each other's identity out-of-band (device-pair pinning).*
+
+> **Implementation status:** the pinning model is the owner-approved
+> target (slice F7). Until F7 ships, the dev tier uses the interim
+> per-session SAS comparison and the guarantee is conditional on that
+> comparison; this document is updated again when F7 lands.
 
 Two honest scoping conditions, no asterisks:
 
@@ -17,9 +22,12 @@ Two honest scoping conditions, no asterisks:
    itself is a trusted party by design. The private layer exists only in
    the dev host (`VITE_PRIVATE_MODULE=1` + live API) as a dev-tier build —
    ephemeral in-memory session keys, no hardware keystore yet.
-2. **The guarantee is conditional on SAS verification.** An unverified
-   private session is MITM-able by the relay. Without verification there
-   is encryption-against-passive-observers — not end-to-end security.
+2. **The guarantee is conditional on verification.** An unverified pair
+   is MITM-able by the relay. In the target model an unverified pair
+   cannot open a private session at all (the UI shows a lock); in the
+   interim dev tier an unverified session is labelled unverified, never
+   "encrypted" — encryption-against-passive-observers is not end-to-end
+   security.
 
 ## What the Server Sees
 
@@ -47,10 +55,13 @@ Two honest scoping conditions, no asterisks:
 
 | Threat | Mitigation |
 |--------|------------|
-| MITM on key exchange | SAS fingerprint (emoji code) — the *only* defense; see core guarantee |
+| MITM on key exchange | Device identity keys + out-of-band verification ritual (5 emoji / QR) pin each peer device once; every handshake is signed by the pinned key — a relay cannot substitute ephemeral keys. Unpinned pairs cannot open a private session at all |
+| Public-key directory lies | The directory is untrusted storage; substitution is caught by the ritual |
+| Stolen/lost device with an unlocked browser profile | Device lock (F7b): identity wrapped at rest, attempt-limited unlock, wipe on repeated failures; remote revoke wipes on next contact. Deters casual physical access; **does not** stop an offline attacker who copies the profile and brute-forces the wrapper (hardware-backed unlock only in native shells) |
+| Mode confusion (sending a secret publicly / mistaking the layer) | Private palette differs by hue in both app themes, mask glyph on every private bubble, ringed composer, private-only composer while a session is live |
 | Buffer hijack in grace window | Per-session resume token issued at accept |
 | Blob flooding / DoS | Per-session quota + rate limiting |
-| Key leakage via platform storage | Identity keys in Keychain/Keystore/safeStorage; chat keys RAM-only |
+| Key leakage via platform storage | Native: identity keys in Keychain/Keystore/safeStorage. Dev PWA: non-extractable IndexedDB key (XSS can use it, not export it) — documented weakest tier. Chat/session keys RAM-only everywhere |
 | Screenshots | Detect + notify (optional, post-core) — never presented as prevention |
 
 ## Residual Risks (documented, not hidden)

@@ -1,52 +1,55 @@
-# Slice F2 — Private Layer UX Rework (THIRD)
+# Slice F2 — Private Layer UX (in the new design)
 
-Goal: the private layer stops being a bolt-on set of routes and becomes
-a mode of the conversation itself — verify-to-unlock, in-window
-messaging, honest affordances. Builds on finished F1/F3 surfaces.
+Rewritten after the concept-07 review. Previous plan items **dropped**:
+`k:"v"` encrypted ack, `peerConfirmed`, "SAS strip inside the pane",
+verify-to-unlock inside a session. Verification now happens **before**
+sessions (F7), so "both verified" is true by construction.
+
+Order: built **inside the F5 branch, after F7**, directly in the new
+design system — building it on the old styling first would be wasted
+work. Visual spec: `docs/ux/concept-07/03-private-flow.html`.
 
 ## Changes
 
 | # | Item | Implementation |
 |---|------|----------------|
-| B3 | **Verify-to-unlock** | New encrypted envelope `{k:"v"}` — the SAS confirm travels INSIDE AES-GCM (relay can't distinguish it). Session status gains `peerConfirmed`; messaging/send + receive-gate enable only when `ownConfirmed && peerConfirmed`. Until then the pane shows "waiting for peer verification". |
-| F-2 | Setup modal | `PrivateSetupModal` inside S5 (TTL pills, strict toggle, "remember configuration" → localStorage). Routes `/private/setup` and `/private/invite` die; invite becomes an in-chat system card ("invited you to a private session — accept/decline"). |
-| F-3 | Same-window sessions | Private pane overlays S5's message area in place (not a new route). S12's composer+scroll move into a `PrivatePane` component hosted by S5; the public composer swaps out while a session is live. |
-| F-4 | View-once toggle | Compact switch in the private composer (icon + label), not a large button |
-| F-5 | Icon | `private-toggle`: mask → lock |
-| SAS | 5 emoji | Grid renders `digest[:5]`; banner hint: "compare out loud or in person — never send it in chat" |
-| B5 | Exit affordance | Header: back chevron + explicit "end session" (burn with confirm) |
+| B5 | Exit affordance | Header back chevron + explicit "end session" (burn with confirm) |
+| F-2 | Settings sheet | `PrivateSheet` (Reka Dialog; bottom sheet on mobile, centered modal ≥ sm): lifetime presets 5 min / 15 min / 1 h, strict switch, "remember these settings" checkbox (localStorage: lifetime + strict only), plain-language "what the server sees" note |
+| F-3 | Same-window sessions | S12 stops being a route: a `PrivatePane` hosted inside S5. Public composer swaps for the private one while a session is live. Routes `/private/setup`, `/private/invite`, `/private/verify`, `/private` are removed |
+| Header | Layer control | unverified contact → lock "Verify" chip (opens the F7 ritual card); verified → layer switch (mask + switch) |
+| F-4 | View-once | Compact **vertical** switch (flame in the thumb) in the private composer; a lock sits in that slot while the contact is unverified |
+| Icons | Roles | mask = layer (switch, bubble marker, pattern); lock = encryption/verification status |
+| Palette | Flip | chrome switches to the private palette **when the invite is accepted**; public history recessed (60%) |
+| Composer | Private only | while a session is live the composer sends privately only; writing publicly = layer off |
+| Cards | In-chat states | invite sent / waiting / session started / session ended / "private session lost (reload)" as dividers & cards in the timeline |
+| List | Chip | chat-list `private` chip from `PrivateRemote.watchActiveSessions()` (dev PWA only) |
+| Pattern | Background | tiled mask pattern, ≤ 8–9% opacity; plain-gradient fallback setting |
 
 ## Contract impact
+- `PrivateRemote` per F7 (`watchVerification`, `watchActiveSessions`, …);
+  `PrivateSessionView` unchanged otherwise — snapshot whitelist holds.
+- No new relay envelope kinds.
 
-- `MsgPayload` += `{ k: "v" }` — opaque to the relay by construction.
-- `SessionView` += `peerConfirmed: boolean`; `status: "active"` only
-  when both flags set (replaces "verified" as the unlocked state).
-- `PrivateRemote` API unchanged otherwise — snapshot whitelist holds.
-- Routes: S10/S11/S11b views fold into modal+pane; router drops the
-  three `/private/*` sub-routes except the pane host.
-
-## Flow after rework
-
+## Flow
 ```
-S5 → lock toggle → PrivateSetupModal → invite card in the public chat
-peer accepts → key exchange → SAS strip appears INSIDE the chat pane
-both confirm → pane unlocks → messages flow (view-once toggle live)
-TTL / burn / disconnect → pane collapses back to public composer
+S5 header: lock → ritual card → verified → switch
+switch ON → PrivateSheet → invite divider ("invite sent") → peer accepts
+→ chrome flips to private palette → session already verified (pinned)
+→ private bubbles inline (mask glyph, view-once chip) → TTL / burn /
+disconnect → pane collapses, "private session ended · N messages erased"
 ```
 
 ## Tests
-
-- `store.test.ts`: `k:"v"` handling, `peerConfirmed` gating, send
-  blocked before mutual confirm, re-verify after re-establishment.
-- `remote.test.ts`: `peerConfirmed` in snapshot whitelist.
-- E2E rewrite of `invite-flow.spec.js`: invite card → SAS strip →
-  unlock → view-once → burn — all inside S5.
-- Bundle guard unchanged: all private code still behind
-  `VITE_PRIVATE_MODULE`.
+- Component tests: header lock↔switch, composer lock↔vertical switch,
+  private-only composer, every private bubble carries the mask glyph.
+- Contrast test over all four palettes (`palette.mjs` → vitest).
+- Hue-distinctness test: private tokens vs public tokens in both themes.
+- E2E rewrite of `invite-flow.spec.js` inside S5: ritual → invite →
+  accept → view-once → burn → reload shows "session lost".
+- Bundle guard: pattern, private palette and all private UI stay inside
+  the private chunk (`VITE_PRIVATE_MODULE`).
 
 ## Risks
-
-- Largest UX surgery of the set — S5 already hosts message rendering;
-  layering a second pane must not break public scroll/composer state.
-- `k:"v"` is a protocol addition: old dev clients won't understand it —
-  acceptable (dev-tier, single deployment class).
+- Largest surgery on S5 — the pane must not break public scroll/composer
+  state.
+- Mode-confusion is the main product risk: never rely on colour alone.

@@ -168,25 +168,35 @@ declared in `05-threat-model.md`.
 
 ## Client zero-trace discipline (binding on the client)
 
-The private layer leaves **no traces** on the device/browser after any
-session end (burn, timer, disconnect-death, unload):
+Two classes of local data, with different lifetimes:
 
-- Private messages, keys, session state: JS memory only — never
-  `localStorage`, `sessionStorage`, cookies, service-worker caches, or any
-  persistence path except the single exception below.
-- **Dev-tier exception (pwa-dev only):** non-extractable identity
-  `CryptoKey` objects may live in a dedicated IndexedDB database
-  (`openglass-private`) — documented as dev-tier because IndexedDB is the
-  only browser persistence that can hold non-extractable keys. Native
-  shells use platform keystores instead.
-- **Full teardown must delete the IndexedDB itself**
-  (`indexedDB.deleteDatabase`) — including object stores/folders allocated
-  for planned-but-uncreated data. No empty shells, no leftover schema.
-- On session end: message buffers nulled, session key references dropped,
-  private-store state destroyed; `beforeunload`/burn/death paths all run
-  the same teardown.
-- No `console.log`/error reporting of envelope contents, session ids, or
-  peer pairing from the private module.
+**1. Session data — zero trace after every session end** (burn, timer,
+disconnect-death, unload): private messages, session keys, session state,
+read-receipt bookkeeping. JS memory only — never `localStorage`,
+`sessionStorage`, cookies, service-worker caches or IndexedDB. Message
+buffers nulled, key references dropped, private-store state destroyed;
+`beforeunload`/burn/death paths all run the same teardown. A dirty boot
+(a previous unload that never ran teardown) sweeps any leftover session
+material.
+
+**2. Device identity data — persistent by design (dev-tier, pwa-dev
+only):** the non-extractable identity `CryptoKey` and the table of pinned
+peer keys live in the dedicated IndexedDB `openglass-private`, scoped per
+signed-in user, because IndexedDB is the only browser persistence that can
+hold non-extractable keys. This store contains **no messages and no
+session keys** — an automated E2E scan asserts exactly that. It is
+destroyed (`indexedDB.deleteDatabase`, no empty shells left behind) on:
+sign-out, "revoke this device" from Security & sessions, device-lock wipe
+(F7), or an explicit "forget this device". Native shells use platform
+keystores instead.
+
+Additionally:
+
+- No `console.log`/error reporting of envelope contents, session ids,
+  peer pairing or fingerprints from the private module.
+- UI preferences (theme, "remember session settings": lifetime + strict
+  only) may use `localStorage`; they contain no identifiers and are not
+  stored in the private database.
 
 ## Explicitly out of scope
 

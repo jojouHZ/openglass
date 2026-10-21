@@ -59,7 +59,12 @@ for them. Decline → row removed.
 ## UI
 
 - S6: "Send contact request" + pending state on results
-- New: incoming-requests surface (badge on S4 + section in S6/contacts)
+- New: **Contacts root screen** (`/contacts`): requests (accept/decline),
+  sent (pending, resend), contacts list. Built in the current styling
+  here; F5-M4 puts it under the bottom tab bar (Contacts tab, badge =
+  pending requests). Design: `docs/ux/concept-07/02-navigation.html`.
+- `Contact.verifiedAt` is not touched here — it is removed from the
+  contract in F7 (verification is local and device-bound).
 - S7: relationship states — stranger / outgoing pending / incoming
   pending (accept-decline buttons) / mutual
 - B1: contacts list screen renders the store (`mutualContacts`)
