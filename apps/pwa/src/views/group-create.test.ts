@@ -87,8 +87,10 @@ describe("S8 group creation", () => {
     const detail = chats().details[chatId];
     expect(detail?.type).toBe("group");
     expect(detail?.title).toBe("test crew");
-    // owner + 2 picked members
-    expect(detail?.members).toHaveLength(3);
+    // consent model: only the owner is a member; the 2 picked contacts are
+    // INVITED and join once they accept
+    expect(detail?.members).toHaveLength(1);
+    expect(detail?.invited).toHaveLength(2);
     expect(contacts().list.length).toBeGreaterThan(0);
   });
 

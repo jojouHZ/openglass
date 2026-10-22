@@ -45,27 +45,32 @@ onMounted(load);
 
 const badge = computed(() => {
   switch (relationship.value) {
-    case "contact_incoming": return "added you";
-    case "contact_outgoing": return "in your contacts";
+    case "contact_incoming": return "wants to connect";
+    case "contact_outgoing": return "request sent";
     case "contact_mutual": return "mutual contact";
     case "self": return "this is you";
     default: return null;
   }
 });
 
-async function add() {
+async function act(fn: () => Promise<unknown>, failMsg: string) {
   if (busy.value) return;
   busy.value = true;
   errorMsg.value = "";
   try {
-    await contacts.add(userId.value);
-    await load(); // refetch — relationship may now be outgoing or mutual
+    await fn();
+    await load(); // refetch — the relationship is derived server-side
   } catch {
-    errorMsg.value = "failed to add contact";
+    errorMsg.value = failMsg;
   } finally {
     busy.value = false;
   }
 }
+
+const sendRequest = () => act(() => contacts.sendRequest(userId.value), "failed to send request");
+const accept = () => act(() => contacts.accept(userId.value), "failed to accept request");
+const decline = () => act(() => contacts.decline(userId.value), "failed to decline request");
+const cancel = () => act(() => contacts.cancel(userId.value), "failed to cancel request");
 
 async function remove() {
   if (busy.value) return;
@@ -74,7 +79,7 @@ async function remove() {
   try {
     await contacts.remove(userId.value);
     confirmRemove.value = false;
-    await load(); // their edge may remain — refetch tells the truth
+    await load();
   } catch {
     errorMsg.value = "failed to remove contact";
   } finally {
@@ -167,22 +172,49 @@ async function message() {
         >
           message
         </AppButton>
-        <AppButton
-          v-else-if="relationship === 'contact_incoming'"
-          :loading="busy"
-          data-testid="action-add-back"
-          @click="add"
-        >
-          add back
-        </AppButton>
+        <template v-else-if="relationship === 'contact_incoming'">
+          <AppButton :loading="busy" data-testid="action-accept" @click="accept">accept</AppButton>
+          <button
+            class="h-11 w-full rounded-input border border-line text-msg text-ink"
+            :disabled="busy"
+            data-testid="action-decline"
+            @click="decline"
+          >
+            decline
+          </button>
+        </template>
         <AppButton
           v-else-if="relationship === 'none'"
           :loading="busy"
           data-testid="action-add"
-          @click="add"
+          @click="sendRequest"
         >
-          add contact
+          send request
         </AppButton>
+        <div
+          v-else-if="relationship === 'contact_outgoing'"
+          class="flex flex-col gap-3"
+        >
+          <div class="text-center text-meta text-muted" data-testid="request-pending">
+            waiting for {{ user.displayName }} to accept
+          </div>
+          <button
+            class="h-11 w-full rounded-input border border-line text-msg text-ink"
+            :disabled="busy"
+            data-testid="action-resend"
+            @click="sendRequest"
+          >
+            send again
+          </button>
+          <button
+            class="h-11 w-full rounded-input text-msg text-danger"
+            :disabled="busy"
+            data-testid="action-cancel"
+            @click="cancel"
+          >
+            cancel request
+          </button>
+        </div>
 
         <button
           v-if="privateModule && relationship === 'contact_mutual'"
@@ -194,7 +226,7 @@ async function message() {
         </button>
 
         <button
-          v-if="relationship === 'contact_outgoing' || relationship === 'contact_mutual'"
+          v-if="relationship === 'contact_mutual'"
           class="h-11 w-full rounded-input text-msg text-danger"
           data-testid="action-remove"
           @click="confirmRemove = true"
@@ -211,7 +243,7 @@ async function message() {
     <ConfirmDialog
       v-if="confirmRemove && user"
       title="remove contact?"
-      :body="`${user.displayName} will stay able to see you if they added you — this only removes your side.`"
+      :body="`${user.displayName} will be removed from your contacts, and you from theirs. Existing chats stay.`"
       confirm-label="remove"
       :busy="busy"
       @confirm="remove"

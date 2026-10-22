@@ -5,7 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ChevronLeft, Search, Users } from "lucide-vue-next";
 
-import type { User } from "@openglass/core";
+import type { ContactRequest, User } from "@openglass/core";
 import { api, useContactsStore, useSessionStore } from "@openglass/core";
 
 import UserRow from "../components/UserRow.vue";
@@ -58,18 +58,22 @@ onBeforeUnmount(() => clearTimeout(timer));
 const openProfile = (u: User) =>
   router.push({ name: "s7-contact-profile", params: { userId: u.id } });
 
-const addBusy = ref<string | null>(null);
-async function add(userId: string) {
-  if (addBusy.value) return;
-  addBusy.value = userId;
+const busyId = ref<string | null>(null);
+async function run(userId: string, fn: () => Promise<unknown>) {
+  if (busyId.value) return;
+  busyId.value = userId;
   try {
-    await contacts.add(userId);
+    await fn();
   } catch {
-    // transient failure — the row stays in global, user can retry
+    // transient failure — the row stays where it is, user can retry
   } finally {
-    addBusy.value = null;
+    busyId.value = null;
   }
 }
+const sendRequest = (userId: string) => run(userId, () => contacts.sendRequest(userId));
+const accept = (r: ContactRequest) => run(r.user.id, () => contacts.accept(r.user.id));
+const decline = (r: ContactRequest) => run(r.user.id, () => contacts.decline(r.user.id));
+const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.user.id));
 </script>
 
 <template>
@@ -106,6 +110,59 @@ async function add(userId: string) {
     </button>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
+      <div v-if="contacts.incoming.length" class="px-6 pb-1 pt-2 text-meta text-muted" data-testid="requests-header">
+        requests · {{ contacts.incoming.length }}
+      </div>
+      <UserRow
+        v-for="r in contacts.incoming"
+        :key="`in-${r.user.id}`"
+        :user="r.user"
+        data-testid="incoming-request"
+        @open="openProfile(r.user)"
+      >
+        <div class="flex gap-2">
+          <button
+            class="rounded-pill bg-ink px-3 py-1 text-meta text-bg disabled:opacity-40"
+            :disabled="busyId === r.user.id"
+            data-testid="req-accept"
+            @click.stop="accept(r)"
+          >
+            accept
+          </button>
+          <button
+            class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+            :disabled="busyId === r.user.id"
+            data-testid="req-decline"
+            @click.stop="decline(r)"
+          >
+            decline
+          </button>
+        </div>
+      </UserRow>
+
+      <div v-if="!q.trim() && contacts.outgoing.length" class="px-6 pb-1 pt-2 text-meta text-muted">
+        sent · {{ contacts.outgoing.length }}
+      </div>
+      <UserRow
+        v-for="r in q.trim() ? [] : contacts.outgoing"
+        :key="`out-${r.user.id}`"
+        :user="r.user"
+        data-testid="outgoing-request"
+        @open="openProfile(r.user)"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-meta text-muted">pending</span>
+          <button
+            class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+            :disabled="busyId === r.user.id"
+            data-testid="req-cancel"
+            @click.stop="cancel(r)"
+          >
+            cancel
+          </button>
+        </div>
+      </UserRow>
+
       <div v-if="local.length" class="px-6 pb-1 pt-2 text-meta text-muted">contacts</div>
       <UserRow
         v-for="c in local"
@@ -128,18 +185,35 @@ async function add(userId: string) {
         :user="u"
         @open="openProfile(u)"
       >
-        <button
-          class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
-          :disabled="addBusy === u.id"
-          data-testid="add-contact"
-          @click="add(u.id)"
+        <span
+          v-if="contacts.hasOutgoing(u.id)"
+          class="text-meta text-muted"
+          data-testid="request-sent"
         >
-          add
+          requested
+        </span>
+        <button
+          v-else-if="contacts.hasIncoming(u.id)"
+          class="rounded-pill bg-ink px-3 py-1 text-meta text-bg disabled:opacity-40"
+          :disabled="busyId === u.id"
+          data-testid="accept-contact"
+          @click.stop="contacts.accept(u.id).catch(() => undefined)"
+        >
+          accept
+        </button>
+        <button
+          v-else
+          class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+          :disabled="busyId === u.id"
+          data-testid="add-contact"
+          @click.stop="sendRequest(u.id)"
+        >
+          request
         </button>
       </UserRow>
 
       <div
-        v-if="!local.length && !globalFiltered.length && !searching"
+        v-if="!local.length && !globalFiltered.length && !contacts.incoming.length && !contacts.outgoing.length && !searching"
         class="grid h-full place-items-center px-6"
         data-testid="empty"
       >

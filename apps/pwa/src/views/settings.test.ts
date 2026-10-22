@@ -127,4 +127,22 @@ describe("S14 security", () => {
       expect(w.find('[data-testid="revoke-all"]').exists()).toBe(false);
     });
   });
+
+  it("sign out of this device (single-session case) clears local state and lands on S1", async () => {
+    await session().requestOtp("jojou@openglass.demo");
+    await session().verifyOtp("123456", "vitest");
+    await router.push({ name: "s14-security" });
+    const w = mount(S14Security, { global: { plugins: [router, pinia] } });
+    await flush();
+    await w.find('[data-testid="sign-out-this"]').trigger("click");
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="confirm-dialog"]').exists()).toBe(true);
+    });
+    await w.find('[data-testid="confirm-action"]').trigger("click");
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.name).toBe("s1-invite");
+    });
+    expect(session().user).toBeNull();
+    expect(localStorage.getItem("og.session")).toBeNull();
+  });
 });

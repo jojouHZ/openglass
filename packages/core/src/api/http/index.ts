@@ -104,12 +104,31 @@ export class HttpApiClient implements ApiClient {
         method: "GET",
         path: "/contacts",
       }),
-    add: (userId: string) =>
-      this.t.request<{ contact: import("../client").Contact }>({
+    request: (userId: string) =>
+      this.t.request<import("../client").ContactRequestResult>({
         method: "POST",
         path: "/contacts",
         body: { userId },
       }),
+    listRequests: () =>
+      this.t.request<{
+        incoming: import("../client").ContactRequest[];
+        outgoing: import("../client").ContactRequest[];
+      }>({ method: "GET", path: "/contacts/requests" }),
+    acceptRequest: (userId: string) =>
+      this.t.request<{ contact: import("../client").Contact }>({
+        method: "POST",
+        path: `/contacts/requests/${userId}/accept`,
+        body: {},
+      }),
+    declineRequest: (userId: string) =>
+      this.t.request<void>({
+        method: "POST",
+        path: `/contacts/requests/${userId}/decline`,
+        body: {},
+      }),
+    cancelRequest: (userId: string) =>
+      this.t.request<void>({ method: "DELETE", path: `/contacts/requests/${userId}` }),
     remove: (userId: string) =>
       this.t.request<void>({ method: "DELETE", path: `/contacts/${userId}` }),
   };
@@ -231,6 +250,23 @@ export class HttpApiClient implements ApiClient {
         method: "POST",
         path: `/groups/${chatId}/ownership`,
         body: { newOwnerId },
+      }),
+    listInvites: () =>
+      this.t.request<{ invites: import("../client").GroupInvite[] }>({
+        method: "GET",
+        path: "/group-invites",
+      }),
+    acceptInvite: (chatId: string) =>
+      this.t.request<{ chat: import("../client").Chat }>({
+        method: "POST",
+        path: `/group-invites/${chatId}/accept`,
+        body: {},
+      }),
+    declineInvite: (chatId: string) =>
+      this.t.request<void>({
+        method: "POST",
+        path: `/group-invites/${chatId}/decline`,
+        body: {},
       }),
   };
 

@@ -11,7 +11,9 @@ import type {
   Chat,
   ChatSummary,
   Contact,
+  ContactRequest,
   DeviceSession,
+  GroupInvite,
   GroupMember,
   Message,
   User,
@@ -28,7 +30,12 @@ export class MockState {
   readonly users = new Map<string, User>();
   /** emails that already have an account (no invite needed to re-login) */
   readonly knownEmails = new Map<string, User>();
+  /** accepted, mutual contacts only */
   readonly contacts: Contact[] = [];
+  /** pending contact requests (consent model) */
+  readonly incomingRequests: ContactRequest[] = [];
+  readonly outgoingRequests: ContactRequest[] = [];
+  readonly groupInvites: GroupInvite[] = [];
   readonly sessions: DeviceSession[] = [];
   readonly chats = new Map<string, Chat>();
   readonly chatSummaries = new Map<string, ChatSummary>();
@@ -56,6 +63,9 @@ export class MockState {
     this.knownEmails.set("anna@openglass.demo", fx.wife);
     this.profileDone.add("jojou@openglass.demo");
     this.contacts.push(...fx.contacts);
+    this.incomingRequests.push(...fx.incomingRequests);
+    this.outgoingRequests.push(...fx.outgoingRequests);
+    this.groupInvites.push(fx.groupInviteFx);
     this.sessions.push(...fx.sessions);
 
     const direct = fx.buildDirectHistory();
@@ -85,9 +95,9 @@ export class MockState {
 
   relationship(userId: string): "none" | "contact_incoming" | "contact_outgoing" | "contact_mutual" | "self" {
     if (userId === fx.selfUser.id) return "self";
-    const out = this.contacts.find((c) => c.user.id === userId);
-    if (out) return out.mutual ? "contact_mutual" : "contact_outgoing";
-    if (userId === fx.incomingOnly.id) return "contact_incoming";
+    if (this.contacts.some((c) => c.user.id === userId)) return "contact_mutual";
+    if (this.outgoingRequests.some((r) => r.user.id === userId)) return "contact_outgoing";
+    if (this.incomingRequests.some((r) => r.user.id === userId)) return "contact_incoming";
     return "none";
   }
 }

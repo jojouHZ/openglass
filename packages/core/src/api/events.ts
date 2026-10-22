@@ -7,8 +7,7 @@
 
 import type { components } from "./schema.gen";
 
-type User = components["schemas"]["User"];
-type Chat = components["schemas"]["Chat"];
+import type { Chat, GroupInvite, User } from "./client";
 type Message = components["schemas"]["Message"];
 
 export type ServerEvent =
@@ -56,8 +55,13 @@ export type ServerEvent =
       ts: string;
       data: { userId: string; status: "online" | "offline" };
     }
-  | { type: "contact.added"; seq: number; ts: string; data: { user: User } }
+  | { type: "contact.request"; seq: number; ts: string; data: { user: User; createdAt: string } }
+  | { type: "contact.accepted"; seq: number; ts: string; data: { user: User } }
+  | { type: "contact.request.withdrawn"; seq: number; ts: string; data: { userId: string } }
+  | { type: "contact.request.resolved"; seq: number; ts: string; data: { userId: string } }
   | { type: "contact.removed"; seq: number; ts: string; data: { userId: string } }
+  | { type: "group.invite"; seq: number; ts: string; data: { invite: GroupInvite } }
+  | { type: "group.invite.resolved"; seq: number; ts: string; data: { chatId: string } }
   | { type: "user.updated"; seq: number; ts: string; data: { user: User } }
   | { type: "chat.updated"; seq: number; ts: string; data: { chat: Chat } }
   | { type: "chat.new"; seq: number; ts: string; data: { chat: Chat } }

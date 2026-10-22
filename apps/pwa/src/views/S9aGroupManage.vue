@@ -126,7 +126,11 @@ const addQuery = ref("");
 const picked = ref(new Set<string>());
 
 const addCandidates = computed(() => {
-  const inGroup = new Set(members.value.map((m) => m.user.id));
+  // members AND already-invited users are not offered again
+  const inGroup = new Set([
+    ...members.value.map((m) => m.user.id),
+    ...(chat.value?.invited ?? []).map((u) => u.id),
+  ]);
   const q = addQuery.value.trim().toLowerCase();
   return contacts.list.filter(
     (c) =>
@@ -221,6 +225,18 @@ onMounted(async () => {
         data-testid="member-row"
         @open="onMemberTap(m)"
       />
+      <template v-if="chat?.invited?.length">
+        <div class="px-6 pb-1 pt-3 text-meta text-muted" data-testid="invited-header">
+          invited · {{ chat.invited.length }}
+        </div>
+        <UserRow
+          v-for="u in chat.invited"
+          :key="`inv-${u.id}`"
+          :user="u"
+          subtitle="invited — hasn't joined yet"
+          data-testid="invited-row"
+        />
+      </template>
       <button
         v-if="canInvite"
         class="flex w-full items-center gap-3 px-6 py-3 text-left text-accent"

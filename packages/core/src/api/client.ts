@@ -10,12 +10,31 @@
 import type { components } from "./schema.gen";
 import type { ServerEvent } from "./events";
 
-export type User = components["schemas"]["User"];
-export type DeviceSession = components["schemas"]["DeviceSession"];
-export type Contact = components["schemas"]["Contact"];
-export type Chat = components["schemas"]["Chat"];
-export type ChatSummary = components["schemas"]["ChatSummary"];
-export type GroupMember = components["schemas"]["GroupMember"];
+type Schemas = components["schemas"];
+
+// The contract allows displayName/tag to be null only before profile setup
+// (S3, the verifyOtp result). Every user a peer can see — contacts, chat
+// members, requests, invites — has a completed profile, so the app-facing
+// types narrow them to non-null instead of null-checking every row.
+export type User = Omit<Schemas["User"], "displayName" | "tag"> & {
+  displayName: string;
+  tag: string;
+};
+export type DeviceSession = Schemas["DeviceSession"];
+export type Contact = Omit<Schemas["Contact"], "user"> & { user: User };
+export type ContactRequest = Omit<Schemas["ContactRequest"], "user"> & { user: User };
+export type ContactRequestResult = Omit<Schemas["ContactRequestResult"], "request" | "contact"> & {
+  request?: ContactRequest;
+  contact?: Contact;
+};
+export type GroupInvite = Omit<Schemas["GroupInvite"], "inviter"> & { inviter: User };
+export type GroupMember = Omit<Schemas["GroupMember"], "user"> & { user: User };
+export type Chat = Omit<Schemas["Chat"], "peer" | "members" | "invited"> & {
+  peer?: User;
+  members?: GroupMember[];
+  invited?: User[];
+};
+export type ChatSummary = Omit<Schemas["ChatSummary"], "peer"> & { peer?: User };
 export type MemberRights = components["schemas"]["MemberRights"];
 export type Message = components["schemas"]["Message"];
 export type Attachment = components["schemas"]["Attachment"];
@@ -137,8 +156,15 @@ export interface ApiClient {
     get(userId: string): Promise<{ user: User; verifiedAt: string | null; relationship: Relationship }>;
   };
   contacts: {
+    /** Mutual (accepted) contacts only. */
     list(): Promise<{ contacts: Contact[] }>;
-    add(userId: string): Promise<{ contact: Contact }>;
+    /** Send a request; a pending reverse request collapses into a mutual contact. */
+    request(userId: string): Promise<ContactRequestResult>;
+    listRequests(): Promise<{ incoming: ContactRequest[]; outgoing: ContactRequest[] }>;
+    acceptRequest(userId: string): Promise<{ contact: Contact }>;
+    /** Silent — the requester is not told. */
+    declineRequest(userId: string): Promise<void>;
+    cancelRequest(userId: string): Promise<void>;
     remove(userId: string): Promise<void>;
   };
   chats: {
@@ -164,6 +190,10 @@ export interface ApiClient {
     removeMember(chatId: string, userId: string): Promise<void>;
     setMemberRights(chatId: string, userId: string, rights: MemberRights): Promise<{ member: GroupMember }>;
     transferOwnership(chatId: string, newOwnerId: string): Promise<void>;
+    listInvites(): Promise<{ invites: GroupInvite[] }>;
+    acceptInvite(chatId: string): Promise<{ chat: Chat }>;
+    /** Silent — group members are not told. */
+    declineInvite(chatId: string): Promise<void>;
   };
   push: {
     getVapidKey(): Promise<{ publicKey: string }>;

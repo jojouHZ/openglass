@@ -1,0 +1,53 @@
+# 16 — F1: contacts consent and group invitations
+
+Slice F1 on `main` (plan: `docs/plans/F1-contacts-consent.md`). Closes the
+group-spam vector (B2), the invisible-contacts screen (B1) and the
+one-way contact model.
+
+## What shipped
+- **Model**: a contact request is a row the target must accept; accepting
+  writes both contact edges and deletes the request in ONE transaction —
+  mutual is structural, not inferred. A pending reverse request collapses
+  into an immediate mutual contact.
+- **Silent decline** (a design decision of this slice): a declined request
+  is hidden from the target but still looks pending to the requester;
+  resend is a no-op. No rejection signal, no re-spam loop. The same rule
+  applies to group invitations.
+- **Group invites in their own table** (`group_invites`), not a column on
+  `chat_members`. Every existing membership query (chat list, fan-out,
+  message permissions, unread counts) stays untouched, so an invitee
+  can never read a group through a forgotten `state` filter — the shared
+  store suite asserts it (404, absent from list, absent from fan-out).
+- **Migration 0003** turns existing one-way edges into pending requests
+  (consent is never granted silently); only mutual pairs remain in
+  `contacts`. It ran against the populated dev database.
+- **API/WS**: `/contacts/requests*`, `/group-invites*`, per-user rate limit
+  on `POST /contacts`; events `contact.request/accepted/request.withdrawn/
+  request.resolved`, `group.invite/group.invite.resolved`;
+  `contact.added` is retired.
+- **UI** (current styling): contacts screen (`/contacts`, alias `/search`)
+  with requests / sent / contacts / global; S7 states (stranger, pending
+  with resend+cancel, incoming accept/decline, mutual); S4 request badge
+  and invitation strip; S9a "invited" section.
+- **Chore**: vite 8.3.3 (Dependabot alert #2, GHSA-698v-4r3x-3vcv).
+
+## Tests
+- One consent suite run on BOTH stores (Mem and Postgres) — parity is the
+  point; API tests for every endpoint and event; rate limit; core store
+  and mock-contract tests; view tests; real-browser E2E
+  (`contact-flow.spec.js`). Carried from F3: header-title navigation and
+  sign-out-this-device unit tests.
+
+## War stories
+- Regenerating `schema.gen.ts` exposed that the committed OpenAPI had
+  already made `User.displayName/tag` nullable (pre-profile) while the
+  generated types were stale. The app-facing types now narrow users seen
+  by peers back to non-null in one place (`client.ts`) instead of
+  null-checking every row.
+- The old Go tests encoded the one-way model (`AddContact` twice = mutual);
+  the e2e-server fixture now seeds mutual pairs with two `RequestContact`
+  calls, which also exercises the reverse-collapse path every run.
+- Playwright's browser cache and system libraries disappeared again after
+  an environment reset; browsers now live in `~/pw-browsers` and the
+  missing shared libraries are loaded from `~/pwlibs`, so the real-browser
+  E2E suite runs locally.

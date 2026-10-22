@@ -72,6 +72,7 @@ func main() {
 	}{
 		{"alice", "alice@e2e.local", "Alice"},
 		{"bob", "bob@e2e.local", "Bob"},
+		{"carol", "carol@e2e.local", "Carol"}, // no relationship: consent flow specs
 	}
 	users := make(map[string]seedUser, len(seedDefs))
 	ids := make([]string, 0, len(seedDefs))

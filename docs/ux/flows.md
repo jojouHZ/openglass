@@ -117,8 +117,17 @@ tag number (`nickname#NNNN`), so that others can find me.
 **US-2.1** As a user, I want to search people by nickname or ID, so that I
 can find contacts without sharing phone numbers.
 
-**US-2.2** As a user, I want to add a found user to contacts, so that they
-appear in my contact list.
+**US-2.2** As a user, I want to send a contact **request** to a found user;
+the person appears in my contacts only after they accept (consent model —
+no one can add you to their list, or into a group, without your answer).
+A request I send stays "pending" for me until accepted; if the other
+person declines, I am **not told** (silent decline) and I can only send
+it again. I can cancel a request I sent.
+
+**US-2.2a** As a user, I want incoming requests and group invitations in
+one obvious place (a badge on the contacts entry and an invitation strip
+on the chat list), so that I can accept or decline them without
+searching.
 
 **US-2.3** As a user, I want to open a chat directly from a contact profile.
 

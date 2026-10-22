@@ -3,10 +3,11 @@
 
 // @vitest-environment happy-dom
 
-// S6 contact search + S7 profile — real HttpApiClient against the MSW
-// node server. Fixture roster: wife/dima mutual, kostya outgoing-only,
-// mira incoming-only. Test order matters — the shared store reflects
-// mutations across cases (same as a live session).
+// S6 contacts/search + S7 profile — consent model, real HttpApiClient
+// against the MSW node server. Fixture roster: anna/dima/kostya are contacts,
+// lena has a pending request FROM me, mira and oleg have pending
+// requests TO me, nina is a stranger. Test order matters — the shared
+// store reflects mutations across cases (same as a live session).
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
@@ -18,7 +19,7 @@ import {
   useSessionStore,
 } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
-import { incomingOnly, outgoingOnly, wife } from "@openglass/core/api/mock/fixtures";
+import { incomingOnly, lena, stranger, suitor } from "@openglass/core/api/mock/fixtures";
 
 import { pinia } from "../pinia";
 import { createAppRouter } from "../router";
@@ -47,16 +48,28 @@ beforeAll(async () => {
 });
 afterAll(() => ctx.server.close());
 
-describe("S6 contact search", () => {
-  it("lists the local roster under contacts; empty query shows all", async () => {
+describe("S6 contacts and requests", () => {
+  it("separates contacts, incoming requests and sent requests", async () => {
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
     await flush();
-    const names = w.findAll('[data-testid="user-name"]').map((n) => n.text());
-    expect(names).toContain("anna");
-    expect(names).toContain("kostya");
-    expect(names).toContain("dima");
-    // incoming-only mira is NOT a contact — she must not appear yet
-    expect(names).not.toContain("mira");
+    const text = (sel: string) => w.findAll(sel).map((n) => n.text());
+    // accepted contacts only
+    const contactNames = w
+      .findAll('[data-testid="user-row"] [data-testid="user-name"]')
+      .map((n) => n.text());
+    expect(contactNames).toEqual(expect.arrayContaining(["anna", "dima", "kostya"]));
+    expect(contactNames).not.toContain("lena");
+    expect(contactNames).not.toContain("mira");
+    // incoming requests offer accept / decline
+    expect(w.find('[data-testid="requests-header"]').text()).toContain("2");
+    expect(text('[data-testid="incoming-request"] [data-testid="user-name"]')).toEqual(
+      expect.arrayContaining(["mira", "oleg"]),
+    );
+    expect(w.findAll('[data-testid="req-accept"]')).toHaveLength(2);
+    // a sent request is pending + cancelable, never a contact
+    expect(text('[data-testid="outgoing-request"] [data-testid="user-name"]')).toEqual(["lena"]);
+    expect(w.find('[data-testid="req-cancel"]').exists()).toBe(true);
+    expect(contacts().isContact(lena.id)).toBe(false);
   });
 
   it("queries filter the local roster without duplicating global hits", async () => {
@@ -64,28 +77,47 @@ describe("S6 contact search", () => {
     await flush();
     await w.find('[data-testid="contact-search-input"]').setValue("an");
     await flush(400);
-    // local match "anna" stays; global section must not include contacts
     const names = w.findAll('[data-testid="user-name"]').map((n) => n.text());
     expect(names).toContain("anna");
-    expect(names).not.toContain("kostya");
-    // nobody duplicated across the two sections
     expect(names.filter((n) => n === "anna")).toHaveLength(1);
   });
 
-  it("global section offers add; adding a contact clears it from global", async () => {
+  it("global result sends a request — it becomes 'requested', never a contact", async () => {
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
     await flush();
-    await w.find('[data-testid="contact-search-input"]').setValue("mira");
+    await w.find('[data-testid="contact-search-input"]').setValue("nina");
     await flush(400); // debounce 300 + latency
     const addBtn = w.find('[data-testid="add-contact"]');
     expect(addBtn.exists()).toBe(true);
     await addBtn.trigger("click");
     await flush();
-    // mira is now a mutual contact — she left the global section
-    expect(contacts().isMutual(incomingOnly.id)).toBe(true);
+    expect(contacts().hasOutgoing(stranger.id)).toBe(true);
+    expect(contacts().isContact(stranger.id)).toBe(false);
     expect(w.find('[data-testid="add-contact"]').exists()).toBe(false);
-    const names = w.findAll('[data-testid="user-name"]').map((n) => n.text());
-    expect(names).toContain("mira");
+    expect(w.find('[data-testid="request-sent"]').text()).toContain("requested");
+  });
+
+  it("accepting an incoming request creates the contact", async () => {
+    const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
+    await flush();
+    const row = w
+      .findAll('[data-testid="incoming-request"]')
+      .find((r) => r.text().includes("mira"))!;
+    await row.find('[data-testid="req-accept"]').trigger("click");
+    await flush();
+    expect(contacts().isContact(incomingOnly.id)).toBe(true);
+    expect(contacts().hasIncoming(incomingOnly.id)).toBe(false);
+  });
+
+  it("cancel withdraws a sent request", async () => {
+    const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
+    await flush();
+    const row = w
+      .findAll('[data-testid="outgoing-request"]')
+      .find((r) => r.text().includes("lena"))!;
+    await row.find('[data-testid="req-cancel"]').trigger("click");
+    await flush();
+    expect(contacts().hasOutgoing(lena.id)).toBe(false);
   });
 
   it("row tap navigates to S7", async () => {
@@ -102,7 +134,7 @@ describe("S7 contact profile", () => {
     await router.push({ name: "s7-contact-profile", params: { userId: incomingOnly.id } });
     const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
     await flush();
-    // mira was added in the S6 test above — now mutual
+    // mira was accepted in the S6 test above — now mutual
     expect(w.find('[data-testid="badge"]').text()).toContain("mutual");
     await w.find('[data-testid="action-message"]').trigger("click");
     await vi.waitFor(() => {
@@ -111,19 +143,48 @@ describe("S7 contact profile", () => {
     expect(w.find('[data-testid="action-remove"]').exists()).toBe(true);
   });
 
-  it("outgoing-only shows remove; confirm dialog must be accepted", async () => {
-    await router.push({ name: "s7-contact-profile", params: { userId: outgoingOnly.id } });
+  it("incoming request offers accept / decline; decline is final for the target", async () => {
+    await router.push({ name: "s7-contact-profile", params: { userId: suitor.id } });
     const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
     await flush();
-    expect(w.find('[data-testid="badge"]').text()).toContain("in your contacts");
+    expect(w.find('[data-testid="badge"]').text()).toContain("wants to connect");
+    expect(w.find('[data-testid="action-accept"]').exists()).toBe(true);
     expect(w.find('[data-testid="action-message"]').exists()).toBe(false);
+    await w.find('[data-testid="action-decline"]').trigger("click");
+    await flush();
+    expect(contacts().hasIncoming(suitor.id)).toBe(false);
+    expect(contacts().isContact(suitor.id)).toBe(false);
+    // back to a stranger: the target can send their own request later
+    expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
+  });
+
+  it("outgoing request shows pending state with resend and cancel", async () => {
+    await router.push({ name: "s7-contact-profile", params: { userId: stranger.id } });
+    const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
+    await flush();
+    // nina was requested in the S6 test
+    expect(w.find('[data-testid="badge"]').text()).toContain("request sent");
+    expect(w.find('[data-testid="request-pending"]').exists()).toBe(true);
+    expect(w.find('[data-testid="action-remove"]').exists()).toBe(false);
+    await w.find('[data-testid="action-resend"]').trigger("click");
+    await flush();
+    expect(contacts().outgoing.filter((r) => r.user.id === stranger.id)).toHaveLength(1);
+    await w.find('[data-testid="action-cancel"]').trigger("click");
+    await flush();
+    expect(contacts().hasOutgoing(stranger.id)).toBe(false);
+    expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
+  });
+
+  it("removing a mutual contact needs confirmation and drops both sides", async () => {
+    await router.push({ name: "s7-contact-profile", params: { userId: incomingOnly.id } });
+    const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
+    await flush();
     await w.find('[data-testid="action-remove"]').trigger("click");
     expect(w.find('[data-testid="confirm-dialog"]').exists()).toBe(true);
     await w.find('[data-testid="confirm-action"]').trigger("click");
     await flush();
-    // after removal: kostya never added me → relationship none → add button
+    expect(contacts().isContact(incomingOnly.id)).toBe(false);
     expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
-    expect(contacts().isContact(outgoingOnly.id)).toBe(false);
   });
 
   it("unknown user renders the not-found state", async () => {

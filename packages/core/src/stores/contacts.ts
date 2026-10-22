@@ -1,21 +1,26 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Contacts store — the outgoing contact list with mutual flags.
-// REST for state, WS for deltas: contact.added/removed arrive at the
-// *target* side, so they only flip the mutual flag on an existing
-// outgoing edge — the list itself changes solely via add()/remove().
-// Incoming-only contacts have no list API; relationship badges read
-// users.get(userId).relationship instead (S7).
+// Contacts store — consent model. `list` holds ACCEPTED (mutual) contacts
+// only; pending requests live in `incoming` / `outgoing`. REST for state,
+// WS for deltas. Decline is silent: a declined outgoing request stays in
+// `outgoing` (the server never tells the requester), and the target's
+// other devices learn through contact.request.resolved.
 
 import { defineStore } from "pinia";
 
-import type { Contact, User } from "../api/client";
+import { ApiRequestError } from "../api/client";
+import type { Contact, ContactRequest, ContactRequestResult, User } from "../api/client";
 import { api } from "./session";
 
 export const useContactsStore = defineStore("contacts", {
   state: () => ({
+    /** accepted contacts (always mutual) */
     list: [] as Contact[],
+    /** requests addressed to me — Accept / Decline */
+    incoming: [] as ContactRequest[],
+    /** requests I sent — Resend / Cancel */
+    outgoing: [] as ContactRequest[],
     loaded: false,
     loading: false,
   }),
@@ -26,12 +31,17 @@ export const useContactsStore = defineStore("contacts", {
     isContact(): (userId?: string) => boolean {
       return (userId) => !!userId && !!this.byId(userId);
     },
+    /** Contacts are mutual by construction; kept for call-site clarity. */
     isMutual(): (userId?: string) => boolean {
-      return (userId) => !!userId && !!this.byId(userId)?.mutual;
+      return (userId) => this.isContact(userId);
     },
+    hasOutgoing: (s) => (userId?: string) => !!userId && s.outgoing.some((r) => r.user.id === userId),
+    hasIncoming: (s) => (userId?: string) => !!userId && s.incoming.some((r) => r.user.id === userId),
     contactIds: (s) => s.list.map((c) => c.user.id),
     /** Mutuals can open direct chats — the S8 member picker feed. */
-    mutualContacts: (s) => s.list.filter((c) => c.mutual),
+    mutualContacts: (s) => s.list,
+    /** Tab/header badge: requests waiting for my answer. */
+    requestCount: (s) => s.incoming.length,
     /**
      * Local filter for the S6 "contacts" section — substring match on
      * displayName or tag, case-insensitive. The "global" section is a
@@ -44,8 +54,8 @@ export const useContactsStore = defineStore("contacts", {
         if (!needle) return s.list;
         return s.list.filter(
           (c) =>
-            c.user.displayName.toLowerCase().includes(needle) ||
-            c.user.tag.toLowerCase().includes(needle),
+            (c.user.displayName ?? "").toLowerCase().includes(needle) ||
+            (c.user.tag ?? "").toLowerCase().includes(needle),
         );
       },
   },
@@ -56,39 +66,90 @@ export const useContactsStore = defineStore("contacts", {
       if (this.loading) return;
       this.loading = true;
       try {
-        const { contacts } = await api().contacts.list();
+        const [{ contacts }, { incoming, outgoing }] = await Promise.all([
+          api().contacts.list(),
+          api().contacts.listRequests(),
+        ]);
         this.list = contacts;
+        this.incoming = incoming;
+        this.outgoing = outgoing;
         this.loaded = true;
       } finally {
         this.loading = false;
       }
     },
 
-    async add(userId: string): Promise<Contact> {
-      const existing = this.byId(userId);
-      if (existing) return existing; // idempotent — 409 is an already-there
-      const { contact } = await api().contacts.add(userId);
-      this.list.push(contact);
+    /** Send a request. A pending reverse request collapses into a contact. */
+    async sendRequest(userId: string): Promise<ContactRequestResult> {
+      if (this.isContact(userId)) return { relationship: "contact_mutual", contact: this.byId(userId) };
+      const res = await api().contacts.request(userId);
+      if (res.relationship === "contact_mutual" && res.contact) {
+        this.addContact(res.contact);
+        this.incoming = this.incoming.filter((r) => r.user.id !== userId);
+      } else if (res.request && !this.hasOutgoing(userId)) {
+        this.outgoing.unshift(res.request);
+      }
+      return res;
+    },
+
+    async accept(userId: string): Promise<Contact> {
+      const { contact } = await api().contacts.acceptRequest(userId);
+      this.addContact(contact);
+      this.incoming = this.incoming.filter((r) => r.user.id !== userId);
       return contact;
     },
 
+    async decline(userId: string) {
+      await api().contacts.declineRequest(userId);
+      this.incoming = this.incoming.filter((r) => r.user.id !== userId);
+    },
+
+    async cancel(userId: string) {
+      await api().contacts.cancelRequest(userId);
+      this.outgoing = this.outgoing.filter((r) => r.user.id !== userId);
+    },
+
     async remove(userId: string) {
-      await api().contacts.remove(userId);
+      try {
+        await api().contacts.remove(userId);
+      } catch (e) {
+        if (!(e instanceof ApiRequestError && e.status === 404)) throw e; // already gone
+      }
       this.list = this.list.filter((c) => c.user.id !== userId);
     },
 
-    // ---------- ws deltas (target-side semantics) ----------
-
-    /** Someone added me — my outgoing edge to them (if any) is now mutual. */
-    onContactAdded(user: User) {
-      const c = this.byId(user.id);
-      if (c) c.mutual = true;
+    addContact(contact: Contact) {
+      if (!this.byId(contact.user.id)) this.list.push(contact);
     },
 
-    /** Someone removed me — my edge stays, the mutual flag drops. */
+    // ---------- ws deltas ----------
+
+    /** Someone asked to connect — shows up in my incoming list. */
+    onContactRequest(user: User, createdAt: string) {
+      if (!this.hasIncoming(user.id)) this.incoming.unshift({ user, createdAt });
+    },
+
+    /** A request between me and `user` was accepted (either direction). */
+    onContactAccepted(user: User) {
+      this.addContact({ user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null });
+      this.incoming = this.incoming.filter((r) => r.user.id !== user.id);
+      this.outgoing = this.outgoing.filter((r) => r.user.id !== user.id);
+    },
+
+    /** The requester cancelled. */
+    onRequestWithdrawn(userId: string) {
+      this.incoming = this.incoming.filter((r) => r.user.id !== userId);
+    },
+
+    /** Resolved on another of my devices — clear it from both lists. */
+    onRequestResolved(userId: string) {
+      this.incoming = this.incoming.filter((r) => r.user.id !== userId);
+      this.outgoing = this.outgoing.filter((r) => r.user.id !== userId);
+    },
+
+    /** The contact was removed (by me elsewhere, or by them). */
     onContactRemoved(userId: string) {
-      const c = this.byId(userId);
-      if (c) c.mutual = false;
+      this.list = this.list.filter((c) => c.user.id !== userId);
     },
 
     /** Profile edit by a mutual — patch the cached User on the contact. */

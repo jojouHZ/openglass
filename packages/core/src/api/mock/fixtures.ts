@@ -40,7 +40,7 @@ export const wife: User = {
   createdAt: iso(-60 * 24 * 30),
 };
 
-export const outgoingOnly: User = {
+export const kostya: User = {
   id: "00000000-0000-4000-8000-000000000003",
   displayName: "kostya",
   tag: "kostya#3307",
@@ -64,7 +64,34 @@ export const groupPal: User = {
   createdAt: iso(-60 * 24 * 10),
 };
 
-export const allUsers = [selfUser, wife, outgoingOnly, incomingOnly, groupPal];
+/** A second pending request to me — lets tests accept one and decline the other. */
+export const suitor: User = {
+  id: "00000000-0000-4000-8000-000000000006",
+  displayName: "oleg",
+  tag: "oleg#1170",
+  avatarUrl: null,
+  createdAt: iso(-60 * 24 * 8),
+};
+
+/** Known to the server, no relationship with me yet. */
+export const stranger: User = {
+  id: "00000000-0000-4000-8000-000000000007",
+  displayName: "nina",
+  tag: "nina#6402",
+  avatarUrl: null,
+  createdAt: iso(-60 * 24 * 6),
+};
+
+/** A pending request FROM me — never a contact until she accepts. */
+export const lena: User = {
+  id: "00000000-0000-4000-8000-000000000008",
+  displayName: "lena",
+  tag: "lena#2290",
+  avatarUrl: null,
+  createdAt: iso(-60 * 24 * 7),
+};
+
+export const allUsers = [selfUser, wife, kostya, incomingOnly, groupPal, suitor, stranger, lena];
 
 export const sessions: DeviceSession[] = [
   {
@@ -253,9 +280,25 @@ export function buildChats(
 
 export const contacts: Contact[] = [
   { user: wife, mutual: true, addedAt: iso(-60 * 24 * 7), verifiedAt: null },
-  { user: outgoingOnly, mutual: false, addedAt: iso(-60 * 24 * 5), verifiedAt: null },
   { user: groupPal, mutual: true, addedAt: iso(-60 * 24 * 6), verifiedAt: null },
+  { user: kostya, mutual: true, addedAt: iso(-60 * 24 * 5), verifiedAt: null },
 ];
+
+/** Pending contact requests: lena was asked by me, incomingOnly/suitor asked me. */
+export const outgoingRequests = [{ user: lena, createdAt: iso(-60 * 24 * 5) }];
+export const incomingRequests = [
+  { user: incomingOnly, createdAt: iso(-60 * 24 * 2) },
+  { user: suitor, createdAt: iso(-60 * 24) },
+];
+
+/** A group invitation addressed to me (the group is invisible until accepted). */
+export const groupInviteFx = {
+  chatId: "c0000000-0000-4000-8000-000000000009",
+  title: "book club",
+  memberCount: 3,
+  inviter: groupPal,
+  createdAt: iso(-60 * 24),
+};
 
 export const demoAttachment: Attachment = {
   id: "a0000000-0000-4000-8000-000000000001",

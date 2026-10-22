@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ApiRequestError, type ApiClient } from "../client";
 import { HttpApiClient } from "../http";
-import { DEMO_OTP, wife } from "./fixtures";
+import { DEMO_OTP, groupInviteFx, incomingOnly, lena, stranger, wife } from "./fixtures";
 import { createMockNodeApiClient, type MockNodeContext } from "./node";
 
 const OPTS = { mode: "mock" as const, baseUrl: "/api/v1", wsUrl: "/api/v1/ws" };
@@ -150,6 +150,51 @@ describe("contract: contacts & users", () => {
   it("exposes relationship states", async () => {
     const r = await api.users.get(wife.id);
     expect(r.relationship).toBe("contact_mutual");
+  });
+
+  it("a pending request is not a contact; relationship reads outgoing/incoming", async () => {
+    const { contacts } = await api.contacts.list();
+    expect(contacts.every((c) => c.mutual)).toBe(true);
+    expect(contacts.some((c) => c.user.id === lena.id)).toBe(false);
+    expect((await api.users.get(lena.id)).relationship).toBe("contact_outgoing");
+    expect((await api.users.get(incomingOnly.id)).relationship).toBe("contact_incoming");
+    const { incoming, outgoing } = await api.contacts.listRequests();
+    expect(incoming.some((r) => r.user.id === incomingOnly.id)).toBe(true);
+    expect(outgoing.some((r) => r.user.id === lena.id)).toBe(true);
+  });
+
+  it("request → cancel; resend is idempotent; self and contacts are rejected", async () => {
+    const r1 = await api.contacts.request(stranger.id);
+    expect(r1.relationship).toBe("contact_outgoing");
+    expect((await api.contacts.request(stranger.id)).relationship).toBe("contact_outgoing");
+    expect((await api.contacts.listRequests()).outgoing.filter((r) => r.user.id === stranger.id)).toHaveLength(1);
+    await api.contacts.cancelRequest(stranger.id);
+    expect((await api.users.get(stranger.id)).relationship).toBe("none");
+    await expect(api.contacts.request(wife.id)).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.status === 409,
+    );
+    const me = (await api.users.getMe()).user;
+    await expect(api.contacts.request(me.id)).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.status === 400,
+    );
+  });
+
+  it("requesting someone who already asked me collapses into a mutual contact", async () => {
+    const r = await api.contacts.request(incomingOnly.id);
+    expect(r.relationship).toBe("contact_mutual");
+    expect(r.contact?.user.id).toBe(incomingOnly.id);
+    expect((await api.contacts.list()).contacts.some((c) => c.user.id === incomingOnly.id)).toBe(true);
+  });
+
+  it("group invitations: listed, not memberships, accept creates the chat", async () => {
+    const { invites } = await api.groups.listInvites();
+    expect(invites[0]?.chatId).toBe(groupInviteFx.chatId);
+    const { chat } = await api.groups.acceptInvite(groupInviteFx.chatId);
+    expect(chat.type).toBe("group");
+    expect((await api.groups.listInvites()).invites).toHaveLength(0);
+    await expect(api.groups.declineInvite(groupInviteFx.chatId)).rejects.toSatisfy(
+      (e) => e instanceof ApiRequestError && e.status === 404,
+    );
   });
 
   it("getMe returns the private email field", async () => {

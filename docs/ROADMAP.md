@@ -116,7 +116,7 @@ native-shell item.
 | # | Slice | Where | Plan |
 |---|-------|-------|------|
 | ✅ | F3 UI polish | main | `docs/plans/F3-ui-polish.md` |
-| 1 | **F1** Contacts consent (F-1, B1, B2, B4) — also unblocks the Contacts tab | main | `docs/plans/F1-contacts-consent.md` |
+| 1 | **F1** Contacts consent (F-1, B1, B2, B4) — also unblocks the Contacts tab — **implemented, awaiting owner review** | main | `docs/plans/F1-contacts-consent.md` |
 | 2 | **F4** Stub removal (push routes out, reports real) | main | `docs/plans/F4-stub-removal.md` |
 | 3 | **F5 core** M3–M5: tokens/themes, tab bar, Contacts root, list + chat | branch `f5-ui-redesign` (not pushed) | `docs/plans/F5-ui-redesign.md` |
 | 4 | **F7** Device identity & verified contacts (wipe on sign-out until F8) | branch | `docs/plans/F7-device-identity.md` |

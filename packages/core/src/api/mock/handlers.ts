@@ -112,9 +112,9 @@ export function createHandlers(state: MockState) {
         requestedTag?: string;
       };
       const taken = (t: string) =>
-        [...state.users.values()].some((u) => u.tag.toLowerCase() === t.toLowerCase());
+        [...state.users.values()].some((u) => (u.tag ?? "").toLowerCase() === t.toLowerCase());
       const prefixTaken = (p: string) =>
-        [...state.users.values()].some((u) => u.tag.split("#")[0] === p);
+        [...state.users.values()].some((u) => (u.tag ?? "").split("#")[0] === p);
       const rand4 = () => 1000 + Math.floor(Math.random() * 9000);
       const slug = displayName.toLowerCase().replace(/\W+/g, "") || "user";
 
@@ -224,7 +224,7 @@ export function createHandlers(state: MockState) {
       const users = [...state.users.values()].filter(
         (u) =>
           u.id !== selfUser.id &&
-          (u.displayName.toLowerCase().includes(q) || u.tag.toLowerCase().includes(q)),
+          ((u.displayName ?? "").toLowerCase().includes(q) || (u.tag ?? "").toLowerCase().includes(q)),
       );
       return ok({ users });
     }),
@@ -251,18 +251,65 @@ export function createHandlers(state: MockState) {
       if (g) return g;
       await delay(LATENCY_MS);
       const { userId } = (await request.json()) as { userId: string };
+      if (userId === selfUser.id) return err(400, "validation_failed", "You cannot add yourself");
       const user = state.findUser(userId);
       if (!user) return err(404, "not_found", "User not found");
-      const existing = state.contacts.find((c) => c.user.id === userId);
-      if (existing) return ok({ contact: existing }, 200);
-      const contact: Contact = {
-        user,
-        mutual: state.relationship(userId) === "contact_incoming",
-        addedAt: new Date().toISOString(),
-        verifiedAt: null,
-      };
+      const rel = state.relationship(userId);
+      if (rel === "contact_mutual") return err(409, "conflict", "Already in contacts");
+      if (rel === "contact_outgoing") {
+        const r = state.outgoingRequests.find((x) => x.user.id === userId)!;
+        return ok({ relationship: "contact_outgoing", request: r }, 200);
+      }
+      if (rel === "contact_incoming") {
+        // they already asked me — collapse into a mutual contact
+        const i = state.incomingRequests.findIndex((x) => x.user.id === userId);
+        state.incomingRequests.splice(i, 1);
+        const contact: Contact = { user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null };
+        state.contacts.push(contact);
+        return ok({ relationship: "contact_mutual", contact }, 201);
+      }
+      const req = { user, createdAt: new Date().toISOString() };
+      state.outgoingRequests.push(req);
+      return ok({ relationship: "contact_outgoing", request: req }, 201);
+    }),
+
+    http.get(`${API}/contacts/requests`, async ({ request }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      return ok({ incoming: state.incomingRequests, outgoing: state.outgoingRequests });
+    }),
+
+    http.post(`${API}/contacts/requests/:userId/accept`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      const i = state.incomingRequests.findIndex((r) => r.user.id === params.userId);
+      if (i === -1) return err(404, "not_found", "Request not found");
+      const [req] = state.incomingRequests.splice(i, 1);
+      const contact: Contact = { user: req!.user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null };
       state.contacts.push(contact);
-      return ok({ contact }, 201);
+      return ok({ contact });
+    }),
+
+    http.post(`${API}/contacts/requests/:userId/decline`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      const i = state.incomingRequests.findIndex((r) => r.user.id === params.userId);
+      if (i === -1) return err(404, "not_found", "Request not found");
+      state.incomingRequests.splice(i, 1);
+      return empty();
+    }),
+
+    http.delete(`${API}/contacts/requests/:userId`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      const i = state.outgoingRequests.findIndex((r) => r.user.id === params.userId);
+      if (i === -1) return err(404, "not_found", "Request not found");
+      state.outgoingRequests.splice(i, 1);
+      return empty();
     }),
 
     http.delete(`${API}/contacts/:userId`, async ({ request, params }) => {
@@ -270,7 +317,8 @@ export function createHandlers(state: MockState) {
       if (g) return g;
       await delay(LATENCY_MS);
       const i = state.contacts.findIndex((c) => c.user.id === params.userId);
-      if (i !== -1) state.contacts.splice(i, 1);
+      if (i === -1) return err(404, "not_found", "Contact not found");
+      state.contacts.splice(i, 1);
       return empty();
     }),
 
@@ -565,21 +613,15 @@ export function createHandlers(state: MockState) {
           rights: { inviteMembers: true, removeMembers: true, editInfo: true, pinMessages: true, deleteMessages: true },
           joinedAt: new Date().toISOString(),
         },
-        ...memberIds
-          .map((id) => state.findUser(id))
-          .filter((u): u is User => !!u)
-          .map((u) => ({
-            user: u,
-            role: "member" as const,
-            rights: { inviteMembers: false, removeMembers: false, editInfo: false, pinMessages: false, deleteMessages: false },
-            joinedAt: new Date().toISOString(),
-          })),
       ];
+      // consent model: everyone else is INVITED, not added
+      const invited = memberIds.map((id) => state.findUser(id)).filter((u): u is User => !!u);
       const chat: Chat = {
         id: freshId(),
         type: "group",
         title,
         members,
+        invited,
         createdAt: new Date().toISOString(),
       };
       state.chats.set(chat.id, chat);
@@ -621,15 +663,11 @@ export function createHandlers(state: MockState) {
       const members = state.members.get(String(params.chatId));
       const chat = state.chats.get(String(params.chatId));
       if (!members || !chat) return err(404, "not_found", "Chat not found");
+      chat.invited ??= [];
       for (const id of memberIds) {
         const u = state.findUser(id);
-        if (u && !members.some((m) => m.user.id === id)) {
-          members.push({
-            user: u,
-            role: "member",
-            rights: { inviteMembers: false, removeMembers: false, editInfo: false, pinMessages: false, deleteMessages: false },
-            joinedAt: new Date().toISOString(),
-          });
+        if (u && !members.some((m) => m.user.id === id) && !chat.invited.some((i) => i.id === id)) {
+          chat.invited.push(u);
         }
       }
       chat.members = members;
@@ -662,6 +700,46 @@ export function createHandlers(state: MockState) {
       const { rights } = (await request.json()) as { rights: import("../client").MemberRights };
       member.rights = { ...member.rights, ...rights };
       return ok({ member });
+    }),
+
+    http.get(`${API}/group-invites`, async ({ request }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      return ok({ invites: state.groupInvites });
+    }),
+
+    http.post(`${API}/group-invites/:chatId/accept`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      const i = state.groupInvites.findIndex((x) => x.chatId === params.chatId);
+      if (i === -1) return err(404, "not_found", "Invitation not found");
+      const [inv] = state.groupInvites.splice(i, 1);
+      const me = state.session?.user ?? selfUser;
+      const members: GroupMember[] = [
+        { user: inv!.inviter, role: "owner", rights: { inviteMembers: true, removeMembers: true, editInfo: true, pinMessages: true, deleteMessages: true }, joinedAt: inv!.createdAt },
+        { user: me, role: "member", rights: { inviteMembers: false, removeMembers: false, editInfo: false, pinMessages: false, deleteMessages: false }, joinedAt: new Date().toISOString() },
+      ];
+      const chat: Chat = { id: inv!.chatId, type: "group", title: inv!.title, members, invited: [], createdAt: inv!.createdAt };
+      state.chats.set(chat.id, chat);
+      state.members.set(chat.id, members);
+      state.messages.set(chat.id, []);
+      state.chatSummaries.set(chat.id, {
+        id: chat.id, type: "group", title: inv!.title, lastActivityAt: new Date().toISOString(),
+        unreadCount: 0, memberCount: members.length, pinned: false,
+      });
+      return ok({ chat });
+    }),
+
+    http.post(`${API}/group-invites/:chatId/decline`, async ({ request, params }) => {
+      const g = guard(request);
+      if (g) return g;
+      await delay(LATENCY_MS);
+      const i = state.groupInvites.findIndex((x) => x.chatId === params.chatId);
+      if (i === -1) return err(404, "not_found", "Invitation not found");
+      state.groupInvites.splice(i, 1);
+      return empty();
     }),
 
     http.post(`${API}/groups/:chatId/ownership`, async ({ request, params }) => {

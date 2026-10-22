@@ -235,6 +235,25 @@ describe("S5 chat view", () => {
     }
   });
 
+  it("header title opens group settings (group) or the peer profile (direct)", async () => {
+    await router.push({ name: "s5-chat-view", params: { chatId: groupChatId } });
+    let w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush(400);
+    await w.find("header button.flex-1, button.min-w-0.flex-1").trigger("click");
+    await flush(50);
+    expect(router.currentRoute.value.name).toBe("s9a-group-manage");
+    w.unmount();
+
+    await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
+    w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush(400);
+    await w.find("button.min-w-0.flex-1").trigger("click");
+    await flush(50);
+    expect(router.currentRoute.value.name).toBe("s7-contact-profile");
+    w.unmount();
+    await router.push({ name: "s4-chat-list" });
+  });
+
   it("offline state shows the banner and disables the composer", async () => {
     await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
     chats().connState = "offline";

@@ -87,9 +87,14 @@ describe("S9a group management", () => {
     expect(names).toContain("kostya");
     await w.find('[data-testid="add-row"]').trigger("click");
     await w.find('[data-testid="add-confirm"]').trigger("click");
+    // an added contact is invited, not joined
     await vi.waitFor(() => {
-      expect(chats().details[groupChatId]?.members).toHaveLength(4);
+      expect(chats().details[groupChatId]?.invited?.map((u) => u.displayName)).toContain("kostya");
     });
+    expect(chats().details[groupChatId]?.members).toHaveLength(3);
+    // the invited user shows in their own section and is not offered again
+    expect(w.find('[data-testid="invited-header"]').exists()).toBe(true);
+    expect(w.findAll('[data-testid="invited-row"]')).toHaveLength(1);
   });
 
   it("leave group removes the chat locally and returns to S4", async () => {

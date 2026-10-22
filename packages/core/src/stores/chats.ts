@@ -9,7 +9,7 @@
 import { defineStore } from "pinia";
 
 import { ApiRequestError, type ApiClient } from "../api/client";
-import type { Chat, ChatSummary, GroupMember, MemberRights, Message, User } from "../api/client";
+import type { Chat, ChatSummary, GroupInvite, GroupMember, MemberRights, Message, User } from "../api/client";
 import type { Unsubscribe } from "../api/client";
 import { useContactsStore } from "./contacts";
 import { api, useSessionStore } from "./session";
@@ -46,6 +46,9 @@ export const SERIES_GAP_MS = 5 * 60_000;
 export const useChatsStore = defineStore("chats", {
   state: () => ({
     chats: [] as ChatSummary[],
+    /** pending group invitations addressed to me (not memberships) */
+    invites: [] as GroupInvite[],
+    invitesLoaded: false,
     /** full Chat objects (members for groups) — fetched on open */
     details: {} as Record<string, Chat>,
     windows: {} as Record<string, ChatWindow>,
@@ -128,6 +131,40 @@ export const useChatsStore = defineStore("chats", {
       this.details[chat.id] = chat;
       void this.refreshChats();
       return chat;
+    },
+
+    async refreshInvites() {
+      try {
+        const { invites } = await api().groups.listInvites();
+        this.invites = invites;
+        this.invitesLoaded = true;
+      } catch {
+        /* the strip simply stays as it was */
+      }
+    },
+
+    /** ws: invited to a group — listed once; the group itself stays invisible. */
+    onGroupInvite(invite: GroupInvite) {
+      if (!this.invites.some((i) => i.chatId === invite.chatId)) this.invites.unshift(invite);
+    },
+
+    /** ws: answered on another of my devices. */
+    onGroupInviteResolved(chatId: string) {
+      this.invites = this.invites.filter((i) => i.chatId !== chatId);
+    },
+
+    /** Accept → the group appears in the chat list. */
+    async acceptInvite(chatId: string): Promise<Chat> {
+      const { chat } = await api().groups.acceptInvite(chatId);
+      this.details[chat.id] = chat;
+      this.invites = this.invites.filter((i) => i.chatId !== chatId);
+      void this.refreshChats();
+      return chat;
+    },
+
+    async declineInvite(chatId: string) {
+      await api().groups.declineInvite(chatId);
+      this.invites = this.invites.filter((i) => i.chatId !== chatId);
     },
 
     /** Current user's GroupMember row in a group (rights/role source). */
@@ -400,8 +437,19 @@ export const useChatsStore = defineStore("chats", {
           this.details[e.data.chat.id] = e.data.chat;
           void this.refreshChats();
         }),
-        ev.on("contact.added", (e) => useContactsStore().onContactAdded(e.data.user)),
+        ev.on("contact.request", (e) =>
+          useContactsStore().onContactRequest(e.data.user, e.data.createdAt),
+        ),
+        ev.on("contact.accepted", (e) => useContactsStore().onContactAccepted(e.data.user)),
+        ev.on("contact.request.withdrawn", (e) =>
+          useContactsStore().onRequestWithdrawn(e.data.userId),
+        ),
+        ev.on("contact.request.resolved", (e) =>
+          useContactsStore().onRequestResolved(e.data.userId),
+        ),
         ev.on("contact.removed", (e) => useContactsStore().onContactRemoved(e.data.userId)),
+        ev.on("group.invite", (e) => this.onGroupInvite(e.data.invite)),
+        ev.on("group.invite.resolved", (e) => this.onGroupInviteResolved(e.data.chatId)),
         ev.on("user.updated", (e) => {
           useContactsStore().onUserUpdated(e.data.user);
           this.onUserUpdated(e.data.user);
@@ -429,6 +477,7 @@ export const useChatsStore = defineStore("chats", {
       await this.refreshChats();
       const contacts = useContactsStore();
       if (contacts.loaded) await contacts.refresh().catch(() => undefined);
+      if (this.invitesLoaded) await this.refreshInvites();
       if (this.activeChatId) {
         const id = this.activeChatId;
         this.activeChatId = null;
