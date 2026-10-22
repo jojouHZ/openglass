@@ -92,6 +92,16 @@ func TestRequestOtp_UnknownEmailRequiresInvite(t *testing.T) {
 	}
 }
 
+// B4: an existing account logs in with the email alone — the invite gates
+// account creation only.
+func TestRequestOtp_ReturningUserNeedsNoInvite(t *testing.T) {
+	ts, st, sender := newServer(t)
+	mkUser(t, ts, st, sender, "returning@x.io", "returning#0001")
+	if c, b := post(t, ts, "/api/v1/auth/otp/request", `{"email":"returning@x.io"}`, ""); c != 202 {
+		t.Fatalf("returning user must not need an invite: %d %v", c, b)
+	}
+}
+
 func TestRequestOtp_InvalidInvite(t *testing.T) {
 	ts, _, _ := newServer(t)
 	code, body := post(t, ts, "/api/v1/auth/otp/request",
