@@ -51,6 +51,15 @@ func (p *PG) RequestContact(ctx context.Context, from, to string) (*ContactReque
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// serialise the pair: two simultaneous crossing requests must see each
+	// other (one collapses the other into a mutual contact) instead of both
+	// reading "no reverse request yet" and both staying pending forever
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended(least($1::text,$2::text) || greatest($1::text,$2::text), 0))`,
+		from, to); err != nil {
+		return nil, err
+	}
+
 	var already bool
 	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2)`,

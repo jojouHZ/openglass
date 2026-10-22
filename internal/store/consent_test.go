@@ -5,6 +5,7 @@ package store_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/jojouHZ/openglass/internal/store"
@@ -232,5 +233,29 @@ func runConsentSuite(t *testing.T, st consentStore) {
 	}
 	if _, err := st.AddGroupMembers(ctx, g.ID, e.ID, []string{c.ID}); err != store.ErrNotFound {
 		t.Fatalf("stranger add must hide the group: %v", err)
+	}
+}
+
+// Crossing requests fired at the same instant must always end mutual — never
+// "both pending". Runs against both stores.
+func TestMem_CrossingRequestsConverge(t *testing.T) { runCrossing(t, store.NewMem()) }
+func TestPG_CrossingRequestsConverge(t *testing.T)  { runCrossing(t, pgOrSkip(t)) }
+
+func runCrossing(t *testing.T, st consentStore) {
+	ctx := context.Background()
+	for i := 0; i < 30; i++ {
+		a, b := mkUser(t, st, "xa"), mkUser(t, st, "xb")
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); _, _ = st.RequestContact(ctx, a.ID, b.ID) }()
+		go func() { defer wg.Done(); _, _ = st.RequestContact(ctx, b.ID, a.ID) }()
+		wg.Wait()
+		if ok, _ := st.AreMutual(ctx, a.ID, b.ID); !ok {
+			in, out, _ := st.ListContactRequests(ctx, a.ID)
+			t.Fatalf("iteration %d: crossing requests did not converge (in=%d out=%d)", i, len(in), len(out))
+		}
+		if in, out, _ := st.ListContactRequests(ctx, a.ID); len(in)+len(out) != 0 {
+			t.Fatalf("iteration %d: leftover requests after convergence", i)
+		}
 	}
 }
