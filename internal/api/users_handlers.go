@@ -76,22 +76,9 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 		writeErrorFromErr(w, err)
 		return
 	}
-	rel := "none"
-	switch me := userID(r); u.ID {
-	case me:
-		rel = "self"
-	default:
-		out, in, err := s.chats.ContactEdges(r.Context(), me, u.ID)
-		if err == nil {
-			switch {
-			case out && in:
-				rel = "contact_mutual"
-			case out:
-				rel = "contact_outgoing"
-			case in:
-				rel = "contact_incoming"
-			}
-		}
+	rel, err := s.chats.Relationship(r.Context(), userID(r), u.ID)
+	if err != nil {
+		rel = "none"
 	}
 	// verifiedAt: always null until the private module ships (contract)
 	writeJSON(w, http.StatusOK, map[string]any{

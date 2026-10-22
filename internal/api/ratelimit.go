@@ -95,6 +95,9 @@ type AuthRateLimits struct {
 	OtpRequestEmail RateLimitSpec // spam one victim from many IPs
 	OtpVerifyIP     RateLimitSpec // brute-force beyond per-account caps
 	RefreshIP       RateLimitSpec // token-refresh hammering
+	// ContactRequest — per-USER bucket on POST /contacts (request spam).
+	// Zero value falls back to the default.
+	ContactRequest RateLimitSpec
 }
 
 func DefaultAuthRateLimits() AuthRateLimits {
@@ -103,6 +106,7 @@ func DefaultAuthRateLimits() AuthRateLimits {
 		OtpRequestEmail: RateLimitSpec{PerMinute: 10, Burst: 3},
 		OtpVerifyIP:     RateLimitSpec{PerMinute: 30, Burst: 5},
 		RefreshIP:       RateLimitSpec{PerMinute: 60, Burst: 10},
+		ContactRequest:  RateLimitSpec{PerMinute: 6, Burst: 20},
 	}
 }
 
@@ -113,6 +117,11 @@ func WithAuthRateLimits(l AuthRateLimits) Option {
 		s.otpRequestMail = newRateLimiter(l.OtpRequestEmail.PerMinute, l.OtpRequestEmail.Burst)
 		s.otpVerifyIP = newRateLimiter(l.OtpVerifyIP.PerMinute, l.OtpVerifyIP.Burst)
 		s.refreshIP = newRateLimiter(l.RefreshIP.PerMinute, l.RefreshIP.Burst)
+		cr := l.ContactRequest
+		if cr.PerMinute == 0 && cr.Burst == 0 {
+			cr = DefaultAuthRateLimits().ContactRequest
+		}
+		s.contactReq = newRateLimiter(cr.PerMinute, cr.Burst)
 	}
 }
 

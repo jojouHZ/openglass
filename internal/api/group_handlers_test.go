@@ -13,12 +13,12 @@ import (
 	"time"
 )
 
-// addOne makes target an outgoing contact of the caller — the minimal
-// gate for group invites (mutual not required).
-func addOne(t *testing.T, ts *httptest.Server, tok, targetID string) {
+// acceptInvite — the invitee joins the group (consent gate: an invite is
+// not a membership until accepted).
+func acceptInvite(t *testing.T, ts *httptest.Server, chatID, tok string) {
 	t.Helper()
-	if c, b := post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, targetID), tok); c != 201 {
-		t.Fatalf("contact: %d %v", c, b)
+	if c, b := post(t, ts, "/api/v1/group-invites/"+chatID+"/accept", `{}`, tok); c != 200 {
+		t.Fatalf("accept invite: %d %v", c, b)
 	}
 }
 
@@ -49,17 +49,24 @@ func TestGroup_CreateFlow(t *testing.T) {
 	ts, st, sender := newServer(t)
 	oTok, oID := mkUser(t, ts, st, sender, "go@x.io", "go#0001")
 	bTok, bID := mkUser(t, ts, st, sender, "gb@x.io", "gb#0002")
-	_, cID := mkUser(t, ts, st, sender, "gc@x.io", "gc#0003")
-	_, sID := mkUser(t, ts, st, sender, "gs@x.io", "gs#0004") // stranger, no contact
+	cTok, cID := mkUser(t, ts, st, sender, "gc@x.io", "gc#0003")
+	sTok, sID := mkUser(t, ts, st, sender, "gs@x.io", "gs#0004") // stranger, no contact
 
-	addOne(t, ts, oTok, bID)
-	addOne(t, ts, oTok, cID)
+	befriend(t, ts, oTok, bTok, oID, bID)
+	befriend(t, ts, oTok, cTok, oID, cID)
 
-	// non-contact id rejected — contacts-only invites
+	// non-contact id rejected — mutual-contacts-only invites
 	if c, _ := post(t, ts, "/api/v1/groups",
 		fmt.Sprintf(`{"title":"x","memberIds":[%q]}`, sID), oTok); c != 403 {
 		t.Fatalf("non-contact member must be 403, got %d", c)
 	}
+	// a one-way request is NOT enough (consent model)
+	post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, sID), oTok)
+	if c, _ := post(t, ts, "/api/v1/groups",
+		fmt.Sprintf(`{"title":"x","memberIds":[%q]}`, sID), oTok); c != 403 {
+		t.Fatalf("pending request must not unlock invites, got %d", c)
+	}
+	_ = sTok
 	// unknown id → 403 too (don't leak user existence)
 	if c, _ := post(t, ts, "/api/v1/groups",
 		`{"title":"x","memberIds":["00000000-0000-0000-0000-000000000000"]}`, oTok); c != 403 {
@@ -67,15 +74,70 @@ func TestGroup_CreateFlow(t *testing.T) {
 	}
 
 	g := mkGroup(t, ts, oTok, "squad", bID, cID)
+	// invitees are NOT members and cannot see the group until they accept
 	code, body := get(t, ts, "/api/v1/chats/"+g, oTok)
 	if code != 200 {
 		t.Fatalf("getChat: %d", code)
 	}
+	if ms := membersOf(body); len(ms) != 1 || ms[oID]["role"] != "owner" {
+		t.Fatalf("pre-accept roster must be the owner only: %v", ms)
+	}
+	if inv := body["chat"].(map[string]any)["invited"].([]any); len(inv) != 2 {
+		t.Fatalf("invited list: %v", inv)
+	}
+	if c, _ := get(t, ts, "/api/v1/chats/"+g, bTok); c != 404 {
+		t.Fatalf("invitee must get 404 before accepting, got %d", c)
+	}
+	if c, lb := get(t, ts, "/api/v1/chats", bTok); c != 200 || len(lb["chats"].([]any)) != 0 {
+		t.Fatalf("invited group leaked into the chat list: %v", lb)
+	}
+	if c, _ := send(t, ts, g, bTok, "sneak"); c != 404 {
+		t.Fatalf("invitee must not post: %d", c)
+	}
+
+	// the invitation is listed; accepting joins
+	c, il := get(t, ts, "/api/v1/group-invites", bTok)
+	invs := il["invites"].([]any)
+	if c != 200 || len(invs) != 1 || invs[0].(map[string]any)["chatId"] != g {
+		t.Fatalf("invites: %d %v", c, il)
+	}
+	acceptInvite(t, ts, g, bTok)
+	acceptInvite(t, ts, g, cTok)
+	if c, _ := post(t, ts, "/api/v1/group-invites/"+g+"/accept", `{}`, bTok); c != 404 {
+		t.Fatalf("accept twice: %d", c)
+	}
+	_, body = get(t, ts, "/api/v1/chats/"+g, oTok)
 	ms := membersOf(body)
 	if ms[oID]["role"] != "owner" || ms[bID]["role"] != "member" || ms[cID]["role"] != "member" {
 		t.Fatalf("roster: %v", ms)
 	}
-	_ = bTok
+}
+
+func TestGroup_DeclineIsSilent(t *testing.T) {
+	ts, st, sender := newServer(t)
+	oTok, oID := mkUser(t, ts, st, sender, "do@x.io", "do#0001")
+	bTok, bID := mkUser(t, ts, st, sender, "db@x.io", "db#0002")
+	befriend(t, ts, oTok, bTok, oID, bID)
+	g := mkGroup(t, ts, oTok, "quiet", bID)
+
+	if c, _ := post(t, ts, "/api/v1/group-invites/"+g+"/decline", `{}`, bTok); c != 204 {
+		t.Fatalf("decline: %d", c)
+	}
+	if _, il := get(t, ts, "/api/v1/group-invites", bTok); len(il["invites"].([]any)) != 0 {
+		t.Fatalf("declined invite still listed: %v", il)
+	}
+	// the owner is not told: the user still reads as invited, re-invite is a no-op
+	_, body := get(t, ts, "/api/v1/chats/"+g, oTok)
+	if len(body["chat"].(map[string]any)["invited"].([]any)) != 1 {
+		t.Fatalf("decline must not be reported to members: %v", body)
+	}
+	if c, _ := post(t, ts, "/api/v1/groups/"+g+"/members",
+		fmt.Sprintf(`{"memberIds":[%q]}`, bID), oTok); c != 204 {
+		t.Fatalf("re-invite after decline: %d", c)
+	}
+	if c, _ := post(t, ts, "/api/v1/group-invites/"+g+"/accept", `{}`, bTok); c != 404 {
+		t.Fatalf("declined invite must not be acceptable: %d", c)
+	}
 }
 
 func TestGroup_RightsMatrix(t *testing.T) {
@@ -83,9 +145,10 @@ func TestGroup_RightsMatrix(t *testing.T) {
 	oTok, oID := mkUser(t, ts, st, sender, "ro@x.io", "ro#0001")
 	mTok, mID := mkUser(t, ts, st, sender, "rm@x.io", "rm#0002")
 	xTok, xID := mkUser(t, ts, st, sender, "rx@x.io", "rx#0003")
-	addOne(t, ts, oTok, mID)
-	addOne(t, ts, oTok, xID)
+	befriend(t, ts, oTok, mTok, oID, mID)
+	befriend(t, ts, oTok, xTok, oID, xID)
 	g := mkGroup(t, ts, oTok, "raid", mID)
+	acceptInvite(t, ts, g, mTok)
 
 	// member without rights: title, invites, member-removal → 403
 	if c, _ := patch(t, ts, "/api/v1/groups/"+g, `{"title":"hax"}`, mTok); c != 403 {
@@ -108,25 +171,25 @@ func TestGroup_RightsMatrix(t *testing.T) {
 	if c, _ := patch(t, ts, "/api/v1/groups/"+g, `{"title":"new name"}`, mTok); c != 200 {
 		t.Fatalf("member edit after grant: %d", c)
 	}
-	// but member can only invite own contacts — x is not in m's contacts
+	// but member can only invite own mutual contacts — x is not m's contact
 	if c, _ := post(t, ts, "/api/v1/groups/"+g+"/members",
 		fmt.Sprintf(`{"memberIds":[%q]}`, xID), mTok); c != 403 {
 		t.Fatalf("member invite non-contact: %d", c)
 	}
-	addOne(t, ts, mTok, xID)
+	befriend(t, ts, mTok, xTok, mID, xID)
 	if c, _ := post(t, ts, "/api/v1/groups/"+g+"/members",
 		fmt.Sprintf(`{"memberIds":[%q]}`, xID), mTok); c != 204 {
 		t.Fatalf("member invite contact: %d", c)
 	}
-	_ = xTok
 }
 
 func TestGroup_MessageRights(t *testing.T) {
 	ts, st, sender := newServer(t)
-	oTok, _ := mkUser(t, ts, st, sender, "mo@x.io", "mo#0001")
+	oTok, oID := mkUser(t, ts, st, sender, "mo@x.io", "mo#0001")
 	mTok, mID := mkUser(t, ts, st, sender, "mm@x.io", "mm#0002")
-	addOne(t, ts, oTok, mID)
+	befriend(t, ts, oTok, mTok, oID, mID)
 	g := mkGroup(t, ts, oTok, "msg", mID)
+	acceptInvite(t, ts, g, mTok)
 
 	send(t, ts, g, oTok, "owner post")
 	_, mb := get(t, ts, "/api/v1/chats/"+g+"/messages", oTok)
@@ -160,8 +223,9 @@ func TestGroup_OwnerInvariants(t *testing.T) {
 	ts, st, sender := newServer(t)
 	oTok, oID := mkUser(t, ts, st, sender, "oo@x.io", "oo#0001")
 	mTok, mID := mkUser(t, ts, st, sender, "om@x.io", "om#0002")
-	addOne(t, ts, oTok, mID)
+	befriend(t, ts, oTok, mTok, oID, mID)
 	g := mkGroup(t, ts, oTok, "own", mID)
+	acceptInvite(t, ts, g, mTok)
 
 	// owner cannot be removed by anyone, including self
 	if c := del(t, ts, "/api/v1/groups/"+g+"/members/"+oID, oTok); c != 403 {
@@ -207,10 +271,11 @@ func TestGroup_OwnerInvariants(t *testing.T) {
 func TestGroup_Privacy404(t *testing.T) {
 	ts, st, sender := newServer(t)
 	oTok, oID := mkUser(t, ts, st, sender, "po@x.io", "po#0001")
-	_, mID := mkUser(t, ts, st, sender, "pm@x.io", "pm#0002")
+	mTok, mID := mkUser(t, ts, st, sender, "pm@x.io", "pm#0002")
 	sTok, sID := mkUser(t, ts, st, sender, "ps@x.io", "ps#0003")
-	addOne(t, ts, oTok, mID)
+	befriend(t, ts, oTok, mTok, oID, mID)
 	g := mkGroup(t, ts, oTok, "secret", mID)
+	acceptInvite(t, ts, g, mTok)
 
 	// stranger: every group route is 404, not 403 — existence hidden
 	if c, _ := patch(t, ts, "/api/v1/groups/"+g, `{"title":"x"}`, sTok); c != 404 {
@@ -265,7 +330,7 @@ func TestGroup_Emits(t *testing.T) {
 	hub.OfflineGrace = time.Hour // no flapping in-test
 	oTok, oID := mkUser(t, ts, st, sender, "eo@x.io", "eo#0001")
 	mTok, mID := mkUser(t, ts, st, sender, "em@x.io", "em#0002")
-	addOne(t, ts, oTok, mID)
+	befriend(t, ts, oTok, mTok, oID, mID)
 
 	// member listens, then owner creates a group containing them
 	mc, _ := wsConnect(t, ts, mTok, 0)
@@ -273,9 +338,28 @@ func TestGroup_Emits(t *testing.T) {
 	defer func() { _ = mc.Close() }()
 
 	g := mkGroup(t, ts, oTok, "emit", mID)
+	// the invitee gets the INVITATION, never the chat itself
 	var ev wsFrame
 	got := false
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 8; i++ {
+		ev = wsRead(t, mc)
+		if ev.Type == "chat.new" {
+			t.Fatalf("invitee received chat.new before accepting: %v", ev.Data)
+		}
+		if ev.Type == "group.invite" {
+			got = true
+			if ev.Data["invite"].(map[string]any)["chatId"] != g {
+				t.Fatalf("group.invite payload: %v", ev.Data)
+			}
+			break
+		}
+	}
+	if !got {
+		t.Fatal("invitee never got group.invite")
+	}
+	acceptInvite(t, ts, g, mTok)
+	got = false
+	for i := 0; i < 8; i++ {
 		ev = wsRead(t, mc)
 		if ev.Type == "chat.new" {
 			got = true
@@ -286,7 +370,7 @@ func TestGroup_Emits(t *testing.T) {
 		}
 	}
 	if !got {
-		t.Fatal("member never got chat.new")
+		t.Fatal("member never got chat.new after accepting")
 	}
 
 	// rights change → chat.updated reaches the member

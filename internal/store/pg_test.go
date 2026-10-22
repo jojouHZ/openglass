@@ -121,10 +121,10 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 	if _, _, err := pg.OpenDirectChat(ctx, a.ID, b.ID); err != store.ErrForbidden {
 		t.Fatalf("not-mutual open: %v", err)
 	}
-	if _, err := pg.AddContact(ctx, a.ID, b.ID); err != nil {
+	if _, err := pg.RequestContact(ctx, a.ID, b.ID); err != nil {
 		t.Fatal(err)
 	}
-	ct, err := pg.AddContact(ctx, b.ID, a.ID)
+	ct, err := pg.RequestContact(ctx, b.ID, a.ID)
 	if err != nil || !ct.Mutual {
 		t.Fatalf("mutual: %v %v", ct, err)
 	}
@@ -255,15 +255,29 @@ func TestPG_GroupRoundtrip(t *testing.T) {
 	if _, err := pg.CreateGroup(ctx, o.ID, "g", []string{m.ID}); err != store.ErrForbidden {
 		t.Fatalf("non-contact create: %v", err)
 	}
-	if _, err := pg.AddContact(ctx, o.ID, m.ID); err != nil {
+	if _, err := pg.RequestContact(ctx, o.ID, m.ID); err != nil {
 		t.Fatal(err)
+	}
+	// a one-way request is still not enough: the gate needs a mutual pair
+	if _, err := pg.CreateGroup(ctx, o.ID, "g", []string{m.ID}); err != store.ErrForbidden {
+		t.Fatalf("pending-request create: %v", err)
+	}
+	if r, err := pg.RequestContact(ctx, m.ID, o.ID); err != nil || !r.Mutual {
+		t.Fatalf("accept by reverse request: %v %v", r, err)
 	}
 	g, err := pg.CreateGroup(ctx, o.ID, "squad", []string{m.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Type != "group" || len(g.Members) != 2 || g.Members[0].Role != "owner" {
-		t.Fatalf("roster: %+v", g.Members)
+	// invited, not joined — consent gate
+	if g.Type != "group" || len(g.Members) != 1 || g.Members[0].Role != "owner" || len(g.Invited) != 1 {
+		t.Fatalf("roster: %+v invited=%+v", g.Members, g.Invited)
+	}
+	if _, err := pg.ChatByID(ctx, g.ID, m.ID); err != store.ErrNotFound {
+		t.Fatalf("invitee must not see the group: %v", err)
+	}
+	if g, err = pg.AcceptGroupInvite(ctx, g.ID, m.ID); err != nil || len(g.Members) != 2 || len(g.Invited) != 0 {
+		t.Fatalf("accept invite: %v %+v", err, g)
 	}
 
 	// member without rights is denied; granted rights unlock
@@ -296,7 +310,7 @@ func TestPG_GroupRoundtrip(t *testing.T) {
 	s, _ := pg.CreateUser(ctx, "gs-"+sfx+"@x.io")
 	for _, fn := range []func() error{
 		func() error { _, e := pg.SetGroupTitle(ctx, g.ID, s.ID, "x"); return e },
-		func() error { return pg.AddGroupMembers(ctx, g.ID, s.ID, []string{m.ID}) },
+		func() error { _, e := pg.AddGroupMembers(ctx, g.ID, s.ID, []string{m.ID}); return e },
 		func() error { return pg.RemoveGroupMember(ctx, g.ID, s.ID, m.ID) },
 		func() error { return pg.RemoveGroupMember(ctx, g.ID, s.ID, o.ID) },
 		func() error { _, e := pg.SetMemberRights(ctx, g.ID, s.ID, m.ID, store.MemberRights{}); return e },
@@ -307,7 +321,6 @@ func TestPG_GroupRoundtrip(t *testing.T) {
 		}
 	}
 	// group ops on a direct chat id are NotFound, not Forbidden
-	_, _ = pg.AddContact(ctx, m.ID, o.ID) // direct chats need mutuality
 	dc, _, _ := pg.OpenDirectChat(ctx, o.ID, m.ID)
 	if _, err := pg.SetGroupTitle(ctx, dc.ID, o.ID, "x"); err != store.ErrNotFound {
 		t.Fatalf("direct-chat group op: %v", err)

@@ -436,16 +436,23 @@ paths:
                     type: string
                     enum: [none, contact_incoming, contact_outgoing, contact_mutual, self]
                     description: |
-                      none — strangers; contact_incoming — they added you,
-                      you haven't (drives "add back?" prompt); contact_outgoing —
-                      you added them; contact_mutual — both added; self.
+                      none — strangers; contact_incoming — they sent you a
+                      contact request that is still pending (drives the
+                      Accept/Decline prompt); contact_outgoing — you sent a
+                      request that is not accepted yet (a declined request
+                      still reads as outgoing — decline is silent);
+                      contact_mutual — accepted by both; self.
         '404': { $ref: '#/components/responses/NotFound' }
 
   /contacts:
     get:
       tags: [contacts]
-      summary: Contact list
+      summary: Contact list (mutual contacts only)
       operationId: listContacts
+      description: |
+        Contacts exist only as accepted, mutual pairs (both edges are
+        written in one transaction). Pending requests are listed by
+        `GET /contacts/requests`.
       security: [{ bearerAuth: [] }]
       responses:
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -462,12 +469,20 @@ paths:
                     items: { $ref: '#/components/schemas/Contact' }
     post:
       tags: [contacts]
-      summary: Add contact (S7)
+      summary: Send a contact request (S6/S7)
       operationId: addContact
       description: |
-        Creates a one-directional contact entry. When both users have added
-        each other the relation becomes `mutual` — required for 1-1 chat
-        creation and private-session invites.
+        Creates a **pending request** — nothing is visible to the target
+        except their incoming-requests list. The target must accept before
+        either side has a contact (consent model).
+
+        - If the target already has a pending request to you, the two
+          requests collapse into an immediate mutual contact (`201`,
+          `relationship: contact_mutual`).
+        - Re-sending while a request is pending (or was silently declined)
+          is an idempotent no-op returning `200` — the sender never learns
+          whether the target declined.
+        - Rate limited per user (`429 rate_limited`, `Retry-After`).
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -480,7 +495,70 @@ paths:
                 userId: { type: string, format: uuid }
       responses:
         '201':
-          description: Created
+          description: Request created, or auto-accepted into a mutual contact
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContactRequestResult' }
+        '200':
+          description: Request already pending (idempotent resend)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContactRequestResult' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Already contacts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Too many contact requests
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /contacts/requests:
+    get:
+      tags: [contacts]
+      summary: Pending contact requests (Contacts root)
+      operationId: listContactRequests
+      description: |
+        `incoming` — requests addressed to you (Accept/Decline).
+        `outgoing` — requests you sent (Resend/Cancel). A request the
+        target declined **still appears in `outgoing`** (silent decline).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [incoming, outgoing]
+                properties:
+                  incoming:
+                    type: array
+                    items: { $ref: '#/components/schemas/ContactRequest' }
+                  outgoing:
+                    type: array
+                    items: { $ref: '#/components/schemas/ContactRequest' }
+
+  /contacts/requests/{userId}/accept:
+    post:
+      tags: [contacts]
+      summary: Accept an incoming contact request
+      operationId: acceptContactRequest
+      description: |
+        One transaction: both contact rows are created and the request is
+        deleted. Both sides receive `contact.accepted`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '200':
+          description: Accepted
           content:
             application/json:
               schema:
@@ -488,18 +566,45 @@ paths:
                 required: [contact]
                 properties:
                   contact: { $ref: '#/components/schemas/Contact' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: Already in contacts
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+
+  /contacts/requests/{userId}/decline:
+    post:
+      tags: [contacts]
+      summary: Decline an incoming contact request (silent)
+      operationId: declineContactRequest
+      description: |
+        The request is hidden from the target's list; the requester gets no
+        signal and keeps seeing it as pending.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '204': { description: Declined }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /contacts/requests/{userId}:
+    delete:
+      tags: [contacts]
+      summary: Cancel an outgoing contact request
+      operationId: cancelContactRequest
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '204': { description: Cancelled }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /contacts/{userId}:
     delete:
       tags: [contacts]
-      summary: Remove contact
+      summary: Remove contact (both edges)
       operationId: removeContact
+      description: |
+        Removes the mutual pair. Existing chats are not deleted.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/UserId' }
@@ -923,7 +1028,10 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
-          description: All `memberIds` must be in the creator's contacts
+          description: |
+            All `memberIds` must be **mutual** contacts of the creator.
+            Accepted members are *invited*, not added: the group becomes
+            visible to them only after `POST /group-invites/{chatId}/accept`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -936,6 +1044,66 @@ paths:
                 required: [chat]
                 properties:
                   chat: { $ref: '#/components/schemas/Chat' }
+
+  /group-invites:
+    get:
+      tags: [groups]
+      summary: Pending group invitations for me
+      operationId: listGroupInvites
+      description: |
+        Invitations are not memberships: until accepted the group does not
+        appear in `/chats`, and `GET /chats/{id}` answers 404.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/GroupInvite' }
+
+  /group-invites/{chatId}/accept:
+    post:
+      tags: [groups]
+      summary: Accept a group invitation
+      operationId: acceptGroupInvite
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      responses:
+        '200':
+          description: Joined
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chat]
+                properties:
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /group-invites/{chatId}/decline:
+    post:
+      tags: [groups]
+      summary: Decline a group invitation (silent)
+      operationId: declineGroupInvite
+      description: |
+        Removed from the invitee's list. The group's members keep seeing
+        the invitee as invited — decline is not reported.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ChatId' }
+      responses:
+        '204': { description: Declined }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /groups/{chatId}:
     patch:
@@ -1269,8 +1437,8 @@ components:
         user: { $ref: '#/components/schemas/User' }
         mutual:
           type: boolean
-          description: Both parties added each other
-        addedAt: { type: string, format: date-time }
+          description: Always true — contacts exist only as accepted, mutual pairs (kept for compatibility)
+        addedAt: { type: string, format: date-time, description: When the request was accepted }
         verifiedAt:
           type: string
           format: date-time
@@ -1294,6 +1462,37 @@ components:
         members:
           type: array
           items: { $ref: '#/components/schemas/GroupMember' }
+        invited:
+          type: array
+          description: Group only — users invited and not yet joined (visible to members)
+          items: { $ref: '#/components/schemas/User' }
+        createdAt: { type: string, format: date-time }
+
+    ContactRequest:
+      type: object
+      required: [user, createdAt]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        createdAt: { type: string, format: date-time }
+
+    ContactRequestResult:
+      type: object
+      required: [relationship]
+      properties:
+        relationship:
+          type: string
+          enum: [contact_outgoing, contact_mutual]
+        request: { $ref: '#/components/schemas/ContactRequest' }
+        contact: { $ref: '#/components/schemas/Contact' }
+
+    GroupInvite:
+      type: object
+      required: [chatId, title, memberCount, inviter, createdAt]
+      properties:
+        chatId: { type: string, format: uuid }
+        title: { type: string }
+        memberCount: { type: integer }
+        inviter: { $ref: '#/components/schemas/User' }
         createdAt: { type: string, format: date-time }
 
     ChatSummary:

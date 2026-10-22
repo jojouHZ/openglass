@@ -104,41 +104,6 @@ func patch(t *testing.T, ts *httptest.Server, path, body, tok string) (int, map[
 
 // ---- contacts ----
 
-func TestContacts_AddListRemove(t *testing.T) {
-	ts, _, _, aTok, aID, bTok, bID := setupTwoUsers(t)
-
-	c, b := post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, bID), aTok)
-	if c != 201 || b["contact"].(map[string]any)["mutual"] != false {
-		t.Fatalf("add: %d %v", c, b)
-	}
-	c, b = post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, aID), bTok)
-	if c != 201 || b["contact"].(map[string]any)["mutual"] != true {
-		t.Fatalf("mutual add: %d %v", c, b)
-	}
-	if c, _ := post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, bID), aTok); c != 409 {
-		t.Fatalf("dup: %d", c)
-	}
-	if c, _ := post(t, ts, "/api/v1/contacts",
-		`{"userId":"00000000-0000-0000-0000-000000000000"}`, aTok); c != 404 {
-		t.Fatalf("ghost: %d", c)
-	}
-	c, list := get(t, ts, "/api/v1/contacts", aTok)
-	contacts := list["contacts"].([]any)
-	if c != 200 || len(contacts) != 1 {
-		t.Fatalf("list: %d %v", c, list)
-	}
-	got := contacts[0].(map[string]any)
-	if got["mutual"] != true || got["verifiedAt"] != nil {
-		t.Fatalf("contact shape: %v", got)
-	}
-	if del(t, ts, "/api/v1/contacts/"+bID, aTok) != 204 {
-		t.Fatal("remove")
-	}
-	if del(t, ts, "/api/v1/contacts/"+bID, aTok) != 404 {
-		t.Fatal("remove twice should 404")
-	}
-}
-
 // ---- direct chat ----
 
 func TestOpenDirect_RequiresMutual(t *testing.T) {
@@ -542,14 +507,16 @@ func TestSelfChat_FullFlow(t *testing.T) {
 func TestMutual_Lifecycle(t *testing.T) {
 	ts, _, _, aTok, aID, bTok, bID := setupTwoUsers(t)
 
-	// one-directional: a adds b — a sees mutual=false, b's list is empty
+	// a requests b: a sees an outgoing request, b sees it incoming, nobody
+	// has a contact yet
 	c, b := post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, bID), aTok)
-	if c != 201 || b["contact"].(map[string]any)["mutual"] != false {
-		t.Fatalf("one-way add: %d %v", c, b)
+	if c != 201 || b["relationship"] != "contact_outgoing" {
+		t.Fatalf("request: %d %v", c, b)
 	}
-	_, bl := get(t, ts, "/api/v1/contacts", bTok)
-	if len(bl["contacts"].([]any)) != 0 {
-		t.Fatalf("b must not see a's outgoing contact: %v", bl)
+	for _, tok := range []string{aTok, bTok} {
+		if _, l := get(t, ts, "/api/v1/contacts", tok); len(l["contacts"].([]any)) != 0 {
+			t.Fatalf("a request must not create a contact: %v", l)
+		}
 	}
 	// neither direction can open a chat yet
 	if c, _ := post(t, ts, "/api/v1/chats", fmt.Sprintf(`{"userId":%q}`, bID), aTok); c != 403 {
@@ -558,24 +525,24 @@ func TestMutual_Lifecycle(t *testing.T) {
 	if c, _ := post(t, ts, "/api/v1/chats", fmt.Sprintf(`{"userId":%q}`, aID), bTok); c != 403 {
 		t.Fatalf("b→a not mutual: %d", c)
 	}
-	// mutual completes when b adds a back
-	if c, b := post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, aID), bTok); c != 201 ||
+	// b accepts → both have the contact
+	if c, b := post(t, ts, "/api/v1/contacts/requests/"+aID+"/accept", `{}`, bTok); c != 200 ||
 		b["contact"].(map[string]any)["mutual"] != true {
-		t.Fatalf("mutual leg: %d %v", c, b)
+		t.Fatalf("accept: %d %v", c, b)
 	}
 	chatID := directChat(t, ts, aTok, bID)
 	if c, _ := send(t, ts, chatID, aTok, "hello"); c != 201 {
 		t.Fatalf("send in mutual chat: %d", c)
 	}
-	// b removes a → a's remaining contact loses mutual, but the chat persists
+	// b removes a → the pair is gone for BOTH, but the chat persists
 	if del(t, ts, "/api/v1/contacts/"+aID, bTok) != 204 {
 		t.Fatal("b removes a")
 	}
-	_, al := get(t, ts, "/api/v1/contacts", aTok)
-	if al["contacts"].([]any)[0].(map[string]any)["mutual"] != false {
-		t.Fatalf("mutual flag did not reset: %v", al)
+	for _, tok := range []string{aTok, bTok} {
+		if _, l := get(t, ts, "/api/v1/contacts", tok); len(l["contacts"].([]any)) != 0 {
+			t.Fatalf("unfriend must drop both edges: %v", l)
+		}
 	}
-	// membership is not revoked: existing chat keeps working for both
 	if c, _ := send(t, ts, chatID, bTok, "still here"); c != 201 {
 		t.Fatalf("post-removal send: %d", c)
 	}
@@ -595,7 +562,7 @@ func TestUserRelationship_ProfileEnum(t *testing.T) {
 		return b["relationship"].(string)
 	}
 
-	// strangers, then one-way, then mutual — plus self
+	// strangers, then request pending, then mutual — plus self
 	if rel(aTok, bID) != "none" || rel(bTok, aID) != "none" {
 		t.Fatal("strangers must see none")
 	}
@@ -604,15 +571,15 @@ func TestUserRelationship_ProfileEnum(t *testing.T) {
 	}
 	post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, bID), aTok)
 	if rel(aTok, bID) != "contact_outgoing" || rel(bTok, aID) != "contact_incoming" {
-		t.Fatal("one-way edge must be outgoing/incoming")
+		t.Fatal("a pending request must be outgoing/incoming")
 	}
-	post(t, ts, "/api/v1/contacts", fmt.Sprintf(`{"userId":%q}`, aID), bTok)
+	post(t, ts, "/api/v1/contacts/requests/"+aID+"/accept", `{}`, bTok)
 	if rel(aTok, bID) != "contact_mutual" || rel(bTok, aID) != "contact_mutual" {
-		t.Fatal("two-way must be contact_mutual")
+		t.Fatal("accepted must be contact_mutual")
 	}
 	del(t, ts, "/api/v1/contacts/"+aID, bTok)
-	if rel(bTok, aID) != "contact_incoming" || rel(aTok, bID) != "contact_outgoing" {
-		t.Fatal("after remove: remover sees incoming, removed sees outgoing")
+	if rel(bTok, aID) != "none" || rel(aTok, bID) != "none" {
+		t.Fatal("after remove both sides are strangers again")
 	}
 }
 

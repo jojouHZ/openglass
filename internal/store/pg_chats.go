@@ -14,109 +14,12 @@ import (
 
 // PG ChatStore implementation — messaging persistence.
 
-func (p *PG) ListContacts(ctx context.Context, userID string) ([]Contact, error) {
-	rows, err := p.pool.Query(ctx,
-		`SELECT u.id, u.email::text, coalesce(u.display_name,''), coalesce(u.tag,''),
-		        u.avatar_url, u.created_at, c.created_at,
-		        EXISTS(SELECT 1 FROM contacts rc WHERE rc.owner_id = c.contact_id AND rc.contact_id = c.owner_id)
-		 FROM contacts c JOIN users u ON u.id = c.contact_id
-		 WHERE c.owner_id = $1 ORDER BY c.created_at`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Contact
-	for rows.Next() {
-		var c Contact
-		if err := rows.Scan(&c.User.ID, &c.User.Email, &c.User.DisplayName, &c.User.Tag,
-			&c.User.AvatarURL, &c.User.CreatedAt, &c.AddedAt, &c.Mutual); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-func (p *PG) AddContact(ctx context.Context, userID, contactID string) (*Contact, error) {
-	if _, err := p.UserByID(ctx, contactID); err != nil {
-		return nil, err
-	}
-	var at time.Time
-	err := p.pool.QueryRow(ctx,
-		`INSERT INTO contacts (owner_id, contact_id) VALUES ($1,$2)
-		 ON CONFLICT DO NOTHING RETURNING created_at`,
-		userID, contactID).Scan(&at)
-	if isNoRows(err) {
-		return nil, ErrConflict
-	}
-	if err != nil {
-		return nil, err
-	}
-	var mutual bool
-	_ = p.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$2 AND contact_id=$1)`,
-		userID, contactID).Scan(&mutual)
-	u, _ := p.UserByID(ctx, contactID)
-	return &Contact{User: *u, Mutual: mutual, AddedAt: at}, nil
-}
-
-func (p *PG) RemoveContact(ctx context.Context, userID, contactID string) error {
-	tag, err := p.pool.Exec(ctx,
-		`DELETE FROM contacts WHERE owner_id=$1 AND contact_id=$2`, userID, contactID)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (p *PG) AreMutual(ctx context.Context, a, b string) (bool, error) {
-	var ok bool
-	err := p.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2)
-		   AND EXISTS(SELECT 1 FROM contacts WHERE owner_id=$2 AND contact_id=$1)`,
-		a, b).Scan(&ok)
-	return ok, err
-}
-
-func (p *PG) ContactEdges(ctx context.Context, a, b string) (bool, bool, error) {
-	var ab, ba bool
-	err := p.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2),
-		        EXISTS(SELECT 1 FROM contacts WHERE owner_id=$2 AND contact_id=$1)`,
-		a, b).Scan(&ab, &ba)
-	return ab, ba, err
-}
-
 func (p *PG) IsChatMember(ctx context.Context, chatID, userID string) (bool, error) {
 	var ok bool
 	err := p.pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM chat_members WHERE chat_id=$1 AND user_id=$2)`,
 		chatID, userID).Scan(&ok)
 	return ok, err
-}
-
-func (p *PG) MutualContactIDs(ctx context.Context, userID string) ([]string, error) {
-	rows, err := p.pool.Query(ctx,
-		`SELECT c.contact_id FROM contacts c
-		 WHERE c.owner_id=$1
-		   AND EXISTS(SELECT 1 FROM contacts r WHERE r.owner_id=c.contact_id AND r.contact_id=$1)`,
-		userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
 }
 
 func (p *PG) ChatMemberIDs(ctx context.Context, chatID string) ([]string, error) {
@@ -274,7 +177,27 @@ func (p *PG) ChatByID(ctx context.Context, chatID, userID string) (*Chat, error)
 		_ = json.Unmarshal(rights, &gm.Rights)
 		c.Members = append(c.Members, gm)
 	}
-	return c, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	inv, err := p.pool.Query(ctx,
+		`SELECT u.id, u.email::text, coalesce(u.display_name,''), coalesce(u.tag,''),
+		        u.avatar_url, u.created_at
+		 FROM group_invites gi JOIN users u ON u.id = gi.invitee_id
+		 WHERE gi.chat_id = $1 ORDER BY gi.created_at`, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer inv.Close()
+	for inv.Next() {
+		var u User
+		if err := inv.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Tag, &u.AvatarURL, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		c.Invited = append(c.Invited, u)
+	}
+	return c, inv.Err()
 }
 
 func (p *PG) OpenDirectChat(ctx context.Context, me, peerID string) (*Chat, bool, error) {
@@ -736,29 +659,24 @@ func (p *PG) Membership(ctx context.Context, chatID, userID string) (*GroupMembe
 	return gm, nil
 }
 
-// allContacts — every id must exist as a user and be in the actor's
-// contact list (outgoing edge; mutual not required) — anti-spam gate.
-func (p *PG) allContacts(ctx context.Context, actorID string, ids []string) (bool, error) {
+// allMutual — every id must be a mutual contact of the actor (consent
+// gate: a one-way edge no longer exists, but mutuality is re-checked
+// structurally so the gate survives any future data drift).
+func (p *PG) allMutual(ctx context.Context, actorID string, ids []string) (bool, error) {
 	for _, id := range ids {
 		if id == actorID {
 			continue
 		}
-		var ok bool
-		err := p.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM contacts WHERE owner_id=$1 AND contact_id=$2)`,
-			actorID, id).Scan(&ok)
-		if err != nil {
+		ok, err := p.AreMutual(ctx, actorID, id)
+		if err != nil || !ok {
 			return false, err
-		}
-		if !ok {
-			return false, nil
 		}
 	}
 	return true, nil
 }
 
 func (p *PG) CreateGroup(ctx context.Context, ownerID, title string, memberIDs []string) (*Chat, error) {
-	ok, err := p.allContacts(ctx, ownerID, memberIDs)
+	ok, err := p.allMutual(ctx, ownerID, memberIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -787,8 +705,8 @@ func (p *PG) CreateGroup(ctx context.Context, ownerID, title string, memberIDs [
 			continue
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2)
-			 ON CONFLICT DO NOTHING`, chatID, id); err != nil {
+			`INSERT INTO group_invites (chat_id, invitee_id, inviter_id) VALUES ($1,$2,$3)
+			 ON CONFLICT DO NOTHING`, chatID, id, ownerID); err != nil {
 			return nil, err
 		}
 	}
@@ -864,48 +782,53 @@ func (p *PG) SetGroupTitle(ctx context.Context, chatID, actorID, title string) (
 	return p.ChatByID(ctx, chatID, actorID)
 }
 
-func (p *PG) AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) error {
+func (p *PG) AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) ([]string, error) {
 	if err := p.memberGate(ctx, chatID, actorID, "inviteMembers"); err != nil {
-		return err
+		return nil, err
 	}
-	// already-members are an idempotent no-op (same as Mem) — filter them
-	// out before the contacts gate so a re-add can't 403 on a non-contact
+	// members and already-invited users (pending or silently declined) are
+	// idempotent no-ops — filtered before the mutual gate so a re-add can't
+	// 403 and a decline can't be probed by re-inviting
 	rows, err := p.pool.Query(ctx,
-		`SELECT user_id FROM chat_members WHERE chat_id=$1 AND user_id=ANY($2)`,
+		`SELECT user_id FROM chat_members WHERE chat_id=$1 AND user_id=ANY($2)
+		 UNION SELECT invitee_id FROM group_invites WHERE chat_id=$1 AND invitee_id=ANY($2)`,
 		chatID, memberIDs)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	existing := map[string]bool{}
+	skip := map[string]bool{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return err
+			return nil, err
 		}
-		existing[id] = true
+		skip[id] = true
 	}
 	rows.Close()
 	var fresh []string
+	seen := map[string]bool{}
 	for _, id := range memberIDs {
-		if !existing[id] {
+		if !skip[id] && !seen[id] {
+			seen[id] = true
 			fresh = append(fresh, id)
 		}
 	}
-	ok, err := p.allContacts(ctx, actorID, fresh)
+	ok, err := p.allMutual(ctx, actorID, fresh)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return ErrForbidden
+		return nil, ErrForbidden
 	}
 	for _, id := range fresh {
 		if _, err := p.pool.Exec(ctx,
-			`INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2)`, chatID, id); err != nil {
-			return err
+			`INSERT INTO group_invites (chat_id, invitee_id, inviter_id) VALUES ($1,$2,$3)
+			 ON CONFLICT DO NOTHING`, chatID, id, actorID); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return fresh, nil
 }
 
 func (p *PG) RemoveGroupMember(ctx context.Context, chatID, actorID, targetID string) error {

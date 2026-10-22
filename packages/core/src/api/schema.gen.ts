@@ -224,17 +224,111 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Contact list */
+        /**
+         * Contact list (mutual contacts only)
+         * @description Contacts exist only as accepted, mutual pairs (both edges are
+         *     written in one transaction). Pending requests are listed by
+         *     `GET /contacts/requests`.
+         */
         get: operations["listContacts"];
         put?: never;
         /**
-         * Add contact (S7)
-         * @description Creates a one-directional contact entry. When both users have added
-         *     each other the relation becomes `mutual` — required for 1-1 chat
-         *     creation and private-session invites.
+         * Send a contact request (S6/S7)
+         * @description Creates a **pending request** — nothing is visible to the target
+         *     except their incoming-requests list. The target must accept before
+         *     either side has a contact (consent model).
+         *
+         *     - If the target already has a pending request to you, the two
+         *       requests collapse into an immediate mutual contact (`201`,
+         *       `relationship: contact_mutual`).
+         *     - Re-sending while a request is pending (or was silently declined)
+         *       is an idempotent no-op returning `200` — the sender never learns
+         *       whether the target declined.
+         *     - Rate limited per user (`429 rate_limited`, `Retry-After`).
          */
         post: operations["addContact"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending contact requests (Contacts root)
+         * @description `incoming` — requests addressed to you (Accept/Decline).
+         *     `outgoing` — requests you sent (Resend/Cancel). A request the
+         *     target declined **still appears in `outgoing`** (silent decline).
+         */
+        get: operations["listContactRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts/requests/{userId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an incoming contact request
+         * @description One transaction: both contact rows are created and the request is
+         *     deleted. Both sides receive `contact.accepted`.
+         */
+        post: operations["acceptContactRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts/requests/{userId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline an incoming contact request (silent)
+         * @description The request is hidden from the target's list; the requester gets no
+         *     signal and keeps seeing it as pending.
+         */
+        post: operations["declineContactRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts/requests/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel an outgoing contact request */
+        delete: operations["cancelContactRequest"];
         options?: never;
         head?: never;
         patch?: never;
@@ -250,7 +344,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove contact */
+        /**
+         * Remove contact (both edges)
+         * @description Removes the mutual pair. Existing chats are not deleted.
+         */
         delete: operations["removeContact"];
         options?: never;
         head?: never;
@@ -454,6 +551,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/group-invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending group invitations for me
+         * @description Invitations are not memberships: until accepted the group does not
+         *     appear in `/chats`, and `GET /chats/{id}` answers 404.
+         */
+        get: operations["listGroupInvites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/group-invites/{chatId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a group invitation */
+        post: operations["acceptGroupInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/group-invites/{chatId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a group invitation (silent)
+         * @description Removed from the invitee's list. The group's members keep seeing
+         *     the invitee as invited — decline is not reported.
+         */
+        post: operations["declineGroupInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/groups/{chatId}": {
         parameters: {
             query?: never;
@@ -613,13 +769,13 @@ export interface components {
         User: {
             /** Format: uuid */
             id: string;
-            /** @description Free-form, changeable, NOT unique */
-            displayName: string;
+            /** @description Free-form, changeable, NOT unique; null until profile setup (S3) */
+            displayName: string | null;
             /**
-             * @description Immutable unique handle `name#NNNN`; `#1` reserved for instance owner
+             * @description Immutable unique handle `name#NNNN`; `#1` reserved for instance owner; null until profile setup
              * @example jojou#1042
              */
-            tag: string;
+            tag: string | null;
             avatarUrl?: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -636,9 +792,12 @@ export interface components {
         };
         Contact: {
             user: components["schemas"]["User"];
-            /** @description Both parties added each other */
+            /** @description Always true — contacts exist only as accepted, mutual pairs (kept for compatibility) */
             mutual: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the request was accepted
+             */
             addedAt: string;
             /**
              * Format: date-time
@@ -657,6 +816,28 @@ export interface components {
             title?: string | null;
             peer?: components["schemas"]["User"];
             members?: components["schemas"]["GroupMember"][];
+            /** @description Group only — users invited and not yet joined (visible to members) */
+            invited?: components["schemas"]["User"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ContactRequest: {
+            user: components["schemas"]["User"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ContactRequestResult: {
+            /** @enum {string} */
+            relationship: "contact_outgoing" | "contact_mutual";
+            request?: components["schemas"]["ContactRequest"];
+            contact?: components["schemas"]["Contact"];
+        };
+        GroupInvite: {
+            /** Format: uuid */
+            chatId: string;
+            title: string;
+            memberCount: number;
+            inviter: components["schemas"]["User"];
             /** Format: date-time */
             createdAt: string;
         };
@@ -779,7 +960,12 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Rate limit hit */
+        /**
+         * @description Rate limit hit. **Reserved — no endpoint emits 429 with
+         *     `rate_limited` today** (OTP resend cooldown uses `otp_cooldown`;
+         *     attempt lockout uses `otp_expired`). Kept for the future
+         *     IP-level rate limiter.
+         */
         RateLimited: {
             headers: {
                 "Retry-After"?: number;
@@ -983,7 +1169,12 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationFailed"];
-            /** @description Code invalid or expired */
+            /**
+             * @description Code invalid or expired. `otp_invalid` carries
+             *     `error.details.attemptsLeft`; when attempts run out the code is
+             *     deleted and subsequent verifies answer `otp_expired` ("Too many
+             *     attempts") — the lockout signal is `otp_expired`, not a 429.
+             */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -992,7 +1183,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            429: components["responses"]["RateLimited"];
         };
     };
     completeProfile: {
@@ -1241,9 +1431,12 @@ export interface operations {
                          */
                         verifiedAt?: string | null;
                         /**
-                         * @description none — strangers; contact_incoming — they added you,
-                         *     you haven't (drives "add back?" prompt); contact_outgoing —
-                         *     you added them; contact_mutual — both added; self.
+                         * @description none — strangers; contact_incoming — they sent you a
+                         *     contact request that is still pending (drives the
+                         *     Accept/Decline prompt); contact_outgoing — you sent a
+                         *     request that is not accepted yet (a declined request
+                         *     still reads as outgoing — decline is silent);
+                         *     contact_mutual — accepted by both; self.
                          * @enum {string}
                          */
                         relationship: "none" | "contact_incoming" | "contact_outgoing" | "contact_mutual" | "self";
@@ -1292,8 +1485,84 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
+            /** @description Request already pending (idempotent resend) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactRequestResult"];
+                };
+            };
+            /** @description Request created, or auto-accepted into a mutual contact */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactRequestResult"];
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Already contacts */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many contact requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listContactRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        incoming: components["schemas"]["ContactRequest"][];
+                        outgoing: components["schemas"]["ContactRequest"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    acceptContactRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1303,16 +1572,52 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            /** @description Already in contacts */
-            409: {
+        };
+    };
+    declineContactRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
+                content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelContactRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     removeContact: {
@@ -1397,6 +1702,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["ValidationFailed"];
             /** @description Not mutual contacts */
             403: {
                 headers: {
@@ -1406,6 +1712,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            404: components["responses"]["NotFound"];
         };
     };
     getChat: {
@@ -1685,7 +1992,18 @@ export interface operations {
                     };
                 };
             };
-            /** @description File too large */
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Chat not found or caller is not a member (existence privacy — non-members cannot distinguish) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description File too large (`too_large`) */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1744,7 +2062,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createGroup: {
@@ -1774,7 +2094,92 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            /**
+             * @description All `memberIds` must be **mutual** contacts of the creator.
+             *     Accepted members are *invited*, not added: the group becomes
+             *     visible to them only after `POST /group-invites/{chatId}/accept`.
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listGroupInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        invites: components["schemas"]["GroupInvite"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    acceptGroupInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Joined */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chat: components["schemas"]["Chat"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    declineGroupInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chatId: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     editGroup: {

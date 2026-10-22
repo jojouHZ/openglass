@@ -18,9 +18,16 @@ import (
 func contactJSON(c *store.Contact) map[string]any {
 	return map[string]any{
 		"user":       userJSON(&c.User),
-		"mutual":     c.Mutual,
+		"mutual":     true, // contacts are always accepted mutual pairs
 		"addedAt":    c.AddedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		"verifiedAt": c.VerifiedAt,
+	}
+}
+
+func contactRequestJSON(r *store.ContactRequest) map[string]any {
+	return map[string]any{
+		"user":      userJSON(&r.User),
+		"createdAt": r.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -37,6 +44,8 @@ func (s *Server) listContacts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"contacts": out})
 }
 
+// addContact sends a contact REQUEST (consent model). A pending reverse
+// request collapses into a mutual contact; a resend is a silent no-op.
 func (s *Server) addContact(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		UserID string `json:"userId"`
@@ -45,35 +54,128 @@ func (s *Server) addContact(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "userId is required", map[string]any{"userId": "required"})
 		return
 	}
-	c, err := s.chats.AddContact(r.Context(), userID(r), in.UserID)
+	me := userID(r)
+	if wait, ok := s.contactReq.allow("user|" + me); !ok {
+		rateLimited(w, wait)
+		return
+	}
+	res, err := s.chats.RequestContact(r.Context(), me, in.UserID)
 	switch {
+	case errors.Is(err, store.ErrInvalid):
+		badRequest(w, "You cannot add yourself", map[string]any{"userId": "self"})
+		return
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
+		return
 	case errors.Is(err, store.ErrConflict):
 		conflict(w, "Already in contacts", nil)
+		return
 	case err != nil:
 		writeErrorFromErr(w, err)
-	default:
-		// tell the added side someone added them (payload: the adder)
-		if me, err := s.store.UserByID(r.Context(), userID(r)); err == nil {
-			s.emitToUsers([]string{in.UserID}, "contact.added",
-				map[string]any{"user": userJSON(me)})
+		return
+	}
+	ctx := r.Context()
+	switch {
+	case res.Mutual:
+		if mu, err := s.store.UserByID(ctx, me); err == nil {
+			s.emitToUsers([]string{in.UserID}, "contact.accepted", map[string]any{"user": userJSON(mu)})
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"contact": contactJSON(c)})
+		s.emitToUsers([]string{me}, "contact.accepted", map[string]any{"user": userJSON(&res.Contact.User)})
+		s.emitToUsers([]string{me}, "contact.request.resolved", map[string]any{"userId": in.UserID})
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"relationship": "contact_mutual", "contact": contactJSON(res.Contact)})
+	case res.Existing:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"relationship": "contact_outgoing", "request": contactRequestJSON(res.Request)})
+	default:
+		if mu, err := s.store.UserByID(ctx, me); err == nil {
+			s.emitToUsers([]string{in.UserID}, "contact.request", map[string]any{
+				"user": userJSON(mu), "createdAt": res.Request.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00")})
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"relationship": "contact_outgoing", "request": contactRequestJSON(res.Request)})
 	}
 }
 
+func (s *Server) listContactRequests(w http.ResponseWriter, r *http.Request) {
+	in, out, err := s.chats.ListContactRequests(r.Context(), userID(r))
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	conv := func(list []store.ContactRequest) []any {
+		o := make([]any, 0, len(list))
+		for i := range list {
+			o = append(o, contactRequestJSON(&list[i]))
+		}
+		return o
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"incoming": conv(in), "outgoing": conv(out)})
+}
+
+func (s *Server) acceptContactRequest(w http.ResponseWriter, r *http.Request) {
+	me, requester := userID(r), r.PathValue("userId")
+	c, err := s.chats.AcceptContactRequest(r.Context(), me, requester)
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	if mu, err := s.store.UserByID(r.Context(), me); err == nil {
+		s.emitToUsers([]string{requester}, "contact.accepted", map[string]any{"user": userJSON(mu)})
+	}
+	s.emitToUsers([]string{me}, "contact.accepted", map[string]any{"user": userJSON(&c.User)})
+	s.emitToUsers([]string{me}, "contact.request.resolved", map[string]any{"userId": requester})
+	writeJSON(w, http.StatusOK, map[string]any{"contact": contactJSON(c)})
+}
+
+// declineContactRequest is SILENT: the requester receives nothing and keeps
+// seeing the request as pending; only the actor's other devices are told.
+func (s *Server) declineContactRequest(w http.ResponseWriter, r *http.Request) {
+	me, requester := userID(r), r.PathValue("userId")
+	err := s.chats.DeclineContactRequest(r.Context(), me, requester)
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	s.emitToUsers([]string{me}, "contact.request.resolved", map[string]any{"userId": requester})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) cancelContactRequest(w http.ResponseWriter, r *http.Request) {
+	me, target := userID(r), r.PathValue("userId")
+	err := s.chats.CancelContactRequest(r.Context(), me, target)
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	s.emitToUsers([]string{target}, "contact.request.withdrawn", map[string]any{"userId": me})
+	s.emitToUsers([]string{me}, "contact.request.resolved", map[string]any{"userId": target})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) removeContact(w http.ResponseWriter, r *http.Request) {
-	peerID := r.PathValue("userId")
-	err := s.chats.RemoveContact(r.Context(), userID(r), peerID)
+	me, peerID := userID(r), r.PathValue("userId")
+	err := s.chats.RemoveContact(r.Context(), me, peerID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
-		s.emitToUsers([]string{peerID}, "contact.removed",
-			map[string]any{"userId": userID(r)})
+		s.emitToUsers([]string{peerID}, "contact.removed", map[string]any{"userId": me})
+		s.emitToUsers([]string{me}, "contact.removed", map[string]any{"userId": peerID})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -105,6 +207,13 @@ func chatJSON(c *store.Chat) map[string]any {
 			members[i] = memberJSON(&c.Members[i])
 		}
 		out["members"] = members
+	}
+	if c.Type == "group" {
+		invited := make([]any, len(c.Invited))
+		for i := range c.Invited {
+			invited[i] = userJSON(&c.Invited[i])
+		}
+		out["invited"] = invited
 	}
 	return out
 }

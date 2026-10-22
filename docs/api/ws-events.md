@@ -82,8 +82,13 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 
 | type | data | notes |
 |------|------|-------|
-| `contact.added` | `{ "user": User }` | someone added you — relationship becomes `contact_incoming` until you add back (mutual) |
-| `contact.removed` | `{ "userId": uuid }` | someone removed you — mutual degrades to `contact_outgoing` on your side |
+| `contact.request` | `{ "user": User, "createdAt": ts }` | someone sent you a contact request — appears in your incoming list; relationship becomes `contact_incoming`. Replaces the retired `contact.added` |
+| `contact.accepted` | `{ "user": User }` | a request between you and `user` was accepted — **both** parties get it (the other party's profile); the contact now exists |
+| `contact.request.withdrawn` | `{ "userId": uuid }` | the requester cancelled — drop it from the incoming list |
+| `contact.request.resolved` | `{ "userId": uuid }` | **your own other devices only**: you accepted/declined/cancelled a request on one device — remove it from the lists. Never sent to the other party (decline is silent) |
+| `contact.removed` | `{ "userId": uuid }` | the other party removed the contact — the mutual pair is gone for both |
+| `group.invite` | `{ "invite": GroupInvite }` | you were invited to a group — shown in your invitations; the group itself stays invisible (404) until you accept |
+| `group.invite.resolved` | `{ "chatId": uuid }` | **your own other devices only**: you accepted/declined an invitation — drop it from the list |
 | `user.updated` | `{ "user": User }` | a mutual contact's profile changed (displayName, avatar) — refresh caches |
 | `chat.updated` | `{ "chat": Chat }` | group info changed (title, members, rights) for a chat you're in |
 | `chat.new` | `{ "chat": Chat }` | a chat appeared that you're now in: someone opened a direct chat with you or added you to a group. Emitted **before** that chat's first `message.new` (session `seq` order guarantees it) |

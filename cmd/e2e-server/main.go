@@ -95,10 +95,10 @@ func main() {
 
 	// mutual contacts are required for OpenDirectChat and for the relay
 	// contact-gating that prevents spam private invitations
-	if _, err := st.AddContact(context.Background(), ids[0], ids[1]); err != nil {
+	if _, err := st.RequestContact(context.Background(), ids[0], ids[1]); err != nil {
 		log.Fatalf("add contact alice->bob: %v", err)
 	}
-	if _, err := st.AddContact(context.Background(), ids[1], ids[0]); err != nil {
+	if _, err := st.RequestContact(context.Background(), ids[1], ids[0]); err != nil {
 		log.Fatalf("add contact bob->alice: %v", err)
 	}
 

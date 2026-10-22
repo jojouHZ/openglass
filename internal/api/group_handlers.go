@@ -6,6 +6,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/jojouHZ/openglass/internal/store"
 )
@@ -22,16 +23,45 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "title (1..128) and memberIds are required", nil)
 		return
 	}
-	c, err := s.chats.CreateGroup(r.Context(), userID(r), in.Title, in.MemberIDs)
+	me := userID(r)
+	c, err := s.chats.CreateGroup(r.Context(), me, in.Title, in.MemberIDs)
 	switch {
 	case errors.Is(err, store.ErrForbidden):
-		writeErr(w, http.StatusForbidden, "forbidden", "memberIds must be in your contacts", nil)
+		writeErr(w, http.StatusForbidden, "forbidden", "memberIds must be mutual contacts", nil)
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:
 		s.emitToChat(r.Context(), c.ID, "chat.new",
-			map[string]any{"chat": chatJSON(c)})
+			map[string]any{"chat": chatJSON(c)}) // owner only — invitees are not members yet
+		s.emitInvites(r, c, me, c.Invited)
 		writeJSON(w, http.StatusCreated, map[string]any{"chat": chatJSON(c)})
+	}
+}
+
+func groupInviteJSON(chatID, title string, memberCount int, inviter *store.User, at time.Time) map[string]any {
+	return map[string]any{
+		"chatId":      chatID,
+		"title":       title,
+		"memberCount": memberCount,
+		"inviter":     userJSON(inviter),
+		"createdAt":   at.UTC().Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+// emitInvites pushes group.invite to each newly invited user. Invitees get
+// the invitation only — never the chat (404 until they accept).
+func (s *Server) emitInvites(r *http.Request, c *store.Chat, inviterID string, invited []store.User) {
+	inviter, err := s.store.UserByID(r.Context(), inviterID)
+	if err != nil {
+		return
+	}
+	title := ""
+	if c.Title != nil {
+		title = *c.Title
+	}
+	for i := range invited {
+		s.emitToUsers([]string{invited[i].ID}, "group.invite", map[string]any{
+			"invite": groupInviteJSON(c.ID, title, len(c.Members), inviter, time.Now())})
 	}
 }
 
@@ -58,27 +88,70 @@ func (s *Server) addGroupMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	chatID := r.PathValue("chatId")
-	before, _ := s.chats.ChatMemberIDs(ctx, chatID)
-	if err := s.chats.AddGroupMembers(ctx, chatID, userID(r), in.MemberIDs); err != nil {
+	invitedIDs, err := s.chats.AddGroupMembers(ctx, chatID, userID(r), in.MemberIDs)
+	if err != nil {
 		s.writeGroupErr(w, err)
 		return
 	}
-	// chat.new only to actually-new members (re-adds are silent);
-	// everyone gets chat.updated with the fresh roster
-	was := map[string]bool{}
-	for _, id := range before {
-		was[id] = true
-	}
-	var added []string
-	for _, id := range in.MemberIDs {
-		if !was[id] {
-			added = append(added, id)
-		}
-	}
+	// invites go only to actually-new invitees (re-adds and silent
+	// declines stay quiet); members get the fresh roster
 	if c, err := s.chats.ChatByID(ctx, chatID, userID(r)); err == nil {
-		s.emitToUsers(added, "chat.new", map[string]any{"chat": chatJSON(c)})
+		var fresh []store.User
+		for _, id := range invitedIDs {
+			if u, err := s.store.UserByID(ctx, id); err == nil {
+				fresh = append(fresh, *u)
+			}
+		}
+		s.emitInvites(r, c, userID(r), fresh)
 		s.emitToChat(ctx, chatID, "chat.updated", map[string]any{"chat": chatJSON(c)})
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) listGroupInvites(w http.ResponseWriter, r *http.Request) {
+	list, err := s.chats.ListGroupInvites(r.Context(), userID(r))
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	out := make([]any, 0, len(list))
+	for i := range list {
+		out = append(out, groupInviteJSON(list[i].ChatID, list[i].Title, list[i].MemberCount, &list[i].Inviter, list[i].CreatedAt))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invites": out})
+}
+
+func (s *Server) acceptGroupInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	me, chatID := userID(r), r.PathValue("chatId")
+	c, err := s.chats.AcceptGroupInvite(ctx, chatID, me)
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	s.emitToUsers([]string{me}, "chat.new", map[string]any{"chat": chatJSON(c)})
+	s.emitToUsers([]string{me}, "group.invite.resolved", map[string]any{"chatId": chatID})
+	s.emitToChat(ctx, chatID, "chat.updated", map[string]any{"chat": chatJSON(c)})
+	writeJSON(w, http.StatusOK, map[string]any{"chat": chatJSON(c)})
+}
+
+// declineGroupInvite is SILENT — the group's members are not told.
+func (s *Server) declineGroupInvite(w http.ResponseWriter, r *http.Request) {
+	me, chatID := userID(r), r.PathValue("chatId")
+	err := s.chats.DeclineGroupInvite(r.Context(), chatID, me)
+	if errors.Is(err, store.ErrNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeErrorFromErr(w, err)
+		return
+	}
+	s.emitToUsers([]string{me}, "group.invite.resolved", map[string]any{"chatId": chatID})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -47,6 +47,7 @@ var (
 	ErrConflict  = errors.New("conflict")
 	ErrConsumed  = errors.New("invite consumed")
 	ErrForbidden = errors.New("forbidden")
+	ErrInvalid   = errors.New("invalid") // e.g. a contact request to yourself
 )
 
 // AuthStore — the persistence surface the API layer needs.
@@ -90,6 +91,29 @@ type Contact struct {
 	VerifiedAt *time.Time // private layer writes; always nil for now
 }
 
+// ContactRequest — a pending request, seen from either side.
+type ContactRequest struct {
+	User      User // the other party
+	CreatedAt time.Time
+}
+
+// ContactRequestResult — outcome of RequestContact.
+type ContactRequestResult struct {
+	Mutual   bool            // auto-accepted: the target had already asked us
+	Existing bool            // idempotent resend — nothing changed
+	Request  *ContactRequest // set when !Mutual
+	Contact  *Contact        // set when Mutual
+}
+
+// GroupInvite — an invitation addressed to the viewer.
+type GroupInvite struct {
+	ChatID      string
+	Title       string
+	MemberCount int
+	Inviter     User
+	CreatedAt   time.Time
+}
+
 type MemberRights struct {
 	InviteMembers  bool `json:"inviteMembers,omitempty"`
 	RemoveMembers  bool `json:"removeMembers,omitempty"`
@@ -111,6 +135,7 @@ type Chat struct {
 	Title     *string
 	Peer      *User         // direct chats only
 	Members   []GroupMember // group chats only
+	Invited   []User        // group chats only — invited, not yet joined
 	CreatedAt time.Time
 }
 
@@ -165,14 +190,22 @@ type MessageQuery struct {
 // Convention: ErrNotFound also means "chat exists but caller is not a
 // member" — existence of foreign chats is never leaked (contract 404).
 type ChatStore interface {
-	// contacts
-	ListContacts(ctx context.Context, userID string) ([]Contact, error)
-	AddContact(ctx context.Context, userID, contactID string) (*Contact, error) // ErrConflict dup, ErrNotFound user
-	RemoveContact(ctx context.Context, userID, contactID string) error          // ErrNotFound
+	// contacts — consent model: a contact is a mutual pair, created only by
+	// accepting a request. Requests are separate rows (see 0003).
+	ListContacts(ctx context.Context, userID string) ([]Contact, error) // mutual only
+	// RequestContact — ErrInvalid self, ErrNotFound unknown user, ErrConflict
+	// already contacts. A pending reverse request collapses into a mutual
+	// contact; re-sending an existing request is a silent no-op.
+	RequestContact(ctx context.Context, from, to string) (*ContactRequestResult, error)
+	ListContactRequests(ctx context.Context, userID string) (incoming, outgoing []ContactRequest, err error)
+	AcceptContactRequest(ctx context.Context, me, requesterID string) (*Contact, error) // ErrNotFound
+	DeclineContactRequest(ctx context.Context, me, requesterID string) error            // silent; ErrNotFound
+	CancelContactRequest(ctx context.Context, me, targetID string) error                // ErrNotFound
+	RemoveContact(ctx context.Context, userID, contactID string) error                  // both edges; ErrNotFound
 	AreMutual(ctx context.Context, a, b string) (bool, error)
-	// ContactEdges reports the two directed edges between a and b —
-	// drives the relationship enum on GET /users/{id} (S7).
-	ContactEdges(ctx context.Context, a, b string) (aToB, bToA bool, err error)
+	// Relationship drives GET /users/{id}: self|contact_mutual|
+	// contact_outgoing|contact_incoming|none (S7).
+	Relationship(ctx context.Context, a, b string) (string, error)
 	MutualContactIDs(ctx context.Context, userID string) ([]string, error) // presence scope (ws)
 
 	// chats
@@ -187,9 +220,16 @@ type ChatStore interface {
 	Membership(ctx context.Context, chatID, userID string) (*GroupMember, error)
 
 	// groups — party/raid rights model (owner implicit, member via rights)
+	// CreateGroup — memberIDs must be mutual contacts (ErrForbidden); they
+	// become INVITED, not members (Chat.Invited).
 	CreateGroup(ctx context.Context, ownerID, title string, memberIDs []string) (*Chat, error)
 	SetGroupTitle(ctx context.Context, chatID, actorID, title string) (*Chat, error)
-	AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) error
+	// AddGroupMembers invites mutual contacts; returns the ids newly
+	// invited (members, already-invited and silently-declined are skipped).
+	AddGroupMembers(ctx context.Context, chatID, actorID string, memberIDs []string) (invited []string, err error)
+	ListGroupInvites(ctx context.Context, userID string) ([]GroupInvite, error)
+	AcceptGroupInvite(ctx context.Context, chatID, userID string) (*Chat, error) // ErrNotFound
+	DeclineGroupInvite(ctx context.Context, chatID, userID string) error         // silent; ErrNotFound
 	RemoveGroupMember(ctx context.Context, chatID, actorID, targetID string) error
 	SetMemberRights(ctx context.Context, chatID, ownerID, targetID string, rights MemberRights) (*GroupMember, error)
 	TransferOwnership(ctx context.Context, chatID, ownerID, newOwnerID string) error

@@ -21,6 +21,12 @@ import (
 // newLimitedServer — newServer with shrunken auth buckets so limits trip
 // deterministically without clock tricks.
 func newLimitedServer(t *testing.T, limits api.AuthRateLimits) *httptest.Server {
+	ts, _, _ := newLimitedServerFull(t, limits)
+	return ts
+}
+
+// newLimitedServerFull — same, exposing the store/sender for mkUser.
+func newLimitedServerFull(t *testing.T, limits api.AuthRateLimits) (*httptest.Server, *store.Mem, *auth.CaptureSender) {
 	t.Helper()
 	st := store.NewMem()
 	st.SeedInvite("GLS-DEMO")
@@ -40,7 +46,7 @@ func newLimitedServer(t *testing.T, limits api.AuthRateLimits) *httptest.Server 
 		w.WriteHeader(http.StatusUpgradeRequired)
 	}))
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, st, sender
 }
 
 // generous — a spec that never trips inside a test.

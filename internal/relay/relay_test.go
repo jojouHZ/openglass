@@ -65,10 +65,10 @@ func mkUser(t *testing.T, st *store.Mem, email string) *store.User {
 func befriend(t *testing.T, st *store.Mem, a, b *store.User) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := st.AddContact(ctx, a.ID, b.ID); err != nil {
+	if _, err := st.RequestContact(ctx, a.ID, b.ID); err != nil {
 		t.Fatalf("add contact a→b: %v", err)
 	}
-	if _, err := st.AddContact(ctx, b.ID, a.ID); err != nil {
+	if _, err := st.RequestContact(ctx, b.ID, a.ID); err != nil {
 		t.Fatalf("add contact b→a: %v", err)
 	}
 }

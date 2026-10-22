@@ -34,6 +34,7 @@ type Server struct {
 	otpRequestMail *rateLimiter
 	otpVerifyIP    *rateLimiter
 	refreshIP      *rateLimiter
+	contactReq     *rateLimiter // per-user key (consent model anti-spam)
 
 	// optional probes for /healthz — nil dep reports "down"
 	pgPing    func(context.Context) error
@@ -122,6 +123,10 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	// contacts — bearer
 	v1.HandleFunc("GET /contacts", s.requireAuth(s.listContacts))
 	v1.HandleFunc("POST /contacts", s.requireAuth(s.addContact))
+	v1.HandleFunc("GET /contacts/requests", s.requireAuth(s.listContactRequests))
+	v1.HandleFunc("POST /contacts/requests/{userId}/accept", s.requireAuth(s.acceptContactRequest))
+	v1.HandleFunc("POST /contacts/requests/{userId}/decline", s.requireAuth(s.declineContactRequest))
+	v1.HandleFunc("DELETE /contacts/requests/{userId}", s.requireAuth(s.cancelContactRequest))
 	v1.HandleFunc("DELETE /contacts/{userId}", s.requireAuth(s.removeContact))
 
 	// chats — bearer
@@ -149,6 +154,11 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("DELETE /groups/{chatId}/members/{userId}", s.requireAuth(s.removeGroupMember))
 	v1.HandleFunc("PATCH /groups/{chatId}/members/{userId}", s.requireAuth(s.setMemberRights))
 	v1.HandleFunc("POST /groups/{chatId}/ownership", s.requireAuth(s.transferOwnership))
+
+	// group invitations — consent gate for joining a group
+	v1.HandleFunc("GET /group-invites", s.requireAuth(s.listGroupInvites))
+	v1.HandleFunc("POST /group-invites/{chatId}/accept", s.requireAuth(s.acceptGroupInvite))
+	v1.HandleFunc("POST /group-invites/{chatId}/decline", s.requireAuth(s.declineGroupInvite))
 
 	// contracted-but-unimplemented slices → honest 501, not 404/silence
 	stub := s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) })

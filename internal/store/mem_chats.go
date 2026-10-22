@@ -32,7 +32,9 @@ type memChats struct {
 	chats    map[string]*memChat
 	members  map[string]map[string]*memMember // chatID -> userID -> member
 	messages map[string][]*Message            // chatID -> seq-ordered
-	contacts map[string]map[string]time.Time  // owner -> contact -> addedAt
+	contacts map[string]map[string]time.Time  // owner -> contact -> addedAt (mutual pairs only)
+	requests map[string]map[string]*memReq    // requester -> target -> request
+	invites  map[string]map[string]*memInvite // chatID -> invitee -> invite
 	nonce    map[string]*Message              // chatID:senderID:nonce
 	atts     map[string]*Attachment           // attachmentID
 }
@@ -44,6 +46,8 @@ func (m *Mem) cs() *memChats {
 			members:  map[string]map[string]*memMember{},
 			messages: map[string][]*Message{},
 			contacts: map[string]map[string]time.Time{},
+			requests: map[string]map[string]*memReq{},
+			invites:  map[string]map[string]*memInvite{},
 			nonce:    map[string]*Message{},
 			atts:     map[string]*Attachment{},
 		}
@@ -58,91 +62,12 @@ func directKey(a, b string) string {
 	return a + ":" + b
 }
 
-func (m *Mem) ListContacts(_ context.Context, userID string) ([]Contact, error) {
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	var out []Contact
-	for cid, at := range cs.contacts[userID] {
-		u, err := m.UserByID(context.Background(), cid)
-		if err != nil {
-			continue
-		}
-		_, mutual := cs.contacts[cid][userID]
-		out = append(out, Contact{User: *u, Mutual: mutual, AddedAt: at})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].AddedAt.Before(out[j].AddedAt) })
-	return out, nil
-}
-
-func (m *Mem) AddContact(_ context.Context, userID, contactID string) (*Contact, error) {
-	if _, err := m.UserByID(context.Background(), contactID); err != nil {
-		return nil, err
-	}
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	if cs.contacts[userID] == nil {
-		cs.contacts[userID] = map[string]time.Time{}
-	}
-	if _, dup := cs.contacts[userID][contactID]; dup {
-		return nil, ErrConflict
-	}
-	at := time.Now()
-	cs.contacts[userID][contactID] = at
-	u, _ := m.UserByID(context.Background(), contactID)
-	_, mutual := cs.contacts[contactID][userID]
-	return &Contact{User: *u, Mutual: mutual, AddedAt: at}, nil
-}
-
-func (m *Mem) RemoveContact(_ context.Context, userID, contactID string) error {
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	if _, ok := cs.contacts[userID][contactID]; !ok {
-		return ErrNotFound
-	}
-	delete(cs.contacts[userID], contactID)
-	return nil
-}
-
-func (m *Mem) AreMutual(_ context.Context, a, b string) (bool, error) {
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	_, ab := cs.contacts[a][b]
-	_, ba := cs.contacts[b][a]
-	return ab && ba, nil
-}
-
-func (m *Mem) ContactEdges(_ context.Context, a, b string) (bool, bool, error) {
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	_, ab := cs.contacts[a][b]
-	_, ba := cs.contacts[b][a]
-	return ab, ba, nil
-}
-
 func (m *Mem) IsChatMember(_ context.Context, chatID, userID string) (bool, error) {
 	cs := m.cs()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	_, ok := cs.members[chatID][userID]
 	return ok, nil
-}
-
-func (m *Mem) MutualContactIDs(_ context.Context, userID string) ([]string, error) {
-	cs := m.cs()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	var out []string
-	for cid := range cs.contacts[userID] {
-		if _, back := cs.contacts[cid][userID]; back {
-			out = append(out, cid)
-		}
-	}
-	return out, nil
 }
 
 func (m *Mem) ChatMemberIDs(_ context.Context, chatID string) ([]string, error) {
@@ -239,6 +164,12 @@ func (m *Mem) chatView(cs *memChats, c *memChat, userID string) *Chat {
 				view.Members = append(view.Members, gm)
 			}
 		}
+		for uid := range cs.invites[c.ID] {
+			if u, err := m.UserByID(context.Background(), uid); err == nil {
+				view.Invited = append(view.Invited, *u)
+			}
+		}
+		sort.Slice(view.Invited, func(i, j int) bool { return view.Invited[i].ID < view.Invited[j].ID })
 	}
 	return &view
 }
@@ -600,13 +531,6 @@ func (m *Mem) Membership(_ context.Context, chatID, userID string) (*GroupMember
 	return &gm, nil
 }
 
-// isContact — group invites are restricted to the actor's contact list
-// (outgoing edge; mutual not required) — anti-spam decision.
-func isContact(cs *memChats, owner, contact string) bool {
-	_, ok := cs.contacts[owner][contact]
-	return ok
-}
-
 func (m *Mem) CreateGroup(_ context.Context, ownerID, title string, memberIDs []string) (*Chat, error) {
 	cs := m.cs()
 	cs.mu.Lock()
@@ -615,7 +539,7 @@ func (m *Mem) CreateGroup(_ context.Context, ownerID, title string, memberIDs []
 		if id == ownerID {
 			continue
 		}
-		if _, err := m.UserByID(context.Background(), id); err != nil || !isContact(cs, ownerID, id) {
+		if _, err := m.UserByID(context.Background(), id); err != nil || !cs.mutual(ownerID, id) {
 			return nil, ErrForbidden
 		}
 	}
@@ -625,12 +549,14 @@ func (m *Mem) CreateGroup(_ context.Context, ownerID, title string, memberIDs []
 	cs.members[c.ID] = map[string]*memMember{}
 	cs.members[c.ID][ownerID] = &memMember{GroupMember: GroupMember{
 		User: User{ID: ownerID}, Role: "owner", JoinedAt: now}}
+	cs.invites[c.ID] = map[string]*memInvite{}
 	for _, id := range memberIDs {
 		if id == ownerID {
 			continue
 		}
-		cs.members[c.ID][id] = &memMember{GroupMember: GroupMember{
-			User: User{ID: id}, Role: "member", JoinedAt: now}}
+		if _, dup := cs.invites[c.ID][id]; !dup {
+			cs.invites[c.ID][id] = &memInvite{inviter: ownerID, status: "pending", createdAt: now}
+		}
 	}
 	return m.chatView(cs, c, ownerID), nil
 }
@@ -651,38 +577,43 @@ func (m *Mem) SetGroupTitle(_ context.Context, chatID, actorID, title string) (*
 	return m.chatView(cs, c, actorID), nil
 }
 
-func (m *Mem) AddGroupMembers(_ context.Context, chatID, actorID string, memberIDs []string) error {
+func (m *Mem) AddGroupMembers(_ context.Context, chatID, actorID string, memberIDs []string) ([]string, error) {
 	cs := m.cs()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	c, ok := cs.chats[chatID]
 	mm := cs.members[chatID][actorID]
 	if !ok || mm == nil || c.Type != "group" {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
 	if mm.Role != "owner" && !mm.Rights.InviteMembers {
-		return ErrForbidden
+		return nil, ErrForbidden
 	}
 	// validate everything before mutating — a mid-loop rejection must
-	// not leave a partially-applied roster
+	// not leave a partially-applied roster. Members and already-invited
+	// users (pending or silently declined) are idempotent no-ops.
 	var fresh []string
+	seen := map[string]bool{}
 	for _, id := range memberIDs {
-		if _, member := cs.members[chatID][id]; member {
-			continue // idempotent re-add
+		if _, member := cs.members[chatID][id]; member || cs.invites[chatID][id] != nil || seen[id] {
+			continue
 		}
 		if _, err := m.UserByID(context.Background(), id); err != nil {
-			return ErrForbidden
+			return nil, ErrForbidden
 		}
-		if !isContact(cs, actorID, id) {
-			return ErrForbidden // contacts-only invites
+		if !cs.mutual(actorID, id) {
+			return nil, ErrForbidden // mutual contacts only
 		}
+		seen[id] = true
 		fresh = append(fresh, id)
 	}
-	for _, id := range fresh {
-		cs.members[chatID][id] = &memMember{GroupMember: GroupMember{
-			User: User{ID: id}, Role: "member", JoinedAt: time.Now()}}
+	if cs.invites[chatID] == nil {
+		cs.invites[chatID] = map[string]*memInvite{}
 	}
-	return nil
+	for _, id := range fresh {
+		cs.invites[chatID][id] = &memInvite{inviter: actorID, status: "pending", createdAt: time.Now()}
+	}
+	return fresh, nil
 }
 
 func (m *Mem) RemoveGroupMember(_ context.Context, chatID, actorID, targetID string) error {
