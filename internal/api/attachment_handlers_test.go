@@ -169,3 +169,29 @@ func TestAttachments_NonceReplayWithAttachment(t *testing.T) {
 		t.Fatalf("replayed message lost attachments: %v", m2)
 	}
 }
+
+// Retracting a message retracts its files too: the blob is no longer served,
+// even to someone who still remembers the attachment id.
+func TestAttachments_RetractedMessageFilesAreGone(t *testing.T) {
+	ts, _, _, aTok, aID, bTok, bID := setupTwoUsers(t)
+	befriend(t, ts, aTok, bTok, aID, bID)
+	chatID := directChat(t, ts, aTok, bID)
+	png := append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0}, 64)...)
+	_, body := upload(t, ts, chatID, aTok, "pic.png", png)
+	attID := body["attachment"].(map[string]any)["id"].(string)
+	_, msg := post(t, ts, "/api/v1/chats/"+chatID+"/messages",
+		fmt.Sprintf(`{"clientNonce":"n-gone","attachmentIds":[%q]}`, attID), aTok)
+	mid := msg["message"].(map[string]any)["id"].(string)
+
+	if code, _, _ := downloadRaw(t, ts, attID, bTok); code != 200 {
+		t.Fatalf("before retract: %d", code)
+	}
+	if del(t, ts, "/api/v1/messages/"+mid, aTok) != 204 {
+		t.Fatal("retract")
+	}
+	for _, tok := range []string{aTok, bTok} {
+		if code, _, _ := downloadRaw(t, ts, attID, tok); code != 404 {
+			t.Fatalf("retracted attachment must be gone, got %d", code)
+		}
+	}
+}

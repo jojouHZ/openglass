@@ -80,5 +80,7 @@ one-way contact model.
 - **CI lesson**: a test that waits a fixed 400 ms passed locally and
   failed on the slower CI runner; new tests wait for conditions
   (`vi.waitFor`). 65 older fixed waits remain — fix when touching them.
-- **Known gap**: files of a retracted message are detached from the
-  timeline but the blobs stay on disk until a cleanup job exists.
+- **Review catch**: a retracted message's files were still downloadable
+  by anyone who remembered the attachment id. Retraction now makes the
+  blob unservable (404) on both stores; the bytes stay on disk until a
+  cleanup job exists (known gap).

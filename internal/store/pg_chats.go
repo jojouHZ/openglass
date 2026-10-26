@@ -970,10 +970,12 @@ func (p *PG) CreateAttachment(ctx context.Context, a *Attachment) (*Attachment, 
 func (p *PG) AttachmentByID(ctx context.Context, id string) (*Attachment, error) {
 	var a Attachment
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, chat_id, uploader_id, kind, mime_type, coalesce(file_name,''),
-		        size_bytes, coalesce(storage_path,''), created_at,
-		        coalesce(message_id::text,'')
-		 FROM attachments WHERE id=$1`, id).
+		`SELECT a.id, a.chat_id, a.uploader_id, a.kind, a.mime_type, coalesce(a.file_name,''),
+		        a.size_bytes, coalesce(a.storage_path,''), a.created_at,
+		        coalesce(a.message_id::text,'')
+		 FROM attachments a WHERE a.id=$1
+		   AND NOT EXISTS (SELECT 1 FROM messages m
+		                   WHERE m.id = a.message_id AND m.deleted_at IS NOT NULL)`, id).
 		Scan(&a.ID, &a.ChatID, &a.UploaderID, &a.Kind, &a.MimeType,
 			&a.FileName, &a.SizeBytes, &a.StoragePath, &a.CreatedAt,
 			&a.MessageID)

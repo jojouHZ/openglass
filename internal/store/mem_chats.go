@@ -717,6 +717,12 @@ func (m *Mem) AttachmentByID(_ context.Context, id string) (*Attachment, error) 
 	if !ok {
 		return nil, ErrNotFound
 	}
+	// a retracted message takes its files with it (PG parity)
+	for _, msg := range cs.messages[a.ChatID] {
+		if msg.ID == a.MessageID && msg.DeletedAt != nil {
+			return nil, ErrNotFound
+		}
+	}
 	cp := *a
 	return &cp, nil
 }
