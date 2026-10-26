@@ -261,3 +261,35 @@ func (m *Mem) DeclineGroupInvite(_ context.Context, chatID, userID string) error
 	inv.status = "declined"
 	return nil
 }
+
+func (m *Mem) AddSystemMessage(_ context.Context, chatID, actorID string, ev SystemEvent) (*Message, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	c, ok := cs.chats[chatID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	c.lastSeq++
+	evc := ev
+	msg := &Message{
+		ID: memID(), ChatID: chatID, Seq: c.lastSeq, SenderID: actorID,
+		ClientNonce: "sys-" + memID(), SentAt: time.Now(), Kind: "system", SystemEvent: &evc,
+	}
+	cs.messages[chatID] = append(cs.messages[chatID], msg)
+	out := *msg
+	return &out, nil
+}
+
+func (m *Mem) DirectChatBetween(_ context.Context, a, b string) (string, bool, error) {
+	cs := m.cs()
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	key := directKey(a, b)
+	for id, c := range cs.chats {
+		if c.directKey == key {
+			return id, true, nil
+		}
+	}
+	return "", false, nil
+}

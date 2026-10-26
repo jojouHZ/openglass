@@ -323,13 +323,17 @@ func TestMessages_EditDeleteOwnership(t *testing.T) {
 	if c := del(t, ts, "/api/v1/messages/"+mid, bTok); c != 403 {
 		t.Fatalf("foreign delete: %d", c)
 	}
-	// owner deletes → tombstone excluded from history
+	// owner deletes → a redacted tombstone keeps its place in the history
 	if c := del(t, ts, "/api/v1/messages/"+mid, aTok); c != 204 {
 		t.Fatalf("delete: %d", c)
 	}
 	_, p := get(t, ts, "/api/v1/chats/"+chatID+"/messages", aTok)
-	if len(p["messages"].([]any)) != 0 {
-		t.Fatalf("deleted message still in history: %v", p)
+	msgs := p["messages"].([]any)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one tombstone in history: %v", p)
+	}
+	if tomb := msgs[0].(map[string]any); tomb["deletedAt"] == nil || tomb["text"] != nil || tomb["pinned"] != false {
+		t.Fatalf("tombstone must be redacted: %v", tomb)
 	}
 }
 
@@ -445,10 +449,21 @@ func TestMessages_DeletedTombstone(t *testing.T) {
 	if del(t, ts, "/api/v1/messages/"+doomed, aTok) != 204 {
 		t.Fatal("delete")
 	}
-	// excluded from history and search
-	_, p := get(t, ts, "/api/v1/chats/"+chatID+"/messages", aTok)
-	if len(p["messages"].([]any)) != 1 {
-		t.Fatalf("tombstone in history: %v", p)
+	// kept in the history as a redacted tombstone, excluded from search and pins
+	for _, tok := range []string{aTok, bTok} {
+		_, p := get(t, ts, "/api/v1/chats/"+chatID+"/messages", tok)
+		msgs := p["messages"].([]any)
+		if len(msgs) != 2 {
+			t.Fatalf("tombstone missing from history: %v", p)
+		}
+		tomb := msgs[1].(map[string]any)
+		if tomb["deletedAt"] == nil || tomb["text"] != nil || tomb["id"] != doomed {
+			t.Fatalf("tombstone must be redacted and in place: %v", tomb)
+		}
+	}
+	_, p := get(t, ts, "/api/v1/chats/"+chatID+"/messages?pinned=true", aTok)
+	if len(p["messages"].([]any)) != 0 {
+		t.Fatalf("tombstone in the pinned view: %v", p)
 	}
 	_, p = get(t, ts, "/api/v1/chats/"+chatID+"/messages?q=secret", aTok)
 	if len(p["messages"].([]any)) != 0 {
@@ -553,8 +568,16 @@ func TestMutual_Lifecycle(t *testing.T) {
 		if c, _ := get(t, ts, "/api/v1/chats/"+chatID, tok); c != 200 {
 			t.Fatalf("post-removal get: %d", c)
 		}
-		if c, mb := get(t, ts, "/api/v1/chats/"+chatID+"/messages", tok); c != 200 || len(mb["messages"].([]any)) != 1 {
-			t.Fatalf("history must stay readable: %d %v", c, mb)
+		c, mb := get(t, ts, "/api/v1/chats/"+chatID+"/messages", tok)
+		hist := mb["messages"].([]any)
+		if c != 200 || len(hist) != 2 {
+			t.Fatalf("history must stay readable (+ the system line): %d %v", c, mb)
+		}
+		// the timeline explains itself: a system event naming who ended the contact
+		sys := hist[1].(map[string]any)
+		ev, _ := sys["systemEvent"].(map[string]any)
+		if sys["kind"] != "system" || sys["text"] != nil || ev["type"] != "contact_removed" || ev["actorId"] != bID {
+			t.Fatalf("system line: %v", sys)
 		}
 	}
 	// re-connecting restores sending

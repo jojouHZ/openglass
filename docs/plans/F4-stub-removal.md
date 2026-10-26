@@ -50,7 +50,7 @@ file.
 
 ### B. Reports, for real
 **B1 — storage & API (backend agent)**
-- Migration `0004_reports.sql`:
+- Migration `0005_reports.sql`:
   `reports(id uuid pk, reporter_id → users, target_user_id → users,
   reason text 1..1024, status 'open'|'resolved' default 'open',
   created_at, resolved_at, resolved_note)`; index on `(status, created_at)`;
@@ -128,7 +128,7 @@ file.
   never echoed to the target; reporter identity is operator-visible by
   design and stated in the dialog copy. `ogadmin` needs DB credentials, so
   it is operator-only by construction (no network surface added).
-- **DevOps:** migration `0004` forward-only; new binary in the image; CI
+- **DevOps:** migration `0005` forward-only; new binary in the image; CI
   builds `./cmd/...` already. Dependabot PR #46 (certifi) is merged.
 - **Testing:** the "no 501 anywhere" guard is the regression net for the
   whole north star; E2E covers the only new user-visible flow.

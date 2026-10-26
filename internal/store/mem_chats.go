@@ -245,9 +245,11 @@ func (m *Mem) ListMessages(_ context.Context, chatID string, q MessageQuery) ([]
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	msgs := cs.messages[chatID]
+	// the timeline keeps retracted messages as tombstones (redacted when
+	// cloned); search and the pinned view only ever see live messages
 	var list []*Message
 	for _, msg := range msgs {
-		if msg.DeletedAt == nil {
+		if msg.DeletedAt == nil || (q.Q == "" && !q.Pinned) {
 			list = append(list, msg)
 		}
 	}
@@ -358,6 +360,7 @@ func cloneMsgs(in []*Message) []Message {
 	for i, m := range in {
 		out[i] = *m
 		out[i].Attachments = append([]Attachment(nil), m.Attachments...)
+		out[i].redact()
 	}
 	return out
 }
@@ -470,6 +473,7 @@ func (m *Mem) DeleteMessage(_ context.Context, messageID, userID string) error {
 				if msg.SenderID == userID {
 					now := time.Now()
 					msg.DeletedAt = &now
+					msg.Text = nil // retracted content is erased (PG parity)
 					return nil
 				}
 				// groups: owner or delete_messages may remove others' posts
@@ -477,6 +481,7 @@ func (m *Mem) DeleteMessage(_ context.Context, messageID, userID string) error {
 					(mm.Role == "owner" || mm.Rights.DeleteMessages) {
 					now := time.Now()
 					msg.DeletedAt = &now
+					msg.Text = nil
 					return nil
 				}
 				return ErrForbidden

@@ -427,10 +427,20 @@ silent.
   private layer" is **retired**: private is distinguished by hue (violet),
   mask glyph, pattern and ringed composer in both themes. An automated
   test asserts the private tokens stay hue-distinct from the public ones.
-- **Consent outlives the chat**: sending in a direct chat requires the
-  pair to still be mutual contacts; after unfriending, history stays
-  readable and the composer is disabled with a "no longer contacts"
-  banner. Contact requests never expire.
+- **Consent outlives the chat**: when either side ends the contact the
+  direct chat stays for both as a read-only archive. A **system line** is
+  added to the timeline, rendered per viewer — "You removed Anna from
+  contacts — new messages are turned off. This chat stays as an archive."
+  / "Anna removed you from contacts — …" — and the composer is locked
+  (banner). Frozen chat: no new messages or uploads, **no edits, no pins,
+  no typing indicator**; the author can still retract their own messages.
+  Groups and saved messages are unaffected. "Remove chat from my list"
+  is post-MVP. Contact requests never expire.
+- **Retract, don't rewrite**: deleting a message leaves a visible
+  "message deleted" tombstone (text, attachments, reply and pin are
+  erased server-side; search and pinned views skip it). Editing is possible
+  for **15 minutes** after sending (then `edit_window_closed` — delete and
+  send a new message); an edited message shows "edited".
 - **Navigation**: a bottom tab bar (Chats · Contacts · Settings) on root
   screens only; hidden in an open chat and on detail/sub-screens (group
   info, devices & sessions, verification, PWA prompts). Tab badges: unread

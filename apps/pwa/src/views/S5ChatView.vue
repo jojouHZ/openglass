@@ -8,7 +8,9 @@ import type { LocalMessage } from "@openglass/core";
 import {
   ApiRequestError,
   api,
+  canEdit,
   dayChanged,
+  systemText,
   toSeries,
   useChatsStore,
   useContactsStore,
@@ -59,14 +61,24 @@ const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : n
 
 // consent outlives the chat: once the pair is no longer mutual the server
 // refuses new messages (history stays readable) — mirror it in the UI.
-// Only decided after the contact list has loaded, never on a guess.
+// Decided from the loaded contact list, or from the server's own 403
+// (`not_contacts`) when the list is stale or failed to load.
+const frozenByServer = ref(false);
 const notContacts = computed(
   () =>
     !!peer.value &&
     peer.value.id !== session.user?.id &&
-    contacts.loaded &&
-    !contacts.isContact(peer.value.id),
+    (frozenByServer.value || (contacts.loaded && !contacts.isContact(peer.value.id))),
 );
+watch(
+  () => (peer.value ? contacts.isContact(peer.value.id) : false),
+  (is) => {
+    if (is) frozenByServer.value = false; // reconnected
+  },
+);
+
+const systemLine = (m: LocalMessage) =>
+  systemText(m, session.user?.id, peer.value?.displayName ?? "your contact");
 
 // Header title tap → group manage / peer profile (saved-messages: none).
 const headerTarget = computed(() => {
@@ -208,8 +220,18 @@ async function onSend(text: string) {
     replyTo.value = null;
     staged.value = null;
     await scrollToBottom();
-  } catch {
-    actionError.value = "send failed — message marked";
+  } catch (e) {
+    const reason =
+      e instanceof ApiRequestError && e.status === 403 ? e.apiError.details?.reason : undefined;
+    if (reason === "not_contacts") {
+      frozenByServer.value = true;
+      actionError.value = "you're no longer contacts — sending is off";
+    } else if (reason === "edit_window_closed") {
+      actionError.value = "the edit window has closed — delete the message and send a new one";
+      editing.value = null;
+    } else {
+      actionError.value = "send failed — message marked";
+    }
   }
 }
 
@@ -236,10 +258,14 @@ function canDeleteMsg(m: LocalMessage) {
 }
 let lpTimer: ReturnType<typeof setTimeout> | null = null;
 
+// system lines and tombstones have no actions
+const inert = (m: LocalMessage) => m.kind === "system" || !!m.deletedAt;
 function openMenu(m: LocalMessage, e: MouseEvent) {
+  if (inert(m)) return;
   menu.value = { m, x: e.clientX, y: e.clientY };
 }
 function longPressStart(m: LocalMessage, e: PointerEvent) {
+  if (inert(m)) return;
   lpTimer = setTimeout(() => (menu.value = { m, x: e.clientX, y: e.clientY }), 500);
 }
 function longPressEnd() {
@@ -539,7 +565,7 @@ watch(
       data-testid="not-contacts-banner"
     >
       <span class="flex-1">
-        you're no longer contacts with {{ peer.displayName }} — history is kept, sending is off
+        messaging is off — you're no longer contacts with {{ peer.displayName }}
       </span>
       <button
         class="text-accent"
@@ -620,11 +646,24 @@ watch(
             :key="m.id"
             class="flex w-full"
             :class="[
-              m.senderId === session.user?.id ? 'justify-end' : 'justify-start',
+              m.kind === 'system'
+                ? 'justify-center'
+                : m.senderId === session.user?.id
+                  ? 'justify-end'
+                  : 'justify-start',
               highlightId === m.id ? '-mx-6 bg-soft px-6 py-0.5' : '',
             ]"
           >
           <div
+            v-if="m.kind === 'system'"
+            :data-mid="m.id"
+            class="my-1 max-w-[90%] rounded-card bg-soft px-4 py-2 text-center text-meta text-muted"
+            data-testid="system-line"
+          >
+            {{ systemLine(m) }}
+          </div>
+          <div
+            v-else
             :data-mid="m.id"
             class="flex max-w-[80%] items-end gap-2"
             @contextmenu.prevent="openMenu(m, $event)"
@@ -654,12 +693,19 @@ watch(
               <div v-if="m.replyToMessageId" class="mb-1 border-l-2 border-accent pl-2 text-sub opacity-80">
                 reply
               </div>
-              <div v-if="m.text" class="whitespace-pre-wrap break-words">{{ m.text }}</div>
-              <div v-if="m.attachments?.length" class="mt-1 flex flex-col gap-1">
+              <div
+                v-if="m.deletedAt"
+                class="italic opacity-70"
+                data-testid="tombstone"
+              >
+                message deleted
+              </div>
+              <div v-else-if="m.text" class="whitespace-pre-wrap break-words">{{ m.text }}</div>
+              <div v-if="!m.deletedAt && m.attachments?.length" class="mt-1 flex flex-col gap-1">
                 <AttachmentView v-for="a in m.attachments" :key="a.id" :att="a" />
               </div>
               <div class="mt-0.5 flex items-center justify-end gap-1 text-meta opacity-70">
-                <span v-if="m.editedAt" class="text-micro">edited</span>
+                <span v-if="m.editedAt && !m.deletedAt" class="text-micro">edited</span>
                 <span>{{ fmtTime(m.sentAt) }}</span>
                 <span v-if="m.senderId === session.user?.id" :class="tickClass(m)" data-testid="msg-state">
                   <svg v-if="m.failed" viewBox="0 0 24 24" class="size-3.5" fill="none" stroke="currentColor" stroke-width="2">
@@ -707,7 +753,7 @@ watch(
     <MessageMenu
       v-if="menu"
       :message="menu.m"
-      :own="menu.m.senderId === session.user?.id"
+      :own="canEdit(menu.m, session.user?.id)"
       :can-pin="canPinMsg"
       :can-delete="canDeleteMsg(menu.m)"
       :x="menu.x"

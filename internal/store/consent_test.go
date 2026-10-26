@@ -259,3 +259,58 @@ func runCrossing(t *testing.T, st consentStore) {
 		}
 	}
 }
+
+// Tombstones and system lines — same behaviour on both stores.
+func TestMem_TimelineEvents(t *testing.T) { runTimeline(t, store.NewMem()) }
+func TestPG_TimelineEvents(t *testing.T)  { runTimeline(t, pgOrSkip(t)) }
+
+func runTimeline(t *testing.T, st consentStore) {
+	ctx := context.Background()
+	a, b := mkUser(t, st, "ta"), mkUser(t, st, "tb")
+	_, _ = st.RequestContact(ctx, a.ID, b.ID)
+	_, _ = st.RequestContact(ctx, b.ID, a.ID)
+	chat, _, err := st.OpenDirectChat(ctx, a.ID, b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, ok, err := st.DirectChatBetween(ctx, b.ID, a.ID); err != nil || !ok || id != chat.ID {
+		t.Fatalf("DirectChatBetween: %q %v %v", id, ok, err)
+	}
+	if _, ok, _ := st.DirectChatBetween(ctx, a.ID, mkUser(t, st, "tc").ID); ok {
+		t.Fatal("no chat expected for a stranger pair")
+	}
+
+	secret := "retract me"
+	m1, _, _ := st.SendMessage(ctx, &store.Message{ChatID: chat.ID, SenderID: a.ID, Text: &secret, ClientNonce: "t1"})
+	sys, err := st.AddSystemMessage(ctx, chat.ID, a.ID, store.SystemEvent{Type: "contact_removed", ActorID: a.ID})
+	if err != nil || sys.Kind != "system" || sys.SystemEvent == nil || sys.SystemEvent.ActorID != a.ID || sys.Text != nil {
+		t.Fatalf("system message: %+v %v", sys, err)
+	}
+	if sys.Seq != m1.Seq+1 {
+		t.Fatalf("system message must take the next seq: %d after %d", sys.Seq, m1.Seq)
+	}
+	if err := st.DeleteMessage(ctx, m1.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, _, _, _ := st.ListMessages(ctx, chat.ID, store.MessageQuery{})
+	if len(msgs) != 2 || msgs[0].ID != m1.ID || msgs[1].ID != sys.ID {
+		t.Fatalf("timeline order/tombstone: %+v", msgs)
+	}
+	if msgs[0].DeletedAt == nil || msgs[0].Text != nil || msgs[0].Pinned || len(msgs[0].Attachments) != 0 {
+		t.Fatalf("tombstone must be redacted: %+v", msgs[0])
+	}
+	if msgs[1].Kind != "system" || msgs[1].SystemEvent == nil || msgs[1].SystemEvent.Type != "contact_removed" {
+		t.Fatalf("system line lost its event: %+v", msgs[1])
+	}
+	if found, _, _, _ := st.ListMessages(ctx, chat.ID, store.MessageQuery{Q: "retract"}); len(found) != 0 {
+		t.Fatalf("search must not see a tombstone: %+v", found)
+	}
+	// the system line counts as unread for the other side
+	sums, _ := st.ListChatSummaries(ctx, b.ID)
+	for _, s := range sums {
+		if s.ID == chat.ID && (s.UnreadCount != 1 || s.LastMessage == nil || s.LastMessage.Kind != "system") {
+			t.Fatalf("summary after a system line: unread=%d last=%+v", s.UnreadCount, s.LastMessage)
+		}
+	}
+}

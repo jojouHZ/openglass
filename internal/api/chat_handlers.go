@@ -178,6 +178,15 @@ func (s *Server) removeContact(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.emitToUsers([]string{peerID}, "contact.removed", map[string]any{"userId": me})
 		s.emitToUsers([]string{me}, "contact.removed", map[string]any{"userId": peerID})
+		// the chat stays as an archive — say so IN the timeline, for both
+		// sides, so nobody has to guess why sending stopped working
+		ctx := r.Context()
+		if chatID, ok, err := s.chats.DirectChatBetween(ctx, me, peerID); err == nil && ok {
+			if sm, err := s.chats.AddSystemMessage(ctx, chatID, me,
+				store.SystemEvent{Type: "contact_removed", ActorID: me}); err == nil {
+				s.emitToChat(ctx, chatID, "message.new", messageJSON(sm))
+			}
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -259,6 +268,13 @@ func messageJSON(m *store.Message) map[string]any {
 		"editedAt":         m.EditedAt,
 		"deletedAt":        m.DeletedAt,
 		"pinned":           m.Pinned,
+		"kind":             "user",
+	}
+	if m.Kind == "system" {
+		out["kind"] = "system"
+		if m.SystemEvent != nil {
+			out["systemEvent"] = map[string]any{"type": m.SystemEvent.Type, "actorId": m.SystemEvent.ActorID}
+		}
 	}
 	if m.Attachments != nil {
 		atts := make([]any, len(m.Attachments))

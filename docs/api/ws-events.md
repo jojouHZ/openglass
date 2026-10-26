@@ -66,7 +66,7 @@ frames carry just `{ "type", "data" }` — the `auth` frame included.
 |------|------|---------|
 | `message.new` | `Message` (OpenAPI schema) | a message was sent to a chat the user is in. `seq` field inside the message is the **per-chat** sequence — distinct from the frame-level `seq` |
 | `message.edited` | `Message` | message edited |
-| `message.deleted` | `{ "chatId": uuid, "messageId": uuid, "seq": int }` | message deleted (tombstone; client removes or strikes through) |
+| `message.deleted` | `{ "chatId": uuid, "messageId": uuid, "seq": int }` | message retracted — the client keeps the message in place as a "message deleted" tombstone (content is gone) |
 | `message.pinned` / `message.unpinned` | `{ "chatId": uuid, "messageId": uuid }` | pin change (group right `pin_messages`) |
 
 ### Activity

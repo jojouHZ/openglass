@@ -69,3 +69,16 @@ one-way contact model.
   "who may write to me" profile setting (with the desktop client).
 - **Chore**: certifi 2026.10.19 (Dependabot alert #5, critical, affects
   only the documentation tooling).
+- **F1.2 — the archive model** (owner decisions): after unfriending, the
+  direct chat is a read-only archive for both sides. Audit found edit, pin
+  and typing still open to an ex-contact; all three are now gated. Instead
+  of a generic banner the timeline gets a **system message** (migration
+  0004: `messages.kind`, `system_event`) rendered per viewer, so both
+  sides learn who ended the contact and what that means. Retracting a
+  message now leaves a **tombstone** (content erased in the store, shape
+  kept in the timeline) and edits close after **15 minutes**.
+- **CI lesson**: a test that waits a fixed 400 ms passed locally and
+  failed on the slower CI runner; new tests wait for conditions
+  (`vi.waitFor`). 65 older fixed waits remain — fix when touching them.
+- **Known gap**: files of a retracted message are detached from the
+  timeline but the blobs stay on disk until a cleanup job exists.

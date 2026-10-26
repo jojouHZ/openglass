@@ -236,8 +236,14 @@ func TestPG_ChatRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	msgs, _, _, _ = pg.ListMessages(ctx, chat.ID, store.MessageQuery{})
-	if len(msgs) != 1 {
-		t.Fatalf("tombstone leaked: %d", len(msgs))
+	var tomb *store.Message
+	for i := range msgs {
+		if msgs[i].ID == m.ID {
+			tomb = &msgs[i]
+		}
+	}
+	if tomb == nil || tomb.DeletedAt == nil || tomb.Text != nil || len(msgs) != 2 {
+		t.Fatalf("expected the deleted message as a redacted tombstone: %+v", msgs)
 	}
 }
 

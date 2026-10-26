@@ -76,6 +76,38 @@ test("contact request: nothing happens until the target accepts", async ({ brows
   await a.page.goto("/contacts");
   await expect(a.page.getByTestId("outgoing-request")).toHaveCount(0);
 
+  // ---- ending the contact: the chat stays, as a read-only archive ----
+  const chatId = (await opened.json()).chat.id;
+  await a.page.request.post(`/api/v1/chats/${chatId}/messages`, {
+    headers: auth(alice),
+    data: { clientNonce: "e2e-before", text: "before the break" },
+  });
+  await c.page.goto(`/chats/${chatId}`);
+  await expect(c.page.getByText("before the break")).toBeVisible();
+  await expect(c.page.getByTestId("composer-input")).toBeEnabled();
+
+  await a.page.goto(`/contacts/${carol.id}`);
+  await a.page.getByTestId("action-remove").click();
+  await a.page.getByTestId("confirm-action").click();
+
+  // Carol, live, without reloading: a system line naming the actor + a locked composer
+  await expect(c.page.getByTestId("system-line")).toContainText("Alice removed you from contacts", {
+    timeout: 15000,
+  });
+  await expect(c.page.getByTestId("not-contacts-banner")).toBeVisible();
+  await expect(c.page.getByTestId("composer-input")).toBeDisabled();
+  await expect(c.page.getByText("before the break")).toBeVisible(); // history stays
+
+  // Alice sees the same line from her side; the server refuses new messages
+  await a.page.goto(`/chats/${chatId}`);
+  await expect(a.page.getByTestId("system-line")).toContainText("You removed Carol from contacts");
+  await expect(a.page.getByTestId("composer-input")).toBeDisabled();
+  const refused = await a.page.request.post(`/api/v1/chats/${chatId}/messages`, {
+    headers: auth(alice),
+    data: { clientNonce: "e2e-after", text: "still there?" },
+  });
+  expect(refused.status()).toBe(403);
+
   await a.ctx.close();
   await c.ctx.close();
 });

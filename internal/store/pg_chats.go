@@ -49,7 +49,7 @@ func (p *PG) ListChatSummaries(ctx context.Context, userID string) ([]ChatSummar
 		          WHERE x.chat_id = c.id AND x.deleted_at IS NULL
 		            AND x.seq > mm.last_read_seq AND x.sender_id <> $1), 0),
 		        lm.id, lm.seq, lm.sender_id, lm.text, lm.reply_to, lm.client_nonce,
-		        lm.sent_at, lm.edited_at, lm.pinned,
+		        lm.sent_at, lm.edited_at, lm.pinned, lm.kind, lm.system_event,
 		        coalesce(lm.sent_at, c.created_at),
 		        pu.id, pu.email::text, coalesce(pu.display_name,''), coalesce(pu.tag,''),
 		        pu.avatar_url, pu.created_at
@@ -79,6 +79,8 @@ func (p *PG) ListChatSummaries(ctx context.Context, userID string) ([]ChatSummar
 			text, replyTo             *string
 			sentAt, editedAt          *time.Time
 			pinned                    *bool
+			kind                      *string
+			event                     []byte
 		}
 		var pu struct {
 			id, email, dn, tag *string
@@ -89,7 +91,7 @@ func (p *PG) ListChatSummaries(ctx context.Context, userID string) ([]ChatSummar
 		err := rows.Scan(&s.ID, &s.Type, &title, &s.CreatedAt, &s.Pinned,
 			&s.MemberCount, &s.UnreadCount,
 			&lm.id, &lm.seq, &lm.senderID, &lm.text, &lm.replyTo, &lm.clientNonce,
-			&lm.sentAt, &lm.editedAt, &lm.pinned,
+			&lm.sentAt, &lm.editedAt, &lm.pinned, &lm.kind, &lm.event,
 			&s.LastActivityAt,
 			&pu.id, &pu.email, &pu.dn, &pu.tag, &pu.avatar, &pu.created)
 		if err != nil {
@@ -102,6 +104,10 @@ func (p *PG) ListChatSummaries(ctx context.Context, userID string) ([]ChatSummar
 				Text: lm.text, ReplyToMessageID: lm.replyTo, ClientNonce: *lm.clientNonce,
 				SentAt: *lm.sentAt, EditedAt: lm.editedAt, Pinned: *lm.pinned,
 			}
+			if lm.kind != nil {
+				s.LastMessage.Kind = *lm.kind
+			}
+			s.LastMessage.setEvent(lm.event)
 		}
 		if s.Type == "direct" {
 			if pu.id != nil {
@@ -280,13 +286,30 @@ func (p *PG) SetChatPinned(ctx context.Context, chatID, userID string, pinned bo
 	return nil
 }
 
-const msgCols = `id, chat_id, seq, sender_id, text, reply_to, client_nonce, sent_at, edited_at, deleted_at, pinned`
+const msgCols = `id, chat_id, seq, sender_id, text, reply_to, client_nonce, sent_at, edited_at, deleted_at, pinned, kind, system_event`
 
 func (p *PG) scanMsg(row pgx.Row) (*Message, error) {
 	m := &Message{}
+	var ev []byte
 	err := row.Scan(&m.ID, &m.ChatID, &m.Seq, &m.SenderID, &m.Text,
-		&m.ReplyToMessageID, &m.ClientNonce, &m.SentAt, &m.EditedAt, &m.DeletedAt, &m.Pinned)
+		&m.ReplyToMessageID, &m.ClientNonce, &m.SentAt, &m.EditedAt, &m.DeletedAt, &m.Pinned,
+		&m.Kind, &ev)
+	if err == nil {
+		m.setEvent(ev)
+		m.redact()
+	}
 	return m, err
+}
+
+// setEvent decodes the system_event column.
+func (m *Message) setEvent(raw []byte) {
+	if len(raw) == 0 {
+		return
+	}
+	var ev SystemEvent
+	if json.Unmarshal(raw, &ev) == nil {
+		m.SystemEvent = &ev
+	}
 }
 
 func (p *PG) attachFor(ctx context.Context, chatID string, msgs []Message) error {
@@ -318,6 +341,7 @@ func (p *PG) attachFor(ctx context.Context, chatID string, msgs []Message) error
 	}
 	for i := range msgs {
 		msgs[i].Attachments = byMsg[msgs[i].ID]
+		msgs[i].redact()
 	}
 	return rows.Err()
 }
@@ -335,25 +359,28 @@ func (p *PG) ListMessages(ctx context.Context, chatID string, q MessageQuery) ([
 	}
 	var maxSeq int64
 	if err := p.pool.QueryRow(ctx,
-		`SELECT coalesce(max(seq),0) FROM messages WHERE chat_id=$1 AND deleted_at IS NULL`,
+		`SELECT coalesce(max(seq),0) FROM messages WHERE chat_id=$1`,
 		chatID).Scan(&maxSeq); err != nil {
 		return nil, nil, nil, err
 	}
 	var minSeq int64
 	if err := p.pool.QueryRow(ctx,
-		`SELECT coalesce(min(seq),0) FROM messages WHERE chat_id=$1 AND deleted_at IS NULL`,
+		`SELECT coalesce(min(seq),0) FROM messages WHERE chat_id=$1`,
 		chatID).Scan(&minSeq); err != nil {
 		return nil, nil, nil, err
 	}
 
-	base := `SELECT ` + msgCols + ` FROM messages WHERE chat_id=$1 AND deleted_at IS NULL`
+	// the timeline keeps retracted messages as tombstones (redacted on scan);
+	// search and the pinned view only ever see live messages
+	base := `SELECT ` + msgCols + ` FROM messages WHERE chat_id=$1`
+	live := base + ` AND deleted_at IS NULL`
 
 	var rows pgx.Rows
 	var err error
 	switch {
 	case q.Q != "":
 		// contract: matches seq desc, `before` paginates toward older matches
-		sql := base + ` AND text ILIKE '%' || $2 || '%'`
+		sql := live + ` AND text ILIKE '%' || $2 || '%'`
 		args := []any{chatID, q.Q}
 		if q.Before != nil {
 			sql += ` AND seq < $3`
@@ -363,12 +390,12 @@ func (p *PG) ListMessages(ctx context.Context, chatID string, q MessageQuery) ([
 		rows, err = p.pool.Query(ctx, sql, args...)
 	case q.Pinned:
 		rows, err = p.pool.Query(ctx,
-			base+` AND pinned ORDER BY seq DESC LIMIT `+strconv.Itoa(limit), chatID)
+			live+` AND pinned ORDER BY seq DESC LIMIT `+strconv.Itoa(limit), chatID)
 	case q.AroundID != "":
 		var center int64
 		// contract parity with the mock: unknown id → tail window
 		if e := p.pool.QueryRow(ctx,
-			`SELECT seq FROM messages WHERE id=$1 AND chat_id=$2 AND deleted_at IS NULL`,
+			`SELECT seq FROM messages WHERE id=$1 AND chat_id=$2`,
 			q.AroundID, chatID).Scan(&center); e != nil {
 			center = maxSeq + 1 // mock parity: unknown id centers past the tail
 		}
@@ -475,6 +502,7 @@ func (p *PG) SendMessage(ctx context.Context, m *Message) (*Message, bool, error
 	}
 
 	out := &Message{ChatID: m.ChatID, SenderID: m.SenderID, Seq: seq}
+	var evRaw []byte
 	err = tx.QueryRow(ctx,
 		`INSERT INTO messages (chat_id, sender_id, seq, text, reply_to, client_nonce)
 		 VALUES ($1,$2,$3,$4,$5,$6)
@@ -483,7 +511,7 @@ func (p *PG) SendMessage(ctx context.Context, m *Message) (*Message, bool, error
 		m.ChatID, m.SenderID, seq, m.Text, m.ReplyToMessageID, m.ClientNonce).
 		Scan(&out.ID, &out.ChatID, &out.Seq, &out.SenderID, &out.Text,
 			&out.ReplyToMessageID, &out.ClientNonce, &out.SentAt, &out.EditedAt,
-			&out.DeletedAt, &out.Pinned)
+			&out.DeletedAt, &out.Pinned, &out.Kind, &evRaw)
 	if isNoRows(err) {
 		// nonce replay — return the existing message; seq bump is rolled back
 		_ = tx.Rollback(ctx)
@@ -518,6 +546,7 @@ func (p *PG) SendMessage(ctx context.Context, m *Message) (*Message, bool, error
 	if err := tx.Commit(ctx); err != nil {
 		return nil, false, err
 	}
+	out.setEvent(evRaw)
 	p.attachOne(ctx, out)
 	return out, true, nil
 }

@@ -910,9 +910,31 @@ export interface components {
             sentAt: string;
             /** Format: date-time */
             editedAt?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Set on a **retracted** message. It stays in the timeline as a
+             *     tombstone ("message deleted"): `text`, `attachments`, `replyToMessageId`
+             *     are empty and `pinned` is false. Tombstones are excluded from
+             *     search (`q`) and from the pinned view.
+             */
             deletedAt?: string | null;
             pinned?: boolean;
+            /**
+             * @description `system` messages are structured timeline events (no `text`);
+             *     the client renders the sentence for the viewer from `systemEvent`.
+             * @enum {string}
+             */
+            kind?: "user" | "system";
+            /** @description Present when `kind` is `system` */
+            systemEvent?: {
+                /**
+                 * @description `contact_removed` — `actorId` removed the other party from their contacts; the chat is now an archive
+                 * @enum {string}
+                 */
+                type: "contact_removed";
+                /** Format: uuid */
+                actorId: string;
+            };
         };
     };
     responses: {
@@ -1939,7 +1961,20 @@ export interface operations {
                     };
                 };
             };
-            403: components["responses"]["Forbidden"];
+            /**
+             * @description `forbidden` with `details.reason`: `not_contacts` (the direct chat
+             *     is frozen — the pair stopped being contacts) or `edit_window_closed`
+             *     (messages can be edited for 15 minutes after sending; later retract
+             *     with delete and send a new one).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };

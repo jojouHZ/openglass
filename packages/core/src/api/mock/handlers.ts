@@ -405,8 +405,9 @@ export function createHandlers(state: MockState) {
       if (q !== null && q !== undefined && q.length === 0)
         return err(400, "validation_failed", "q must be non-empty");
 
+      // tombstones stay in the timeline; search and the pinned view skip them
       let list = [...(state.messages.get(chatId) ?? [])].filter(
-        (m) => !m.deletedAt,
+        (m) => !m.deletedAt || (!q && !pinnedOnly),
       );
       if (pinnedOnly) list = list.filter((m) => m.pinned);
 
@@ -536,6 +537,9 @@ export function createHandlers(state: MockState) {
       if (!m) return err(404, "not_found", "Message not found");
       m.deletedAt = new Date().toISOString();
       m.text = null;
+      m.attachments = [];
+      m.replyToMessageId = null;
+      m.pinned = false;
       return empty();
     }),
 

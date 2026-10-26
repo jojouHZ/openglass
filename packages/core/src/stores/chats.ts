@@ -40,6 +40,33 @@ const emptyWindow = (): ChatWindow => ({
   atTail: false,
 });
 
+/** How long after sending an author may still edit a message (server-enforced). */
+export const EDIT_WINDOW_MS = 15 * 60_000;
+
+/** UI gate for the "edit" action — the server answers 403 `edit_window_closed`. */
+export function canEdit(m: Message, myId: string | undefined, now = Date.now()): boolean {
+  return (
+    !!myId &&
+    m.senderId === myId &&
+    m.kind !== "system" &&
+    !m.deletedAt &&
+    now - new Date(m.sentAt).getTime() < EDIT_WINDOW_MS
+  );
+}
+
+/**
+ * The sentence for a system line, rendered for the viewer: the actor reads
+ * "you", the other party reads the actor's name.
+ */
+export function systemText(m: Message, myId: string | undefined, peerName: string): string {
+  if (m.systemEvent?.type === "contact_removed") {
+    return m.systemEvent.actorId === myId
+      ? `You removed ${peerName} from contacts — new messages are turned off. This chat stays as an archive.`
+      : `${peerName} removed you from contacts — new messages are turned off. This chat stays as an archive.`;
+  }
+  return "";
+}
+
 /** Consecutive messages by one sender within this gap share a series. */
 export const SERIES_GAP_MS = 5 * 60_000;
 
@@ -353,8 +380,19 @@ export const useChatsStore = defineStore("chats", {
 
     async remove(messageId: string) {
       await api().messages.delete(messageId);
+      this.markDeleted(messageId);
+    },
+
+    /** A retracted message keeps its place as a tombstone — content is gone. */
+    markDeleted(messageId: string) {
       for (const w of Object.values(this.windows)) {
-        w.messages = w.messages.filter((m) => m.id !== messageId);
+        const m = w.messages.find((x) => x.id === messageId);
+        if (!m) continue;
+        m.deletedAt = new Date().toISOString();
+        m.text = null;
+        m.attachments = [];
+        m.replyToMessageId = null;
+        m.pinned = false;
       }
     },
 
@@ -417,10 +455,7 @@ export const useChatsStore = defineStore("chats", {
         ev.on("message.edited", (e) => this.replaceMessage(e.data)),
         ev.on("message.pinned", (e) => this.setPinnedFlag(e.data.messageId, true)),
         ev.on("message.unpinned", (e) => this.setPinnedFlag(e.data.messageId, false)),
-        ev.on("message.deleted", (e) => {
-          const w = this.windows[e.data.chatId];
-          if (w) w.messages = w.messages.filter((m) => m.id !== e.data.messageId);
-        }),
+        ev.on("message.deleted", (e) => this.markDeleted(e.data.messageId)),
         ev.on("receipt.read", (e) => {
           if (e.data.userId !== session.user?.id) {
             this.peerReadSeq[e.data.chatId] = Math.max(
@@ -631,6 +666,8 @@ export function toSeries(messages: LocalMessage[]): LocalMessage[][] {
     if (
       prev &&
       last &&
+      m.kind !== "system" &&
+      last.kind !== "system" &&
       last.senderId === m.senderId &&
       new Date(m.sentAt).getTime() - new Date(last.sentAt).getTime() < SERIES_GAP_MS
     ) {

@@ -161,6 +161,13 @@ type Attachment struct {
 	CreatedAt   time.Time
 }
 
+// SystemEvent — a structured timeline event; the client renders the sentence
+// for the viewer (actor = "you" vs a name).
+type SystemEvent struct {
+	Type    string `json:"type"` // contact_removed
+	ActorID string `json:"actorId"`
+}
+
 type Message struct {
 	ID               string
 	ChatID           string
@@ -174,6 +181,20 @@ type Message struct {
 	EditedAt         *time.Time
 	DeletedAt        *time.Time
 	Pinned           bool
+	Kind             string       // "" or "user" | "system"
+	SystemEvent      *SystemEvent // set for kind=system
+}
+
+// redact — a retracted message keeps its place in the timeline as a
+// tombstone; nothing of its content leaves the store.
+func (m *Message) redact() {
+	if m.DeletedAt == nil {
+		return
+	}
+	m.Text = nil
+	m.ReplyToMessageID = nil
+	m.Attachments = nil
+	m.Pinned = false
 }
 
 // MessageQuery — cursor semantics per openapi listMessages.
@@ -237,6 +258,11 @@ type ChatStore interface {
 	// messages
 	ListMessages(ctx context.Context, chatID string, q MessageQuery) (msgs []Message, nextCursor, newerCursor *int64, err error)
 	SendMessage(ctx context.Context, m *Message) (*Message, bool /*created*/, error) // created=false on nonce replay
+	// AddSystemMessage appends a structured timeline event authored by actorID
+	// (bypasses the send gates — it is how the gates are explained).
+	AddSystemMessage(ctx context.Context, chatID, actorID string, ev SystemEvent) (*Message, error)
+	// DirectChatBetween finds the 1-1 chat of a pair, if one exists.
+	DirectChatBetween(ctx context.Context, a, b string) (chatID string, ok bool, err error)
 	MessageByID(ctx context.Context, messageID string) (*Message, error)
 	EditMessage(ctx context.Context, messageID, editorID, text string) (*Message, error) // ErrForbidden not own
 	DeleteMessage(ctx context.Context, messageID, userID string) error                   // own; groups: also owner/delete_messages

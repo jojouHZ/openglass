@@ -96,6 +96,8 @@ native-shell item.
 - **Auth hardening** (F8/F9 remainder): wipe-after-failures in release
   builds, hardware-backed unlock, passkey device binding, risk-based
   step-up, token binding + rotation-reuse detection, instance lock policy
+- **Remove a chat from my list** (per-user hide/clear of a frozen chat —
+  the other side keeps their copy)
 - **Contact-request message**: a short note sent together with a contact
   request (so the recipient knows who is asking and why)
 - **Profile privacy setting — who may write to me**: everyone / contacts

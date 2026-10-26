@@ -48,6 +48,13 @@ group invites.
    groups are unaffected (F1.1, owner-confirmed after review: consent
    must outlive the chat; a Discord-style "keep talking in an old DM" is
    not our model). Applies to messages and attachment uploads.
+   **F1.2 (owner decisions after review):** the frozen chat is a read-only
+   archive for both sides — also no edits, no pins, no typing; the author
+   may still retract. Ending a contact adds a structured **system message**
+   (`kind: system`, `systemEvent: contact_removed`, migration 0004) so the
+   timeline explains itself. Deleted messages become redacted
+   **tombstones**. Edits are limited to a **15-minute window**
+   (`edit_window_closed`). "Remove chat from my list" is post-MVP.
 6. **Contact requests never expire** (owner decision). The abuse control
    is the per-user rate limit now and a cap on *active outgoing requests*
    post-MVP.

@@ -19,12 +19,16 @@ const typing = computed(() => !!chats.typingIn(props.chat.id));
 const preview = computed(() => {
   const m = props.chat.lastMessage;
   if (!m) return "";
+  if (m.kind === "system") return "contact removed";
   return m.text ?? "[attachment]";
 });
 
 // Telegram-style "you: " prefix on own outgoing last message.
 const ownLast = computed(
-  () => !!props.chat.lastMessage && props.chat.lastMessage.senderId === session.user?.id,
+  () =>
+    !!props.chat.lastMessage &&
+    props.chat.lastMessage.kind !== "system" &&
+    props.chat.lastMessage.senderId === session.user?.id,
 );
 
 const time = computed(() => {

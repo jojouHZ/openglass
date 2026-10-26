@@ -125,9 +125,13 @@ describe("S5 chat view", () => {
     await flush(300);
     const bubbles = w.findAll("[data-mid]");
     // own message (sent above) → edit visible; incoming → no edit
-    const own = bubbles.find((b) =>
-      b.find(".bg-bubble-own").exists(),
+    const own = bubbles.find(
+      (b) => b.find(".bg-bubble-own").exists() && !b.find('[data-testid="tombstone"]').exists(),
     )!;
+    // edit is offered for 15 minutes after sending — freshen the fixture message
+    const mine = chats().windows[DIRECT]!.messages.find((m) => m.id === own.attributes("data-mid"))!;
+    mine.sentAt = new Date().toISOString();
+    await flush(20);
     await own.trigger("contextmenu", { clientX: 10, clientY: 10 });
     expect(document.querySelector('[data-testid="mi-edit"]')).toBeTruthy();
     document.querySelector('[data-testid="menu-scrim"]')?.dispatchEvent(
@@ -198,7 +202,7 @@ describe("S5 chat view", () => {
       await flush(400);
       const own = w
         .findAll("[data-mid]")
-        .find((b) => b.find(".bg-bubble-own").exists())!;
+        .find((b) => b.find(".bg-bubble-own").exists() && !b.find('[data-testid="tombstone"]').exists())!;
       await own.trigger("contextmenu", { clientX: 10, clientY: 10 });
       document
         .querySelector('[data-testid="mi-delete"]')
