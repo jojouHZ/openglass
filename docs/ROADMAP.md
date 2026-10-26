@@ -96,6 +96,13 @@ native-shell item.
 - **Auth hardening** (F8/F9 remainder): wipe-after-failures in release
   builds, hardware-backed unlock, passkey device binding, risk-based
   step-up, token binding + rotation-reuse detection, instance lock policy
+- **Contact-request message**: a short note sent together with a contact
+  request (so the recipient knows who is asking and why)
+- **Profile privacy setting — who may write to me**: everyone / contacts
+  only / contacts and their contacts (built with the desktop client; the
+  default stays "contacts only", i.e. today's consent model)
+- **Cap on active outgoing contact requests** (requests themselves never
+  expire — owner decision); complements the per-user rate limit
 - **Rename notification to mutual contacts**
 - **Desktop split view** (list | chat | info panel) — slice F6
 - **Admin surface**: reports review, moderation, rare direct-DB
@@ -116,8 +123,8 @@ native-shell item.
 | # | Slice | Where | Plan |
 |---|-------|-------|------|
 | ✅ | F3 UI polish | main | `docs/plans/F3-ui-polish.md` |
-| 1 | **F1** Contacts consent (F-1, B1, B2, B4) — also unblocks the Contacts tab — **implemented, awaiting owner review** | main | `docs/plans/F1-contacts-consent.md` |
-| 2 | **F4** Stub removal (push routes out, reports real) | main | `docs/plans/F4-stub-removal.md` |
+| 1 | **F1** Contacts consent (F-1, B1, B2, B4) — also unblocks the Contacts tab — **done**; **F1.1** sending in a direct chat requires a mutual pair (403 `not_contacts`) — **done**; chore: certifi 2026.10.19 (PR #46, alert #5) — **done** | main | `docs/plans/F1-contacts-consent.md` |
+| 2 | **F4** No stubs: push out of the contract, reports real (+ operator CLI `ogadmin`, optional) — plan detailed, awaiting go | main | `docs/plans/F4-stub-removal.md` |
 | 3 | **F5 core** M3–M5: tokens/themes, tab bar, Contacts root, list + chat | branch `f5-ui-redesign` (not pushed) | `docs/plans/F5-ui-redesign.md` |
 | 4 | **F7** Device identity & verified contacts (wipe on sign-out until F8) | branch | `docs/plans/F7-device-identity.md` |
 | 4b | **F8** Device vault & lock — optional lock (PIN/passkey), vault for tokens + identity, auto-lock; sign-out keeps the encrypted vault | branch | `docs/plans/F8-device-vault-lock.md` |

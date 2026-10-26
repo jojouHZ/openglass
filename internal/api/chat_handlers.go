@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -403,6 +404,39 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// directGate — consent must outlive the chat: in a direct chat (saved
+// messages excepted) both parties must still be mutual contacts to SEND.
+// History stays readable. Non-members get ErrNotFound like everywhere else.
+func (s *Server) directGate(ctx context.Context, chatID, me string) error {
+	c, err := s.chats.ChatByID(ctx, chatID, me)
+	if err != nil {
+		return err
+	}
+	if c.Type != "direct" || c.Peer == nil || c.Peer.ID == me {
+		return nil
+	}
+	ok, err := s.chats.AreMutual(ctx, me, c.Peer.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return store.ErrForbidden
+	}
+	return nil
+}
+
+func (s *Server) writeGateErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		notFound(w)
+	case errors.Is(err, store.ErrForbidden):
+		writeErr(w, http.StatusForbidden, "forbidden",
+			"You are no longer contacts — sending is disabled", map[string]any{"reason": "not_contacts"})
+	default:
+		writeErrorFromErr(w, err)
+	}
+}
+
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	chatID := r.PathValue("chatId")
 	uid := userID(r)
@@ -432,6 +466,10 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(fields) > 0 {
 		badRequest(w, "Validation failed", fields)
+		return
+	}
+	if err := s.directGate(r.Context(), chatID, uid); err != nil {
+		s.writeGateErr(w, err)
 		return
 	}
 	m := &store.Message{

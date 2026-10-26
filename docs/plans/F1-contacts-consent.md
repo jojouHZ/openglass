@@ -42,11 +42,18 @@ group invites.
 3. **Same silent-decline rule for group invites.**
 4. **Mutual gate everywhere** (create group, add members, direct chat);
    the old gate accepted a one-way outgoing edge.
-5. **Unfriend removes both edges**; existing chats are not deleted and
-   message gating is unchanged (documented limitation, not part of F1).
-6. **Rate limiting** reuses the in-memory token bucket from the auth
+5. **Unfriend removes both edges**; existing chats are not deleted, but
+   **sending is refused (403 `not_contacts`) in a direct chat whose pair
+   is no longer mutual** — history stays readable, saved messages and
+   groups are unaffected (F1.1, owner-confirmed after review: consent
+   must outlive the chat; a Discord-style "keep talking in an old DM" is
+   not our model). Applies to messages and attachment uploads.
+6. **Contact requests never expire** (owner decision). The abuse control
+   is the per-user rate limit now and a cap on *active outgoing requests*
+   post-MVP.
+7. **Rate limiting** reuses the in-memory token bucket from the auth
    limiter on `POST /contacts` and group invites (per user).
-7. `Contact.verifiedAt` is untouched here (removed in F7).
+8. `Contact.verifiedAt` is untouched here (removed in F7).
 
 ## Schema (migration 0003)
 

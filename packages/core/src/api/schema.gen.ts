@@ -1873,6 +1873,19 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationFailed"];
+            /**
+             * @description Direct chat whose pair is no longer mutual contacts
+             *     (`forbidden`, `details.reason: not_contacts`). History stays
+             *     readable; saved messages and groups are unaffected.
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };
@@ -1994,6 +2007,18 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            /**
+             * @description Direct chat whose pair is no longer mutual contacts
+             *     (`forbidden`, `details.reason` = `not_contacts`).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Chat not found or caller is not a member (existence privacy — non-members cannot distinguish) */
             404: {
                 headers: {

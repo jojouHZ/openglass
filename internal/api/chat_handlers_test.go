@@ -543,11 +543,29 @@ func TestMutual_Lifecycle(t *testing.T) {
 			t.Fatalf("unfriend must drop both edges: %v", l)
 		}
 	}
-	if c, _ := send(t, ts, chatID, bTok, "still here"); c != 201 {
-		t.Fatalf("post-removal send: %d", c)
+	// consent outlives the chat: nobody can SEND once the pair is gone —
+	// history stays readable for both
+	for _, tok := range []string{aTok, bTok} {
+		c, b := send(t, ts, chatID, tok, "still here")
+		if c != 403 || errCode(b) != "forbidden" {
+			t.Fatalf("post-removal send must be 403: %d %v", c, b)
+		}
+		if c, _ := get(t, ts, "/api/v1/chats/"+chatID, tok); c != 200 {
+			t.Fatalf("post-removal get: %d", c)
+		}
+		if c, mb := get(t, ts, "/api/v1/chats/"+chatID+"/messages", tok); c != 200 || len(mb["messages"].([]any)) != 1 {
+			t.Fatalf("history must stay readable: %d %v", c, mb)
+		}
 	}
-	if c, _ := get(t, ts, "/api/v1/chats/"+chatID, bTok); c != 200 {
-		t.Fatalf("post-removal get: %d", c)
+	// re-connecting restores sending
+	befriend(t, ts, aTok, bTok, aID, bID)
+	if c, _ := send(t, ts, chatID, aTok, "back"); c != 201 {
+		t.Fatalf("send after re-connect: %d", c)
+	}
+	// saved messages never depend on contacts
+	selfChat := directChat(t, ts, aTok, aID)
+	if c, _ := send(t, ts, selfChat, aTok, "note"); c != 201 {
+		t.Fatalf("self chat send: %d", c)
 	}
 }
 

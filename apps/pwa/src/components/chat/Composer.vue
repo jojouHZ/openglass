@@ -13,6 +13,8 @@ const props = defineProps<{
   editing: LocalMessage | null;
   staged: StagedAttachment | null;
   replyTargetName?: string;
+  /** shown in the placeholder while `offline` is forced by something other than the network */
+  lockedReason?: string;
 }>();
 
 const emit = defineEmits<{
@@ -141,7 +143,7 @@ const placeholder = () =>
           v-model="text"
           rows="1"
           class="w-full resize-none bg-transparent text-msg outline-none placeholder:text-muted"
-          :placeholder="offline ? 'offline…' : placeholder()"
+          :placeholder="offline ? (lockedReason ?? 'offline…') : placeholder()"
           :disabled="offline"
           data-testid="composer-input"
           @keydown="onKeydown"

@@ -51,3 +51,21 @@ one-way contact model.
   an environment reset; browsers now live in `~/pw-browsers` and the
   missing shared libraries are loaded from `~/pwlibs`, so the real-browser
   E2E suite runs locally.
+
+## Review follow-ups
+- **Crossing-request race** found in review: two simultaneous opposite
+  requests both read "no reverse request yet" and stayed pending (39 of
+  40 runs on Postgres). Fixed with a per-pair transaction advisory lock;
+  the regression test runs on both stores (30/30).
+- **B4 claim corrected**: the plan said the returning-user path was
+  covered; no test existed. Added an API test.
+- **F1.1**: after unfriending, the old direct chat used to stay writable
+  for both sides — the consent model was violated by the chat itself.
+  Sending (messages and uploads) now needs a mutual pair (403
+  `not_contacts`); S5 shows a banner and disables the composer; saved
+  messages and groups are exempt.
+- **Owner decisions**: contact requests never expire; later (post-MVP)
+  a cap on active outgoing requests, a short note with a request and a
+  "who may write to me" profile setting (with the desktop client).
+- **Chore**: certifi 2026.10.19 (Dependabot alert #5, critical, affects
+  only the documentation tooling).

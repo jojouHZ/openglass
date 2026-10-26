@@ -35,7 +35,7 @@ Every non-2xx response body is:
 | `otp_cooldown` | 429 | resend too soon; `details.resendAvailableInS` | disable resend, countdown |
 | `tag_taken` | 409 | requested tag taken; response carries `tagSuggestions` alongside `error` | S3 suggestion list |
 | `unauthorized` | 401 | missing/expired access token | silent refresh → retry; else S1 |
-| `forbidden` | 403 | authenticated, action not allowed (not mutual, missing group right) | toast/disabled action |
+| `forbidden` | 403 | authenticated, action not allowed (not mutual, missing group right, or `details.reason: not_contacts` — sending in a direct chat after the pair stopped being contacts) | toast/disabled action |
 | `not_found` | 404 | resource absent or invisible | empty state |
 | `conflict` | 409 | duplicate state (e.g. already in contacts) | idempotent UI, refresh |
 | `too_large` | 413 | attachment over limit (also HTTP body cap) | composer error |

@@ -11,6 +11,7 @@ import {
   dayChanged,
   toSeries,
   useChatsStore,
+  useContactsStore,
   useSessionStore,
 } from "@openglass/core";
 
@@ -27,6 +28,7 @@ import { injectPrivateRemote } from "../privateRemote";
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
+const contacts = useContactsStore();
 const session = useSessionStore();
 
 // Private layer (pwa-dev only): the env flag is statically replaced, so
@@ -54,6 +56,17 @@ const dayLabels = computed(() => {
   return out;
 });
 const peer = computed(() => (chat.value?.type === "direct" ? chat.value.peer : null));
+
+// consent outlives the chat: once the pair is no longer mutual the server
+// refuses new messages (history stays readable) — mirror it in the UI.
+// Only decided after the contact list has loaded, never on a guess.
+const notContacts = computed(
+  () =>
+    !!peer.value &&
+    peer.value.id !== session.user?.id &&
+    contacts.loaded &&
+    !contacts.isContact(peer.value.id),
+);
 
 // Header title tap → group manage / peer profile (saved-messages: none).
 const headerTarget = computed(() => {
@@ -340,6 +353,7 @@ const notFound = ref(false);
 
 async function enterChat() {
   notFound.value = false;
+  if (!contacts.loaded) void contacts.refresh().catch(() => undefined);
   await chats.refreshChats();
   await chats.connectRealtime().catch(() => undefined);
   try {
@@ -519,6 +533,23 @@ watch(
       offline — composer disabled
     </div>
 
+    <div
+      v-if="notContacts && peer"
+      class="flex items-center gap-2 bg-soft px-6 py-2 text-meta text-body"
+      data-testid="not-contacts-banner"
+    >
+      <span class="flex-1">
+        you're no longer contacts with {{ peer.displayName }} — history is kept, sending is off
+      </span>
+      <button
+        class="text-accent"
+        data-testid="not-contacts-profile"
+        @click="router.push({ name: 's7-contact-profile', params: { userId: peer.id } })"
+      >
+        profile
+      </button>
+    </div>
+
     <!-- pinned bar -->
     <button
       v-if="pinnedShown"
@@ -662,7 +693,8 @@ watch(
       {{ actionError }}
     </div>
     <Composer
-      :offline="offline"
+      :offline="offline || notContacts"
+      :locked-reason="notContacts ? 'not contacts' : undefined"
       :reply-to="replyTo"
       :editing="editing"
       :staged="staged"

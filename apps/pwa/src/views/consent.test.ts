@@ -13,11 +13,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { bindApiClient, useChatsStore, useContactsStore, useSessionStore } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
-import { groupInviteFx } from "@openglass/core/api/mock/fixtures";
+import { directChatId, groupInviteFx, wife } from "@openglass/core/api/mock/fixtures";
 
 import { pinia } from "../pinia";
 import { createAppRouter } from "../router";
 import S4ChatList from "./S4ChatList.vue";
+import S5ChatView from "./S5ChatView.vue";
 
 const ctx = createMockNodeApiClient({ mode: "mock", baseUrl: "/api/v1", wsUrl: "/api/v1/ws" });
 bindApiClient(ctx.api);
@@ -75,5 +76,29 @@ describe("S4 consent surfaces", () => {
     expect(chats().chats.some((c) => c.id === inv.chatId)).toBe(false);
     chats().onGroupInviteResolved(inv.chatId);
     expect(chats().invites.some((i) => i.chatId === inv.chatId)).toBe(false);
+  });
+});
+
+describe("S5 after the pair stops being contacts", () => {
+  it("shows a banner and disables sending; reconnecting restores it", async () => {
+    await contacts().refresh();
+    await router.push({ name: "s5-chat-view", params: { chatId: directChatId } });
+    const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await flush();
+    const input = () => w.find('[data-testid="composer-input"]').element as HTMLTextAreaElement;
+    expect(w.find('[data-testid="not-contacts-banner"]').exists()).toBe(false);
+    expect(input().disabled).toBe(false);
+
+    contacts().onContactRemoved(wife.id); // ws contact.removed
+    await flush(50);
+    expect(w.find('[data-testid="not-contacts-banner"]').text()).toContain("sending is off");
+    expect(input().disabled).toBe(true);
+    expect(w.find('[data-testid="msg-scroll"]').exists()).toBe(true); // history still readable
+
+    contacts().onContactAccepted(wife); // ws contact.accepted
+    await flush(50);
+    expect(w.find('[data-testid="not-contacts-banner"]').exists()).toBe(false);
+    expect(input().disabled).toBe(false);
+    w.unmount();
   });
 });

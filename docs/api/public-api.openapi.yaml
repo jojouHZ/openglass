@@ -844,6 +844,14 @@ paths:
                 properties:
                   message: { $ref: '#/components/schemas/Message' }
         '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403':
+          description: |
+            Direct chat whose pair is no longer mutual contacts
+            (`forbidden`, `details.reason: not_contacts`). History stays
+            readable; saved messages and groups are unaffected.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /messages/{messageId}:
@@ -951,6 +959,13 @@ paths:
                   attachment: { $ref: '#/components/schemas/Attachment' }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: |
+            Direct chat whose pair is no longer mutual contacts
+            (`forbidden`, `details.reason` = `not_contacts`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '404':
           description: Chat not found or caller is not a member
             (existence privacy — non-members cannot distinguish)

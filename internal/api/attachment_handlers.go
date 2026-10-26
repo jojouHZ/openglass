@@ -33,6 +33,10 @@ func (s *Server) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
+	if err := s.directGate(r.Context(), chatID, uid); err != nil {
+		s.writeGateErr(w, err)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxBytes)
 	f, hdr, err := r.FormFile("file")

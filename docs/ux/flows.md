@@ -427,6 +427,10 @@ silent.
   private layer" is **retired**: private is distinguished by hue (violet),
   mask glyph, pattern and ringed composer in both themes. An automated
   test asserts the private tokens stay hue-distinct from the public ones.
+- **Consent outlives the chat**: sending in a direct chat requires the
+  pair to still be mutual contacts; after unfriending, history stays
+  readable and the composer is disabled with a "no longer contacts"
+  banner. Contact requests never expire.
 - **Navigation**: a bottom tab bar (Chats · Contacts · Settings) on root
   screens only; hidden in an open chat and on detail/sub-screens (group
   info, devices & sessions, verification, PWA prompts). Tab badges: unread
