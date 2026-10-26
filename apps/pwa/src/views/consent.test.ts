@@ -9,7 +9,7 @@
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { bindApiClient, useChatsStore, useContactsStore, useSessionStore } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
@@ -84,21 +84,25 @@ describe("S5 after the pair stops being contacts", () => {
     await contacts().refresh();
     await router.push({ name: "s5-chat-view", params: { chatId: directChatId } });
     const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
-    await flush();
     const input = () => w.find('[data-testid="composer-input"]').element as HTMLTextAreaElement;
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="composer-input"]').exists()).toBe(true);
+      expect(input().disabled).toBe(false);
+    });
     expect(w.find('[data-testid="not-contacts-banner"]').exists()).toBe(false);
-    expect(input().disabled).toBe(false);
 
     contacts().onContactRemoved(wife.id); // ws contact.removed
-    await flush(50);
-    expect(w.find('[data-testid="not-contacts-banner"]').text()).toContain("sending is off");
-    expect(input().disabled).toBe(true);
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="not-contacts-banner"]').text()).toContain("sending is off");
+      expect(input().disabled).toBe(true);
+    });
     expect(w.find('[data-testid="msg-scroll"]').exists()).toBe(true); // history still readable
 
     contacts().onContactAccepted(wife); // ws contact.accepted
-    await flush(50);
-    expect(w.find('[data-testid="not-contacts-banner"]').exists()).toBe(false);
-    expect(input().disabled).toBe(false);
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="not-contacts-banner"]').exists()).toBe(false);
+      expect(input().disabled).toBe(false);
+    });
     w.unmount();
   });
 });

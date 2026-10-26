@@ -8,7 +8,7 @@
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   ApiRequestError,
@@ -236,20 +236,29 @@ describe("S5 chat view", () => {
   });
 
   it("header title opens group settings (group) or the peer profile (direct)", async () => {
+    // the title only becomes a button once the chat is known — wait for
+    // the condition, never for a fixed delay (slow CI)
+    const clickTitle = async (w: ReturnType<typeof mount>) => {
+      await vi.waitFor(() => {
+        expect(w.find("button.min-w-0.flex-1").exists()).toBe(true);
+      });
+      await w.find("button.min-w-0.flex-1").trigger("click");
+    };
+
     await router.push({ name: "s5-chat-view", params: { chatId: groupChatId } });
     let w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
-    await flush(400);
-    await w.find("header button.flex-1, button.min-w-0.flex-1").trigger("click");
-    await flush(50);
-    expect(router.currentRoute.value.name).toBe("s9a-group-manage");
+    await clickTitle(w);
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.name).toBe("s9a-group-manage");
+    });
     w.unmount();
 
     await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
     w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
-    await flush(400);
-    await w.find("button.min-w-0.flex-1").trigger("click");
-    await flush(50);
-    expect(router.currentRoute.value.name).toBe("s7-contact-profile");
+    await clickTitle(w);
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.name).toBe("s7-contact-profile");
+    });
     w.unmount();
     await router.push({ name: "s4-chat-list" });
   });
