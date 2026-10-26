@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/jojouHZ/openglass/internal/store"
 )
 
 // TokenValidator — validate an access token, return identity + expiry.
@@ -34,6 +36,8 @@ type Directory interface {
 	IsChatMember(ctx context.Context, chatID, userID string) (bool, error)
 	MutualContactIDs(ctx context.Context, userID string) ([]string, error)
 	MarkRead(ctx context.Context, chatID, userID string, upToSeq int64) error
+	// ChatByID — typing in a direct chat needs the pair to still be mutual.
+	ChatByID(ctx context.Context, chatID, userID string) (*store.Chat, error)
 	// SessionActive — the REST middleware gate, enforced here too:
 	// a revoked session must not re-attach on a still-valid JWT.
 	SessionActive(ctx context.Context, sessionID string) (bool, error)
@@ -470,6 +474,9 @@ func (h *Hub) dispatchClient(s *session, f *Frame) {
 		if err != nil || !member {
 			return // silent — non-member input is dropped, not answered
 		}
+		if !h.typingAllowed(ctx, chatID, s.userID) {
+			return // frozen direct chat: no presence side-channel either
+		}
 		if f.Type == "typing.start" {
 			key := sessionKey(s) + ":" + chatID
 			h.mu.Lock()
@@ -558,4 +565,26 @@ func (h *Hub) presence(userID string, on bool) {
 func (h *Hub) broadcastPresence(userID, status string) {
 	mutuals, _ := h.dir.MutualContactIDs(context.Background(), userID)
 	h.EmitToUsers(mutuals, "presence", map[string]any{"userId": userID, "status": status})
+}
+
+// typingAllowed — groups and saved messages always; a direct chat only while
+// the pair is still mutual contacts (consent outlives the chat).
+func (h *Hub) typingAllowed(ctx context.Context, chatID, userID string) bool {
+	c, err := h.dir.ChatByID(ctx, chatID, userID)
+	if err != nil {
+		return false
+	}
+	if c.Type != "direct" || c.Peer == nil || c.Peer.ID == userID {
+		return true
+	}
+	ids, err := h.dir.MutualContactIDs(ctx, userID)
+	if err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if id == c.Peer.ID {
+			return true
+		}
+	}
+	return false
 }

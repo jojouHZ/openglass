@@ -8,6 +8,7 @@ package ws
 
 import (
 	"context"
+	"github.com/jojouHZ/openglass/internal/store"
 	"testing"
 	"time"
 )
@@ -27,6 +28,9 @@ func (fakeDir) MutualContactIDs(context.Context, string) ([]string, error) {
 }
 func (fakeDir) MarkRead(context.Context, string, string, int64) error {
 	return nil
+}
+func (fakeDir) ChatByID(_ context.Context, chatID, _ string) (*store.Chat, error) {
+	return &store.Chat{ID: chatID, Type: "group"}, nil // groups: typing always allowed
 }
 func (fakeDir) SessionActive(context.Context, string) (bool, error) {
 	return true, nil

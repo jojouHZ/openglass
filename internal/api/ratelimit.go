@@ -160,3 +160,8 @@ func (s *Server) limitIP(l *rateLimiter, h http.HandlerFunc) http.HandlerFunc {
 		h(w, r)
 	}
 }
+
+// WithEditWindow — test override of how long a message stays editable.
+func WithEditWindow(d time.Duration) Option {
+	return func(s *Server) { s.editWindow = d }
+}

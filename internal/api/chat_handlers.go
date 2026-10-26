@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jojouHZ/openglass/internal/store"
 )
@@ -404,6 +405,9 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// EditWindow — how long after sending an author may still edit a message.
+const EditWindow = 15 * time.Minute
+
 // directGate — consent must outlive the chat: in a direct chat (saved
 // messages excepted) both parties must still be mutual contacts to SEND.
 // History stays readable. Non-members get ErrNotFound like everywhere else.
@@ -531,6 +535,21 @@ func (s *Server) editMessage(w http.ResponseWriter, r *http.Request) {
 	if m == nil {
 		return
 	}
+	// consent outlives the chat: a chat whose pair stopped being contacts is
+	// frozen — no edits (own messages can still be retracted via delete)
+	if err := s.directGate(r.Context(), m.ChatID, userID(r)); err != nil {
+		s.writeGateErr(w, err)
+		return
+	}
+	// edits are possible for a short window only: afterwards the other side
+	// may already have acted on the text, and a silent rewrite is a trust
+	// problem. Retract (delete → visible tombstone) and resend instead.
+	if m.SenderID == userID(r) && time.Since(m.SentAt) > s.editWindow {
+		writeErr(w, http.StatusForbidden, "forbidden",
+			"The edit window has closed — delete the message and send a new one",
+			map[string]any{"reason": "edit_window_closed", "windowMinutes": int(s.editWindow.Minutes())})
+		return
+	}
 	m, err := s.chats.EditMessage(r.Context(), m.ID, userID(r), in.Text)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -600,6 +619,11 @@ func (s *Server) setMessagePinned(w http.ResponseWriter, r *http.Request) {
 	}
 	msg, _ := s.msgForMember(w, r)
 	if msg == nil {
+		return
+	}
+	// pinning changes what both sides see — frozen once the pair is gone
+	if err := s.directGate(r.Context(), msg.ChatID, userID(r)); err != nil {
+		s.writeGateErr(w, err)
 		return
 	}
 	got, err := s.chats.SetMessagePinned(r.Context(), msg.ID, userID(r), in.Pinned)

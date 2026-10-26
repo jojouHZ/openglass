@@ -11,6 +11,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/jojouHZ/openglass/internal/auth"
 	"github.com/jojouHZ/openglass/internal/config"
@@ -35,6 +36,7 @@ type Server struct {
 	otpVerifyIP    *rateLimiter
 	refreshIP      *rateLimiter
 	contactReq     *rateLimiter // per-user key (consent model anti-spam)
+	editWindow     time.Duration
 
 	// optional probes for /healthz — nil dep reports "down"
 	pgPing    func(context.Context) error
@@ -79,6 +81,7 @@ func New(cfg *config.Config, st store.Store, sender auth.OtpSender, opts ...Opti
 		sender: sender,
 	}
 	WithAuthRateLimits(DefaultAuthRateLimits())(s)
+	s.editWindow = EditWindow
 	for _, o := range opts {
 		o(s)
 	}
