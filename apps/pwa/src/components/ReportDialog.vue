@@ -31,7 +31,9 @@ async function submit() {
     error.value =
       e instanceof ApiRequestError && e.status === 429
         ? "too many reports — please try again in a little while"
-        : "could not send the report — please try again";
+        : e instanceof ApiRequestError && e.status === 409
+          ? "you already have the maximum number of open reports — please wait until the owner has reviewed them"
+          : "could not send the report — please try again";
   } finally {
     busy.value = false;
   }

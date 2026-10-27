@@ -96,6 +96,9 @@ native-shell item.
 - **Auth hardening** (F8/F9 remainder): wipe-after-failures in release
   builds, hardware-backed unlock, passkey device binding, risk-based
   step-up, token binding + rotation-reuse detection, instance lock policy
+- **Selected users may invite new people to the server** (not everyone;
+  the operator decides who) — today only the operator issues invite codes
+  (`ogadmin invites create`, always expiring in ≤ 30 days)
 - **Remove a chat from my list** (per-user hide/clear of a frozen chat —
   the other side keeps their copy)
 - **Contact-request message**: a short note sent together with a contact

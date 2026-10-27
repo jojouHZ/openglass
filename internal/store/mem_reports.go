@@ -30,8 +30,17 @@ func (m *Mem) CreateReport(ctx context.Context, reporterID, targetID, reason str
 		Reason: reason, Status: "open", CreatedAt: time.Now(),
 	}
 	m.repMu.Lock()
+	defer m.repMu.Unlock()
+	open := 0
+	for _, r := range m.reports {
+		if r.Status == "open" && r.ReporterID != nil && *r.ReporterID == reporterID {
+			open++
+		}
+	}
+	if open >= MaxOpenReportsPerReporter {
+		return nil, ErrLimit
+	}
 	m.reports = append(m.reports, rep)
-	m.repMu.Unlock()
 	out := *rep
 	return &out, nil
 }

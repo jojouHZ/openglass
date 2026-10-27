@@ -5,6 +5,7 @@ package api_test
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -107,5 +108,74 @@ func TestJSONBodyIsCapped(t *testing.T) {
 	// a maximum-size message still fits comfortably
 	if c, b := post(t, ts, "/api/v1/auth/otp/request", `{"email":"ok@x.io","inviteCode":"GLS-DEMO"}`, ""); c >= 400 {
 		t.Fatalf("normal request broke: %d %v", c, b)
+	}
+}
+
+func TestReports_OpenReportsCapIs409AndFreesOnResolve(t *testing.T) {
+	ts, st, sender := newLimitedServerFull(t, generousLimits())
+	aTok, _ := mkUser(t, ts, st, sender, "ca@x.io", "ca#0001")
+	_, bID := mkUser(t, ts, st, sender, "cb@x.io", "cb#0002")
+	body := fmt.Sprintf(`{"userId":%q,"reason":"flood"}`, bID)
+	for i := 0; i < 50; i++ {
+		if c, b := post(t, ts, "/api/v1/reports", body, aTok); c != 202 {
+			t.Fatalf("report %d: %d %v", i, c, b)
+		}
+	}
+	c, b := post(t, ts, "/api/v1/reports", body, aTok)
+	if c != 409 || errCode(b) != "conflict" {
+		t.Fatalf("51st: %d %v", c, b)
+	}
+	d := b["error"].(map[string]any)["details"].(map[string]any)
+	if d["reason"] != "open_reports_limit" || d["limit"] != float64(50) {
+		t.Fatalf("details: %v", d)
+	}
+	// the operator resolving one frees a slot
+	open, _ := st.ListReports(t.Context(), "open")
+	if err := st.ResolveReport(t.Context(), open[0].ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := post(t, ts, "/api/v1/reports", body, aTok); c != 202 {
+		t.Fatalf("after resolve: %d", c)
+	}
+}
+
+// Hostile text through the whole stack: stored verbatim, never echoed back
+// in any response, table intact.
+func TestReports_HostileTextIsInertEndToEnd(t *testing.T) {
+	ts, st, sender := newLimitedServerFull(t, generousLimits())
+	aTok, _ := mkUser(t, ts, st, sender, "ha@x.io", "ha#0001")
+	_, bID := mkUser(t, ts, st, sender, "hb@x.io", "hb#0002")
+	for _, p := range []string{`'); DROP TABLE reports; --`, `<script>alert(1)</script>`, "<img src=x onerror=alert(1)>"} {
+		c, b := post(t, ts, "/api/v1/reports", fmt.Sprintf(`{"userId":%q,"reason":%q}`, bID, p), aTok)
+		if c != 202 {
+			t.Fatalf("%q: %d %v", p, c, b)
+		}
+		if strings.Contains(fmt.Sprint(b), "script") || strings.Contains(fmt.Sprint(b), "DROP") {
+			t.Fatalf("the response must never echo the text: %v", b)
+		}
+	}
+	list, _ := st.ListReports(t.Context(), "open")
+	if len(list) != 3 || list[0].Reason != `'); DROP TABLE reports; --` {
+		t.Fatalf("stored verbatim: %+v", list)
+	}
+}
+
+func TestAPIResponsesCarrySecurityHeaders(t *testing.T) {
+	ts, _, _, aTok, _, _, _ := setupTwoUsers(t)
+	for _, path := range []string{"/api/v1/users/me", "/api/v1/healthz", "/api/v1/nope"} {
+		req, _ := http.NewRequest("GET", ts.URL+path, nil)
+		req.Header.Set("Authorization", "Bearer "+aTok)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		h := resp.Header
+		if h.Get("X-Content-Type-Options") != "nosniff" ||
+			!strings.Contains(h.Get("Content-Security-Policy"), "default-src 'none'") ||
+			!strings.Contains(h.Get("Content-Security-Policy"), "frame-ancestors 'none'") ||
+			h.Get("Referrer-Policy") != "no-referrer" {
+			t.Fatalf("%s: missing hardening headers: %v", path, h)
+		}
 	}
 }

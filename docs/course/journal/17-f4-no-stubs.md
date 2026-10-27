@@ -54,3 +54,21 @@ direction: it found `/healthz` documented but my naive filter had hidden it.
   because validation also answered 400.
 - `ogadmin reports resolve not-a-uuid` leaked a raw Postgres error; it now
   validates the id and reports a usage error.
+
+## Owner follow-ups (same day)
+- **Open-report cap = 50 per reporter** (409 `open_reports_limit`), checked
+  and inserted under a per-reporter Postgres advisory lock. Mutation check:
+  without the lock 65 of 80 concurrent requests got through.
+- **Hostile text** — the user asked to exclude string concatenation around
+  report text. The store already used bind parameters only; now it is
+  proven rather than claimed: payload tests (SQL fragments, markup, escape
+  sequences, bidi, format verbs) on both stores, a NUL/invalid-UTF-8 guard
+  (a NUL would have been a 500 in Postgres), `gosec` SQL-concatenation
+  rules in lint, a test that bans markup-producing sinks (`v-html`,
+  `innerHTML`, …) from the PWA/core sources (mutation-checked), and
+  `nosniff` + `default-src 'none'` CSP on every API response.
+- **Invite codes always expire** (default and ceiling 30 days; "never" is not
+  an option); migration 0006 brings existing codes under the rule. Letting
+  selected users invite people is post-MVP.
+- **Dependabot cleared before F5**: happy-dom 21.0.4 (2 high), filelock 4.2.1
+  (1 high, 2 low), setuptools 84.1.0 (1 low); superseded PR #44 closed.

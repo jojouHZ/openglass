@@ -7,6 +7,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jojouHZ/openglass/internal/store"
@@ -381,5 +382,105 @@ func runReports(t *testing.T, st consentStore) {
 	}
 	if _, err := st.ListReports(ctx, "bogus"); err != store.ErrInvalid {
 		t.Fatalf("bad status: %v", err)
+	}
+}
+
+// Report cap and hostile text — same behaviour on both stores.
+func TestMem_ReportCapAndPayloads(t *testing.T) { runReportCap(t, store.NewMem()) }
+func TestPG_ReportCapAndPayloads(t *testing.T)  { runReportCap(t, pgOrSkip(t)) }
+
+func runReportCap(t *testing.T, st consentStore) {
+	ctx := context.Background()
+	a, b, c := mkUser(t, st, "ca"), mkUser(t, st, "cb"), mkUser(t, st, "cc")
+
+	// hostile text is data: stored verbatim, never interpreted, table intact
+	payloads := []string{
+		`'); DROP TABLE reports; --`,
+		`" OR 1=1 --`,
+		`<script>alert(document.cookie)</script>`,
+		`<img src=x onerror=alert(1)>`,
+		`$1 $2 %s %v ${jndi:ldap://x}`,
+		"line1\nline2\ttab \x1b[31mred\x1b[0m \u202e rtl",
+		`\x00 \u0000 \' \\`,
+	}
+	for _, p := range payloads {
+		r, err := st.CreateReport(ctx, a.ID, b.ID, p)
+		if err != nil {
+			t.Fatalf("payload %q: %v", p, err)
+		}
+		if r.Reason != strings.TrimSpace(p) {
+			t.Fatalf("payload altered: %q -> %q", p, r.Reason)
+		}
+		if err := st.ResolveReport(ctx, r.ID, p); err != nil { // the note is data too
+			t.Fatalf("note %q: %v", p, err)
+		}
+	}
+	if _, err := st.ListReports(ctx, ""); err != nil {
+		t.Fatalf("reports table must survive hostile text: %v", err)
+	}
+	// a NUL byte cannot live in a Postgres text column: refused up front
+	if _, err := st.CreateReport(ctx, a.ID, b.ID, "bad\x00byte"); err != store.ErrInvalid {
+		t.Fatalf("NUL byte: %v", err)
+	}
+	if _, err := st.CreateReport(ctx, a.ID, b.ID, "bad\xffutf8"); err != store.ErrInvalid {
+		t.Fatalf("invalid UTF-8: %v", err)
+	}
+
+	// the cap: 50 open reports per reporter (those above were all resolved)
+	var ids []string
+	for i := 0; i < store.MaxOpenReportsPerReporter; i++ {
+		r, err := st.CreateReport(ctx, c.ID, b.ID, "flood")
+		if err != nil {
+			t.Fatalf("report %d: %v", i, err)
+		}
+		ids = append(ids, r.ID)
+	}
+	if _, err := st.CreateReport(ctx, c.ID, b.ID, "one too many"); err != store.ErrLimit {
+		t.Fatalf("51st open report: %v, want ErrLimit", err)
+	}
+	// per reporter: somebody else is not affected
+	if _, err := st.CreateReport(ctx, a.ID, b.ID, "me too"); err != nil {
+		t.Fatalf("another reporter must not be capped: %v", err)
+	}
+	// resolving frees exactly one slot
+	if err := st.ResolveReport(ctx, ids[0], ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateReport(ctx, c.ID, b.ID, "fits again"); err != nil {
+		t.Fatalf("after a resolve: %v", err)
+	}
+	if _, err := st.CreateReport(ctx, c.ID, b.ID, "full again"); err != store.ErrLimit {
+		t.Fatalf("slot count: %v", err)
+	}
+}
+
+// Concurrent reports cannot slip past the cap (PG: advisory lock; Mem: mutex).
+func TestMem_ReportCapUnderConcurrency(t *testing.T) { runReportCapConcurrent(t, store.NewMem()) }
+func TestPG_ReportCapUnderConcurrency(t *testing.T)  { runReportCapConcurrent(t, pgOrSkip(t)) }
+
+func runReportCapConcurrent(t *testing.T, st consentStore) {
+	ctx := context.Background()
+	a, b := mkUser(t, st, "xa"), mkUser(t, st, "xb")
+	const attempts = 80
+	var ok, limited atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := st.CreateReport(ctx, a.ID, b.ID, "race")
+			switch err {
+			case nil:
+				ok.Add(1)
+			case store.ErrLimit:
+				limited.Add(1)
+			default:
+				t.Errorf("unexpected: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if ok.Load() != store.MaxOpenReportsPerReporter || limited.Load() != attempts-store.MaxOpenReportsPerReporter {
+		t.Fatalf("accepted %d, limited %d — want exactly %d accepted", ok.Load(), limited.Load(), store.MaxOpenReportsPerReporter)
 	}
 }

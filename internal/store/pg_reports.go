@@ -33,10 +33,35 @@ func (p *PG) CreateReport(ctx context.Context, reporterID, targetID, reason stri
 	if err != nil {
 		return nil, err
 	}
-	return scanReport(p.pool.QueryRow(ctx,
+	// the cap is checked and the row inserted under one per-reporter advisory
+	// lock, so concurrent requests cannot slip past it. Every value reaches
+	// the database as a bind parameter — the reason text is never spliced
+	// into SQL.
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('reports:' || $1::text))`, reporterID); err != nil {
+		return nil, err
+	}
+	var open int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM reports WHERE reporter_id = $1 AND status = 'open'`,
+		reporterID).Scan(&open); err != nil {
+		return nil, err
+	}
+	if open >= MaxOpenReportsPerReporter {
+		return nil, ErrLimit
+	}
+	rep, err := scanReport(tx.QueryRow(ctx,
 		`INSERT INTO reports (reporter_id, target_user_id, reporter_tag, target_tag, reason)
 		 VALUES ($1,$2,$3,$4,$5) RETURNING `+reportCols,
 		reporterID, targetID, reporter.Tag, target.Tag, reason))
+	if err != nil {
+		return nil, err
+	}
+	return rep, tx.Commit(ctx)
 }
 
 func (p *PG) ListReports(ctx context.Context, status string) ([]Report, error) {

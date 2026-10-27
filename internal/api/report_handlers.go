@@ -44,6 +44,9 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 		}
 	case errors.Is(err, store.ErrNotFound):
 		notFound(w)
+	case errors.Is(err, store.ErrLimit):
+		conflict(w, "You already have the maximum number of open reports",
+			map[string]any{"reason": "open_reports_limit", "limit": store.MaxOpenReportsPerReporter})
 	case err != nil:
 		writeErrorFromErr(w, err)
 	default:

@@ -2368,6 +2368,19 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description `conflict` with `details.reason` = `open_reports_limit`: the
+             *     reporter already has 50 unresolved reports (a slot frees when the
+             *     operator resolves one). Distinct from the rate limit (429).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             429: components["responses"]["RateLimited"];
         };
     };

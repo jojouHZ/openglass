@@ -96,7 +96,7 @@ network surface** — there are no admin HTTP routes.
 ```
 docker compose exec server ogadmin reports list [--status open|resolved|all]
 docker compose exec server ogadmin reports resolve <id> [--note "..."]
-docker compose exec server ogadmin invites create [--count N] [--uses N] [--days N]
+docker compose exec server ogadmin invites create [--count N] [--uses N] [--days 1..30]   # default 30, always expires
 docker compose exec server ogadmin invites list
 ```
 
@@ -106,8 +106,20 @@ docker compose exec server ogadmin invites list
   reporter learns "received", not an outcome. Reports outlive accounts
   (tags are snapshotted, references become NULL). User-supplied text is
   printed quoted, so control characters never reach the terminal raw.
-- **Invites**: codes `GLS-XXXXXXXX` from an unambiguous alphabet, with
-  optional use count and expiry.
+- **Open-report cap**: a user can have at most 50 unresolved reports
+  (409 `open_reports_limit`); the per-minute rate limit stops bursts, the cap
+  stops a slow flood of the operator's queue. Resolving frees a slot.
+- **Invites**: codes `GLS-XXXXXXXX` from an unambiguous alphabet, with an
+  optional use count. An invite is the only way to register, so it **always
+  expires**: default 30 days, ceiling 30 days. (Letting selected users invite
+  new people is post-MVP.)
+- **Hostile text**: report text reaches the database only as a bind
+  parameter (the store never splices it into SQL — also enforced by the
+  `gosec` SQL-concatenation rules in lint), is never echoed in any response,
+  is printed quoted by `ogadmin`, and the PWA never renders anyone else's
+  report. The PWA bans markup-producing sinks (`v-html`, `innerHTML`, …) with
+  a test; every API response carries `nosniff` and a `default-src 'none'`
+  CSP.
 
 ## Notifications
 
@@ -124,6 +136,7 @@ The public layer is **server-trusted** by design — and honest about it in UI.
 | TLS / WSS everywhere | Transport security | deployed |
 | Argon2id OTP hashing + attempt/cooldown limits | Authentication | implemented |
 | JWT + rotating refresh, per-device sessions, WS revoke | Session management | implemented |
+| `nosniff` + `default-src 'none'` CSP on every API response | A direct visit to an uploaded file or JSON can never run as a page | implemented |
 | 1 MiB cap on every JSON request body (uploads have their own limit) | Memory-exhaustion DoS, incl. unauthenticated endpoints | implemented |
 | Member-gated attachment access, existence-private 404s | Content privacy | implemented |
 | IP/user rate limiting | Abuse prevention | **not wired yet** — Redis provisioned |

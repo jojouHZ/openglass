@@ -285,6 +285,31 @@ describe("S7 report (F4)", () => {
     }
   });
 
+  it("the open-reports cap (409) explains itself and keeps the text", async () => {
+    const orig = ctx.api.reports.report;
+    ctx.api.reports.report = () =>
+      Promise.reject(
+        new ApiRequestError(409, {
+          code: "conflict",
+          message: "max",
+          details: { reason: "open_reports_limit", limit: 50 },
+        }),
+      );
+    try {
+      const w = await openProfile();
+      await w.find('[data-testid="action-report"]').trigger("click");
+      await w.find('[data-testid="report-reason"]').setValue("one more");
+      await w.find('[data-testid="report-submit"]').trigger("click");
+      await vi.waitFor(() => {
+        expect(w.find('[data-testid="report-error"]').text()).toContain("maximum number of open reports");
+      });
+      expect((w.find('[data-testid="report-reason"]').element as HTMLTextAreaElement).value).toBe("one more");
+      w.unmount();
+    } finally {
+      ctx.api.reports.report = orig;
+    }
+  });
+
   it("cancel closes the dialog without sending anything", async () => {
     const orig = ctx.api.reports.report;
     let called = 0;

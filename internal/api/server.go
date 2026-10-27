@@ -167,9 +167,24 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	// abuse reports — read by the operator (cmd/ogadmin), no automatic effect
 	v1.HandleFunc("POST /reports", s.requireAuth(s.createReport))
 
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", v1))
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", securityHeaders(v1)))
 	mux.HandleFunc("GET /healthz", s.healthz) // infra convenience alias
 	return mux
+}
+
+// securityHeaders — defence in depth for an API that only ever returns JSON
+// or user-uploaded bytes: nothing it serves may be sniffed into, framed as,
+// or run as a page. (Rendering safety itself is the clients' job — Vue
+// escapes interpolations and the codebase bans v-html — this makes a
+// mistake there, or a direct visit to an attachment URL, harmless.)
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {

@@ -47,7 +47,8 @@ var (
 	ErrConflict  = errors.New("conflict")
 	ErrConsumed  = errors.New("invite consumed")
 	ErrForbidden = errors.New("forbidden")
-	ErrInvalid   = errors.New("invalid") // e.g. a contact request to yourself
+	ErrInvalid   = errors.New("invalid")       // e.g. a contact request to yourself
+	ErrLimit     = errors.New("limit reached") // e.g. too many open reports
 )
 
 // AuthStore — the persistence surface the API layer needs.
@@ -246,7 +247,8 @@ type ChatStore interface {
 	MutualContactIDs(ctx context.Context, userID string) ([]string, error) // presence scope (ws)
 
 	// abuse reports (F4): ErrInvalid self-report or empty/oversized reason,
-	// ErrNotFound unknown target. Reasons are trimmed; 1..1024 chars.
+	// ErrNotFound unknown target, ErrLimit when the reporter already has
+	// MaxOpenReportsPerReporter unresolved reports. Reasons are trimmed; 1..1024 chars.
 	CreateReport(ctx context.Context, reporterID, targetID, reason string) (*Report, error)
 	// ListReports — status "" = all, else open|resolved; oldest first.
 	ListReports(ctx context.Context, status string) ([]Report, error)

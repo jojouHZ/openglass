@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -354,4 +355,43 @@ func store_testID(t *testing.T) string {
 	// unique suffix per run — the dev DB is persistent across test runs
 	n := time.Now().UnixNano() % 0xffffff
 	return fmt.Sprintf("%s%x", t.Name()[7:11], n)
+}
+
+// Existing codes fall under the 30-day rule (migration 0006): a code without
+// expiry gets one, a far-future code is cut back, a short one is untouched.
+func TestPG_InvitesNeverLiveBeyond30Days(t *testing.T) {
+	pg := pgOrSkip(t)
+	ctx := context.Background()
+	long := time.Now().Add(400 * 24 * time.Hour)
+	short := time.Now().Add(3 * 24 * time.Hour)
+	suffix := time.Now().UnixNano()
+	for code, exp := range map[string]*time.Time{
+		fmt.Sprintf("T-NONE-%d", suffix):  nil,
+		fmt.Sprintf("T-LONG-%d", suffix):  &long,
+		fmt.Sprintf("T-SHORT-%d", suffix): &short,
+	} {
+		if err := pg.CreateInvite(ctx, code, 1, exp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// re-run the migration's statement (idempotent by construction)
+	sqlText, err := os.ReadFile("migrations/0006_invites_expire.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pg.Pool().Exec(ctx, string(sqlText)); err != nil {
+		t.Fatal(err)
+	}
+	invites, _ := pg.ListInvites(ctx)
+	for _, i := range invites {
+		if !strings.Contains(i.Code, fmt.Sprint(suffix)) {
+			continue
+		}
+		if i.ExpiresAt == nil || time.Until(*i.ExpiresAt) > 31*24*time.Hour {
+			t.Fatalf("%s still outlives 30 days: %v", i.Code, i.ExpiresAt)
+		}
+		if strings.HasPrefix(i.Code, "T-SHORT") && time.Until(*i.ExpiresAt) > 4*24*time.Hour {
+			t.Fatalf("a short code must keep its expiry: %v", i.ExpiresAt)
+		}
+	}
 }

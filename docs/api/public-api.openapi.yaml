@@ -1280,6 +1280,14 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            `conflict` with `details.reason` = `open_reports_limit`: the
+            reporter already has 50 unresolved reports (a slot frees when the
+            operator resolves one). Distinct from the rate limit (429).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
 components:
