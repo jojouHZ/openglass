@@ -4,8 +4,8 @@
 // Package api — public REST API, contract: docs/api/public-api.openapi.yaml.
 //
 // Implemented: auth, users, contacts, chats, messages, attachments,
-// groups, ws. Push and reports routes still answer 501 not_implemented
-// until their slices arrive — never silently wrong.
+// groups, reports, ws. Every route in the contract is real: nothing answers
+// "not implemented" (guarded by contract_routes_test.go).
 package api
 
 import (

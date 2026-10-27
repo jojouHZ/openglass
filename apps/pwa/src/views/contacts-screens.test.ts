@@ -162,18 +162,22 @@ describe("S7 contact profile", () => {
   it("outgoing request shows pending state with resend and cancel", async () => {
     await router.push({ name: "s7-contact-profile", params: { userId: stranger.id } });
     const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
-    await flush();
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="request-pending"]').exists()).toBe(true);
+    });
     // nina was requested in the S6 test
     expect(w.find('[data-testid="badge"]').text()).toContain("request sent");
-    expect(w.find('[data-testid="request-pending"]').exists()).toBe(true);
     expect(w.find('[data-testid="action-remove"]').exists()).toBe(false);
     await w.find('[data-testid="action-resend"]').trigger("click");
-    await flush();
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="action-resend"]').attributes("disabled")).toBeUndefined();
+    });
     expect(contacts().outgoing.filter((r) => r.user.id === stranger.id)).toHaveLength(1);
     await w.find('[data-testid="action-cancel"]').trigger("click");
-    await flush();
-    expect(contacts().hasOutgoing(stranger.id)).toBe(false);
-    expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
+    await vi.waitFor(() => {
+      expect(contacts().hasOutgoing(stranger.id)).toBe(false);
+      expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
+    });
   });
 
   it("removing a mutual contact needs confirmation and drops both sides", async () => {

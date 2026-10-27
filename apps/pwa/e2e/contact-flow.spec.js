@@ -112,6 +112,32 @@ test("contact request: nothing happens until the target accepts", async ({ brows
   await c.ctx.close();
 });
 
+test("report a user: the operator can read it, the reported user sees nothing", async ({ browser }) => {
+  const { alice, carol } = seed.users;
+  const a = await open(browser, alice, `/contacts/${carol.id}`);
+  const c = await open(browser, carol, "/chats");
+
+  await a.page.getByTestId("action-report").click();
+  await expect(a.page.getByTestId("report-submit")).toBeDisabled();
+  await a.page.getByTestId("report-reason").fill("  spamming invites  ");
+  await a.page.getByTestId("report-submit").click();
+  await expect(a.page.getByTestId("report-done")).toContainText("will not be told");
+
+  // what `ogadmin reports list` would show — and the reporter is identifiable
+  const rows = await (await a.page.request.get("/api/v1/__e2e/reports")).json();
+  expect(rows).toEqual([
+    { reporterTag: alice.tag, targetTag: carol.tag, reason: "spamming invites", status: "open" },
+  ]);
+
+  // the reported user's UI has no trace of it: no badge, no new chat, no request
+  await c.page.reload();
+  await expect(c.page.getByTestId("requests-badge")).toHaveCount(0);
+  await expect(c.page.getByText("spamming invites")).toHaveCount(0);
+
+  await a.ctx.close();
+  await c.ctx.close();
+});
+
 test("group invitation: invisible until accepted, then a normal chat", async ({ browser }) => {
   const { alice, bob } = seed.users;
   const created = await (

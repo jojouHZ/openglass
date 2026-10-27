@@ -133,7 +133,30 @@ func main() {
 		api.WithHub(hub),
 		api.WithRelay(rl),
 	)
-	handler := srv.Handler(hub.ServeHTTP)
+	// test-only: lets the browser E2E assert what the operator would see
+	// (this binary never ships — the real server has no such route)
+	root := http.NewServeMux()
+	root.Handle("/", srv.Handler(hub.ServeHTTP))
+	root.HandleFunc("GET /api/v1/__e2e/reports", func(w http.ResponseWriter, r *http.Request) {
+		reps, err := st.ListReports(r.Context(), "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		type row struct {
+			ReporterTag string `json:"reporterTag"`
+			TargetTag   string `json:"targetTag"`
+			Reason      string `json:"reason"`
+			Status      string `json:"status"`
+		}
+		out := make([]row, 0, len(reps))
+		for _, x := range reps {
+			out = append(out, row{x.ReporterTag, x.TargetTag, x.Reason, x.Status})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(out)
+	})
+	handler := http.Handler(root)
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {

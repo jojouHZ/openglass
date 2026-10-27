@@ -18,8 +18,8 @@ Self-hosted deployment for clients is supported via a separate host repository
 ## Maturity Matrix
 
 Every component is labeled honestly: **implemented** means code shipped and
-tested on `main`, **designed** means the contract/thinking is written down,
-**stubbed** means the API answers `501 not_implemented`.
+tested on `main`, **designed** means the contract/thinking is written down. There are no
+stubs: every route in the public contract is implemented.
 
 | Component | Status |
 |-----------|--------|
@@ -29,7 +29,7 @@ tested on `main`, **designed** means the contract/thinking is written down,
 | Shared frontend core (`packages/core`) | **Implemented** |
 | Private layer (relay, E2EE, SAS verify, burnable chats) | **Designed, implementation starting** — contract: `docs/api/relay-events.md`; UI exists only in the internal `pwa-dev` build |
 | Push notifications | **Post-MVP** (not in the contract) |
-| Abuse reports | **Stubbed** (501) |
+| Abuse reports + operator CLI (`ogadmin`) | **Implemented** |
 | iOS / Android / Desktop shells | **Designed** |
 | Redis usage (presence, rate-limit) | **Provisioned** — wired into `/healthz` only; presence currently lives in the hub |
 | Qdrant + TEI knowledge base | **Implemented** — dev infrastructure, not in the message path |
