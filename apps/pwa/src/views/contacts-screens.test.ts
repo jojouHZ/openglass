@@ -14,6 +14,7 @@ import { createMemoryHistory } from "vue-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
+  ApiRequestError,
   bindApiClient,
   useContactsStore,
   useSessionStore,
@@ -195,5 +196,108 @@ describe("S7 contact profile", () => {
     const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
     await flush();
     expect(w.find('[data-testid="not-found"]').exists()).toBe(true);
+  });
+});
+
+describe("S7 report (F4)", () => {
+  async function openProfile() {
+    await router.push({ name: "s7-contact-profile", params: { userId: stranger.id } });
+    const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="action-report"]').exists()).toBe(true);
+    });
+    return w;
+  }
+  const submit = (w: ReturnType<typeof mount>) =>
+    w.find('[data-testid="report-submit"]').element as HTMLButtonElement;
+
+  it("offers a report action; empty or whitespace-only reasons cannot be sent", async () => {
+    const w = await openProfile();
+    expect(w.find('[data-testid="report-dialog"]').exists()).toBe(false);
+    await w.find('[data-testid="action-report"]').trigger("click");
+    expect(w.find('[data-testid="report-dialog"]').text()).toContain("not told");
+    expect(submit(w).disabled).toBe(true);
+    await w.find('[data-testid="report-reason"]').setValue("   \n ");
+    expect(submit(w).disabled).toBe(true);
+    await w.find('[data-testid="report-reason"]').setValue("spam");
+    expect(submit(w).disabled).toBe(false);
+    expect(w.find('[data-testid="report-counter"]').text()).toBe("4 / 1024");
+    w.unmount();
+  });
+
+  it("more than 1024 characters disables sending and flags the counter", async () => {
+    const w = await openProfile();
+    await w.find('[data-testid="action-report"]').trigger("click");
+    await w.find('[data-testid="report-reason"]').setValue("x".repeat(1025));
+    expect(submit(w).disabled).toBe(true);
+    expect(w.find('[data-testid="report-counter"]').classes()).toContain("text-danger");
+    await w.find('[data-testid="report-reason"]').setValue("é".repeat(1024));
+    expect(submit(w).disabled).toBe(false);
+    w.unmount();
+  });
+
+  it("sends the trimmed reason, then confirms receipt without promising an outcome", async () => {
+    const orig = ctx.api.reports.report;
+    const calls: Array<{ userId: string; reason: string }> = [];
+    ctx.api.reports.report = (body) => {
+      calls.push(body);
+      return orig(body);
+    };
+    try {
+      const w = await openProfile();
+      await w.find('[data-testid="action-report"]').trigger("click");
+      await w.find('[data-testid="report-reason"]').setValue("  rude in group  ");
+      await w.find('[data-testid="report-submit"]').trigger("click");
+      await vi.waitFor(() => {
+        expect(w.find('[data-testid="report-done"]').exists()).toBe(true);
+      });
+      expect(calls).toEqual([{ userId: stranger.id, reason: "rude in group" }]);
+      expect(w.find('[data-testid="report-done"]').text()).toContain("will not be told");
+      await w.find('[data-testid="report-close"]').trigger("click");
+      expect(w.find('[data-testid="report-dialog"]').exists()).toBe(false);
+      w.unmount();
+    } finally {
+      ctx.api.reports.report = orig;
+    }
+  });
+
+  it("a rate-limit answer keeps the text and says to try later", async () => {
+    const orig = ctx.api.reports.report;
+    ctx.api.reports.report = () =>
+      Promise.reject(new ApiRequestError(429, { code: "rate_limited", message: "slow down" }));
+    try {
+      const w = await openProfile();
+      await w.find('[data-testid="action-report"]').trigger("click");
+      await w.find('[data-testid="report-reason"]').setValue("again");
+      await w.find('[data-testid="report-submit"]').trigger("click");
+      await vi.waitFor(() => {
+        expect(w.find('[data-testid="report-error"]').text()).toContain("too many reports");
+      });
+      expect((w.find('[data-testid="report-reason"]').element as HTMLTextAreaElement).value).toBe("again");
+      expect(submit(w).disabled).toBe(false); // retry is possible
+      w.unmount();
+    } finally {
+      ctx.api.reports.report = orig;
+    }
+  });
+
+  it("cancel closes the dialog without sending anything", async () => {
+    const orig = ctx.api.reports.report;
+    let called = 0;
+    ctx.api.reports.report = (b) => {
+      called++;
+      return orig(b);
+    };
+    try {
+      const w = await openProfile();
+      await w.find('[data-testid="action-report"]').trigger("click");
+      await w.find('[data-testid="report-reason"]').setValue("never mind");
+      await w.find('[data-testid="report-cancel"]').trigger("click");
+      expect(w.find('[data-testid="report-dialog"]').exists()).toBe(false);
+      expect(called).toBe(0);
+      w.unmount();
+    } finally {
+      ctx.api.reports.report = orig;
+    }
   });
 });

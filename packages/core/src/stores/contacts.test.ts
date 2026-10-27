@@ -12,7 +12,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { bindApiClient, useChatsStore, useContactsStore, useSessionStore } from "../index";
+import { ApiRequestError, bindApiClient, useChatsStore, useContactsStore, useSessionStore } from "../index";
 import { createMockNodeApiClient } from "../api/mock/node";
 import { groupPal, incomingOnly, kostya, lena, stranger, suitor, wife } from "../api/mock/fixtures";
 
@@ -174,5 +174,32 @@ describe("chats propagation", () => {
     expect(
       group.members?.find((m) => m.user.id === wife.id)?.user.displayName,
     ).toBe("anna v3");
+  });
+});
+
+describe("reports (F4)", () => {
+  it("a report is acknowledged as received and changes nothing locally", async () => {
+    const before = JSON.stringify([contacts.list, contacts.incoming, contacts.outgoing]);
+    await contacts.report(stranger.id, "  spam  ");
+    expect(JSON.stringify([contacts.list, contacts.incoming, contacts.outgoing])).toBe(before);
+    const r = await ctx.api.reports.report({ userId: stranger.id, reason: "again" });
+    expect(r.report.status).toBe("received");
+    expect(r.report.id).toBeTruthy();
+  });
+
+  it("mirrors the server rules: empty/oversized reason 400, self 400, unknown 404", async () => {
+    const status = async (userId: string, reason: string) => {
+      try {
+        await contacts.report(userId, reason);
+        return 202;
+      } catch (e) {
+        return e instanceof ApiRequestError ? e.status : -1;
+      }
+    };
+    expect(await status(stranger.id, "   ")).toBe(400);
+    expect(await status(stranger.id, "x".repeat(1025))).toBe(400);
+    expect(await status(session.user!.id, "me")).toBe(400);
+    expect(await status("00000000-0000-4000-8000-000000000000", "x")).toBe(404);
+    expect(await status(stranger.id, "é".repeat(1024))).toBe(202);
   });
 });

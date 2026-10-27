@@ -196,7 +196,13 @@ export interface ApiClient {
     declineInvite(chatId: string): Promise<void>;
   };
   reports: {
-    report(body: { userId: string; reason: string }): Promise<void>;
+    /**
+     * Report a user to the instance operator. No automatic effect; the
+     * reported user is never told. 202 = received (not "reviewed").
+     */
+    report(body: { userId: string; reason: string }): Promise<{
+      report: { id: string; status: "received" };
+    }>;
   };
   system: {
     /** Liveness/readiness probe — also usable for connection-state UI. */

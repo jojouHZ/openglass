@@ -272,7 +272,11 @@ export class HttpApiClient implements ApiClient {
 
   readonly reports = {
     report: (body: { userId: string; reason: string }) =>
-      this.t.request<void>({ method: "POST", path: "/reports", body }),
+      this.t.request<{ report: { id: string; status: "received" } }>({
+        method: "POST",
+        path: "/reports",
+        body,
+      }),
   };
 
   readonly system = {

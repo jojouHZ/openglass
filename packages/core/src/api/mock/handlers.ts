@@ -763,7 +763,13 @@ export function createHandlers(state: MockState) {
       const g = guard(request);
       if (g) return g;
       await delay(LATENCY_MS);
-      return ok({}, 202);
+      const { userId, reason } = (await request.json()) as { userId?: string; reason?: string };
+      const text = (reason ?? "").trim();
+      if (!userId || text.length < 1 || [...text].length > 1024)
+        return err(400, "validation_failed", "reason must be 1..1024 characters");
+      if (userId === (state.session?.user ?? selfUser).id) return err(400, "validation_failed", "You cannot report yourself");
+      if (!state.findUser(userId)) return err(404, "not_found", "User not found");
+      return ok({ report: { id: freshId(), status: "received" } }, 202);
     }),
   ];
 }

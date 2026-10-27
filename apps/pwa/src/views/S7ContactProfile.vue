@@ -10,6 +10,7 @@ import { api, ApiRequestError, useContactsStore } from "@openglass/core";
 
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import ReportDialog from "../components/ReportDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +26,7 @@ const notFound = ref(false);
 const busy = ref(false);
 const errorMsg = ref("");
 const confirmRemove = ref(false);
+const reporting = ref(false);
 
 async function load() {
   loading.value = true;
@@ -234,11 +236,27 @@ async function message() {
           remove contact
         </button>
 
+        <button
+          v-if="relationship !== 'self'"
+          class="h-11 w-full rounded-input text-meta text-muted"
+          data-testid="action-report"
+          @click="reporting = true"
+        >
+          report
+        </button>
+
         <div v-if="errorMsg" class="text-center text-meta text-danger" data-testid="error">
           {{ errorMsg }}
         </div>
       </div>
     </div>
+
+    <ReportDialog
+      v-if="reporting && user"
+      :user-id="user.id"
+      :name="user.displayName ?? ''"
+      @close="reporting = false"
+    />
 
     <ConfirmDialog
       v-if="confirmRemove && user"

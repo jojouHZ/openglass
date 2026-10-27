@@ -109,6 +109,11 @@ export const useContactsStore = defineStore("contacts", {
       this.outgoing = this.outgoing.filter((r) => r.user.id !== userId);
     },
 
+    /** Report a user to the instance operator — no state changes locally. */
+    async report(userId: string, reason: string) {
+      await api().reports.report({ userId, reason });
+    },
+
     async remove(userId: string) {
       try {
         await api().contacts.remove(userId);
