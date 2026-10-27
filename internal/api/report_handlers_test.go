@@ -89,3 +89,23 @@ func TestReports_RateLimitIsPerUser(t *testing.T) {
 		t.Fatalf("other user must not be limited: %d", c)
 	}
 }
+
+// Every JSON endpoint caps the request body: an oversized payload is refused
+// without being buffered (authenticated and — more importantly — public).
+func TestJSONBodyIsCapped(t *testing.T) {
+	ts, _, _, aTok, _, _, bID := setupTwoUsers(t)
+	big := strings.Repeat("x", 3<<20)
+	c, b := post(t, ts, "/api/v1/reports", fmt.Sprintf(`{"userId":%q,"reason":%q}`, bID, big), aTok)
+	// refused while DECODING (never reaches validation, which would blame "reason")
+	d, _ := b["error"].(map[string]any)["details"].(map[string]any)
+	if c != 400 || d["reason"] != nil {
+		t.Fatalf("authenticated 3 MiB body must fail at decode: %d %v", c, b)
+	}
+	if c, _ := post(t, ts, "/api/v1/auth/otp/request", fmt.Sprintf(`{"email":%q}`, big+"@x.io"), ""); c != 400 {
+		t.Fatalf("public 3 MiB body: %d, want 400", c)
+	}
+	// a maximum-size message still fits comfortably
+	if c, b := post(t, ts, "/api/v1/auth/otp/request", `{"email":"ok@x.io","inviteCode":"GLS-DEMO"}`, ""); c >= 400 {
+		t.Fatalf("normal request broke: %d %v", c, b)
+	}
+}

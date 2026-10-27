@@ -124,6 +124,7 @@ The public layer is **server-trusted** by design — and honest about it in UI.
 | TLS / WSS everywhere | Transport security | deployed |
 | Argon2id OTP hashing + attempt/cooldown limits | Authentication | implemented |
 | JWT + rotating refresh, per-device sessions, WS revoke | Session management | implemented |
+| 1 MiB cap on every JSON request body (uploads have their own limit) | Memory-exhaustion DoS, incl. unauthenticated endpoints | implemented |
 | Member-gated attachment access, existence-private 404s | Content privacy | implemented |
 | IP/user rate limiting | Abuse prevention | **not wired yet** — Redis provisioned |
 | At-rest DB encryption | Raw-dump protection | deployment responsibility |

@@ -48,8 +48,13 @@ func conflict(w http.ResponseWriter, msg string, details map[string]any) {
 	writeErr(w, http.StatusConflict, "conflict", msg, details)
 }
 
+// maxJSONBody caps every JSON request body. The largest legitimate payload is
+// a message (8192 chars, ≤ 32 KiB encoded); uploads have their own limit.
+const maxJSONBody = 1 << 20
+
 func decode(r *http.Request, v any) error {
-	dec := json.NewDecoder(r.Body)
+	// nil writer: we only need the cap, the error handler answers the client
+	dec := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxJSONBody))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return err

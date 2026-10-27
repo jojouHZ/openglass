@@ -46,3 +46,11 @@ direction: it found `/healthz` documented but my naive filter had hidden it.
   database need unique names.
 - The first draft of the report-validation test hit the new rate limit
   itself; limits are part of the fixture.
+- **Review catch — no body cap.** Probing the new endpoint with a 30 MiB
+  body showed the server buffered all of it before validating; the
+  decoder had no limit on *any* JSON endpoint (including the public OTP
+  request). Fixed once, in `decode` (1 MiB), with a test that was verified
+  to fail without the fix — the first draft of that test passed either way
+  because validation also answered 400.
+- `ogadmin reports resolve not-a-uuid` leaked a raw Postgres error; it now
+  validates the id and reports a usage error.
