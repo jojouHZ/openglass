@@ -247,6 +247,24 @@ func TestTagTaken_Suggestions(t *testing.T) {
 	}
 }
 
+// Push left the contract (post-MVP, as a complete feature): its old routes
+// are plain 404s, not a pretend "501 not implemented".
+func TestPushRoutesAreGone(t *testing.T) {
+	ts, _, sender := newServer(t)
+	post(t, ts, "/api/v1/auth/otp/request", `{"email":"pg@x.io","inviteCode":"GLS-DEMO"}`, "")
+	_, v := post(t, ts, "/api/v1/auth/otp/verify",
+		`{"email":"pg@x.io","code":"`+sender.Codes["pg@x.io"]+`","deviceName":"t"}`, "")
+	access := v["accessToken"].(string)
+	for _, path := range []string{"/push/vapid-key", "/push/subscriptions"} {
+		if c, _ := get(t, ts, "/api/v1"+path, access); c != 404 {
+			t.Fatalf("GET %s: %d, want 404", path, c)
+		}
+	}
+	if c, _ := post(t, ts, "/api/v1/push/subscriptions", `{}`, access); c != 404 {
+		t.Fatalf("POST /push/subscriptions: %d, want 404", c)
+	}
+}
+
 func TestStubsAre501_NotSilent(t *testing.T) {
 	ts, _, sender := newServer(t)
 	post(t, ts, "/api/v1/auth/otp/request", `{"email":"s@x.io","inviteCode":"GLS-DEMO"}`, "")

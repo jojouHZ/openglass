@@ -87,7 +87,7 @@ One authenticated channel per session (`/api/v1/ws`):
 
 ## Notifications
 
-Web Push for the PWA shell is **stubbed (501)** — the S15 settings screen
+Web Push is **not part of the MVP contract** (no routes) — the S15 settings screen
 intentionally hides the notification card until the backend exists.
 Native push arrives with the native shells.
 

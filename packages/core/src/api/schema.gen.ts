@@ -121,8 +121,8 @@ export interface paths {
         put?: never;
         /**
          * Revoke the current device session
-         * @description Revokes this device's session; Web Push subscriptions bound to it
-         *     are removed with it.
+         * @description Revokes this device's session: its access and refresh tokens stop
+         *     working immediately.
          */
         post: operations["logout"];
         delete?: never;
@@ -674,62 +674,6 @@ export interface paths {
         /** Transfer ownership (owner only) */
         post: operations["transferOwnership"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/push/vapid-key": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** VAPID public key for Web Push subscription (S15) */
-        get: operations["getVapidKey"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/push/subscriptions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Register a Web Push subscription for this device (S15)
-         * @description Idempotent per `endpoint`: re-subscribing an existing endpoint
-         *     updates keys and returns `200` with the existing id instead of
-         *     creating a duplicate.
-         */
-        post: operations["createPushSubscription"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/push/subscriptions/{subscriptionId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a Web Push subscription */
-        delete: operations["deletePushSubscription"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2380,98 +2324,6 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Forbidden"];
-        };
-    };
-    getVapidKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description VAPID public key (applicationServerKey) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        publicKey: string;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    createPushSubscription: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: uri */
-                    endpoint: string;
-                    keys: {
-                        p256dh: string;
-                        auth: string;
-                    };
-                };
-            };
-        };
-        responses: {
-            /** @description Existing subscription updated (same endpoint) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                    };
-                };
-            };
-            /** @description Subscription stored (bound to the current device session) */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    deletePushSubscription: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                subscriptionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
         };
     };
     reportUser: {

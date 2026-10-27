@@ -758,35 +758,6 @@ export function createHandlers(state: MockState) {
       return empty();
     }),
 
-    // ---------- push ----------
-    http.get(`${API}/push/vapid-key`, async ({ request }) => {
-      const g = guard(request);
-      if (g) return g;
-      await delay(LATENCY_MS);
-      return ok({ publicKey: "BMOCKvapidkey0000000000000000000000000000000000000000000000000000000000000" });
-    }),
-
-    http.post(`${API}/push/subscriptions`, async ({ request }) => {
-      const g = guard(request);
-      if (g) return g;
-      await delay(LATENCY_MS);
-      const { endpoint } = (await request.json()) as { endpoint: string };
-      for (const [id, sub] of state.pushSubscriptions) {
-        if (sub.endpoint === endpoint) return ok({ id }, 200); // upsert
-      }
-      const id = freshId();
-      state.pushSubscriptions.set(id, { endpoint });
-      return ok({ id }, 201);
-    }),
-
-    http.delete(`${API}/push/subscriptions/:subscriptionId`, async ({ request, params }) => {
-      const g = guard(request);
-      if (g) return g;
-      await delay(LATENCY_MS);
-      state.pushSubscriptions.delete(String(params.subscriptionId));
-      return empty();
-    }),
-
     // ---------- reports ----------
     http.post(`${API}/reports`, async ({ request }) => {
       const g = guard(request);

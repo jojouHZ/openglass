@@ -50,7 +50,6 @@ export class MockState {
   /** emails with a completed profile */
   readonly profileDone = new Set<string>();
   readonly members = new Map<string, GroupMember[]>();
-  readonly pushSubscriptions = new Map<string, { endpoint: string }>();
   chatPinned = new Map<string, boolean>();
 
   pendingOtpEmail: string | null = null;

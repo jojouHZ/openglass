@@ -291,8 +291,8 @@ paths:
       tags: [auth]
       summary: Revoke the current device session
       description: |
-        Revokes this device's session; Web Push subscriptions bound to it
-        are removed with it.
+        Revokes this device's session: its access and refresh tokens stop
+        working immediately.
       operationId: logout
       security: [{ bearerAuth: [] }]
       responses:
@@ -1240,87 +1240,6 @@ paths:
       responses:
         '204': { description: Transferred }
         '403': { $ref: '#/components/responses/Forbidden' }
-
-  /push/vapid-key:
-    get:
-      tags: [auth]
-      summary: VAPID public key for Web Push subscription (S15)
-      operationId: getVapidKey
-      security: [{ bearerAuth: [] }]
-      responses:
-        '200':
-          description: VAPID public key (applicationServerKey)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [publicKey]
-                properties:
-                  publicKey: { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
-  /push/subscriptions:
-    post:
-      tags: [auth]
-      summary: Register a Web Push subscription for this device (S15)
-      description: |
-        Idempotent per `endpoint`: re-subscribing an existing endpoint
-        updates keys and returns `200` with the existing id instead of
-        creating a duplicate.
-      operationId: createPushSubscription
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [endpoint, keys]
-              properties:
-                endpoint: { type: string, format: uri }
-                keys:
-                  type: object
-                  required: [p256dh, auth]
-                  properties:
-                    p256dh: { type: string }
-                    auth: { type: string }
-      responses:
-        '200':
-          description: Existing subscription updated (same endpoint)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id]
-                properties:
-                  id: { type: string, format: uuid }
-        '201':
-          description: Subscription stored (bound to the current device session)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id]
-                properties:
-                  id: { type: string, format: uuid }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
-  /push/subscriptions/{subscriptionId}:
-    delete:
-      tags: [auth]
-      summary: Remove a Web Push subscription
-      operationId: deletePushSubscription
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '204':
-          description: Removed
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
 
   /reports:
     post:

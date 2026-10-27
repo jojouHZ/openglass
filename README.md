@@ -31,7 +31,7 @@ SAS verification, view-once burn, zero-trace teardown. Requires
 `VITE_PRIVATE_MODULE=1` + `VITE_API_MODE=live`; gated out of the
 production PWA bundle.
 
-**Stubbed (501 `not_implemented`):** push notifications, abuse reports.
+**Not in the MVP:** push notifications (post-MVP, as a complete feature).
 
 ## Tech Stack
 

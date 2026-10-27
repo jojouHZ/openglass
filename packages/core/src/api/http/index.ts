@@ -270,28 +270,6 @@ export class HttpApiClient implements ApiClient {
       }),
   };
 
-  readonly push = {
-    getVapidKey: () =>
-      this.t.request<{ publicKey: string }>({
-        method: "GET",
-        path: "/push/vapid-key",
-      }),
-    subscribe: (body: {
-      endpoint: string;
-      keys: { p256dh: string; auth: string };
-    }) =>
-      this.t.request<{ id: string }>({
-        method: "POST",
-        path: "/push/subscriptions",
-        body,
-      }),
-    unsubscribe: (subscriptionId: string) =>
-      this.t.request<void>({
-        method: "DELETE",
-        path: `/push/subscriptions/${subscriptionId}`,
-      }),
-  };
-
   readonly reports = {
     report: (body: { userId: string; reason: string }) =>
       this.t.request<void>({ method: "POST", path: "/reports", body }),

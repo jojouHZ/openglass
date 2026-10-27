@@ -28,7 +28,7 @@ tested on `main`, **designed** means the contract/thinking is written down,
 | PWA shell (installable, offline states) | **Implemented** |
 | Shared frontend core (`packages/core`) | **Implemented** |
 | Private layer (relay, E2EE, SAS verify, burnable chats) | **Designed, implementation starting** — contract: `docs/api/relay-events.md`; UI exists only in the internal `pwa-dev` build |
-| Push notifications | **Stubbed** (501) |
+| Push notifications | **Post-MVP** (not in the contract) |
 | Abuse reports | **Stubbed** (501) |
 | iOS / Android / Desktop shells | **Designed** |
 | Redis usage (presence, rate-limit) | **Provisioned** — wired into `/healthz` only; presence currently lives in the hub |

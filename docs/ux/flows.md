@@ -31,7 +31,7 @@ navigation event, every screen lists the data it needs.
 | S12 | Chat view in PRIVATE MODE (same window — a pane of S5, not a route; private palette, mask glyph on every private bubble, header chips: Verified · countdown · strict, BURN) | Private | pwa-dev only |
 | S13 | Profile & settings | Public | shipped |
 | S14 | Security & sessions | Public | shipped |
-| S15 | PWA install / push / offline | Public | shipped — install prompt + offline banner live; push card hidden (backend is `501`) |
+| S15 | PWA install / push / offline | Public | shipped — install prompt + offline banner live; no push card — push is post-MVP |
 | S16 | UI state catalog | — | dev-only route `/states` (`import.meta.env.DEV`); a component checklist, not a user flow |
 
 ## Flow Map

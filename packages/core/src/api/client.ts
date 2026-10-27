@@ -195,14 +195,6 @@ export interface ApiClient {
     /** Silent — group members are not told. */
     declineInvite(chatId: string): Promise<void>;
   };
-  push: {
-    getVapidKey(): Promise<{ publicKey: string }>;
-    subscribe(body: {
-      endpoint: string;
-      keys: { p256dh: string; auth: string };
-    }): Promise<{ id: string }>;
-    unsubscribe(subscriptionId: string): Promise<void>;
-  };
   reports: {
     report(body: { userId: string; reason: string }): Promise<void>;
   };

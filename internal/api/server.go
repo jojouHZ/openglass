@@ -163,15 +163,8 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("POST /group-invites/{chatId}/accept", s.requireAuth(s.acceptGroupInvite))
 	v1.HandleFunc("POST /group-invites/{chatId}/decline", s.requireAuth(s.declineGroupInvite))
 
-	// contracted-but-unimplemented slices → honest 501, not 404/silence
-	stub := s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) })
-	for _, r := range []string{
-		"GET /push/vapid-key", "GET /push/subscriptions", "POST /push/subscriptions",
-		"DELETE /push/subscriptions/{subscriptionId}",
-		"POST /reports",
-	} {
-		v1.HandleFunc(r, stub)
-	}
+	// abuse reports — replaced by the real handler in the F4b step
+	v1.HandleFunc("POST /reports", s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) }))
 
 	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", v1))
 	mux.HandleFunc("GET /healthz", s.healthz) // infra convenience alias
