@@ -688,7 +688,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report a user to the instance owner (US-2.4) */
+        /**
+         * Report a user to the instance owner (US-2.4)
+         * @description The report is stored for the instance operator (read with
+         *     `ogadmin reports list`). It has **no automatic effect**: the
+         *     reported user is never notified and nothing about them changes.
+         *     The operator sees who reported. Rate-limited per user.
+         */
         post: operations["reportUser"];
         delete?: never;
         options?: never;
@@ -2343,14 +2349,26 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Report accepted */
+            /** @description Report received (not "reviewed" — the reporter is not told the outcome) */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        report: {
+                            /** Format: uuid */
+                            id: string;
+                            /** @enum {string} */
+                            status: "received";
+                        };
+                    };
+                };
             };
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
         };
     };
 }

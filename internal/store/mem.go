@@ -26,6 +26,9 @@ type Mem struct {
 
 	chatOnce sync.Once
 	chats    *memChats // messaging slice — mem_chats.go
+
+	repMu   sync.Mutex
+	reports []*Report // F4 — mem_reports.go
 }
 
 type invite struct {

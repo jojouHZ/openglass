@@ -1257,9 +1257,30 @@ paths:
               properties:
                 userId: { type: string, format: uuid }
                 reason: { type: string, maxLength: 1024 }
+      description: |
+        The report is stored for the instance operator (read with
+        `ogadmin reports list`). It has **no automatic effect**: the
+        reported user is never notified and nothing about them changes.
+        The operator sees who reported. Rate-limited per user.
       responses:
+        '202':
+          description: Report received (not "reviewed" — the reporter is not told the outcome)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report:
+                    type: object
+                    required: [id, status]
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string, enum: [received] }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '202': { description: Report accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
 components:
   securitySchemes:

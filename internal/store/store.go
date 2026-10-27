@@ -197,6 +197,22 @@ func (m *Message) redact() {
 	m.Pinned = false
 }
 
+// Report — a user's report about another user, read by the instance operator.
+// The user references become nil if an account is ever deleted; the tags are
+// snapshots taken at report time.
+type Report struct {
+	ID           string
+	ReporterID   *string
+	TargetUserID *string
+	ReporterTag  string
+	TargetTag    string
+	Reason       string
+	Status       string // open | resolved
+	CreatedAt    time.Time
+	ResolvedAt   *time.Time
+	ResolvedNote *string
+}
+
 // MessageQuery — cursor semantics per openapi listMessages.
 type MessageQuery struct {
 	Limit    int
@@ -228,6 +244,13 @@ type ChatStore interface {
 	// contact_outgoing|contact_incoming|none (S7).
 	Relationship(ctx context.Context, a, b string) (string, error)
 	MutualContactIDs(ctx context.Context, userID string) ([]string, error) // presence scope (ws)
+
+	// abuse reports (F4): ErrInvalid self-report or empty/oversized reason,
+	// ErrNotFound unknown target. Reasons are trimmed; 1..1024 chars.
+	CreateReport(ctx context.Context, reporterID, targetID, reason string) (*Report, error)
+	// ListReports — status "" = all, else open|resolved; oldest first.
+	ListReports(ctx context.Context, status string) ([]Report, error)
+	ResolveReport(ctx context.Context, id, note string) error // ErrNotFound
 
 	// chats
 	ListChatSummaries(ctx context.Context, userID string) ([]ChatSummary, error)

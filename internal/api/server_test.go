@@ -265,23 +265,6 @@ func TestPushRoutesAreGone(t *testing.T) {
 	}
 }
 
-func TestStubsAre501_NotSilent(t *testing.T) {
-	ts, _, sender := newServer(t)
-	post(t, ts, "/api/v1/auth/otp/request", `{"email":"s@x.io","inviteCode":"GLS-DEMO"}`, "")
-	_, v := post(t, ts, "/api/v1/auth/otp/verify",
-		`{"email":"s@x.io","code":"`+sender.Codes["s@x.io"]+`","deviceName":"t"}`, "")
-	access := v["accessToken"].(string)
-
-	code, body := post(t, ts, "/api/v1/reports", `{"targetType":"user","targetId":"x","reason":"t"}`, access)
-	if code != 501 || errCode(body) != "not_implemented" {
-		t.Fatalf("got %d %v", code, body)
-	}
-	// unauthorized stub still enforces auth
-	if c, _ := post(t, ts, "/api/v1/reports", `{}`, ""); c != 401 {
-		t.Fatalf("unauth stub: %d", c)
-	}
-}
-
 func TestLogout_RevokedSessionKillsAccessToken(t *testing.T) {
 	ts, _, sender := newServer(t)
 	post(t, ts, "/api/v1/auth/otp/request", `{"email":"rv@x.io","inviteCode":"GLS-DEMO"}`, "")

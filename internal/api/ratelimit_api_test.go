@@ -57,6 +57,7 @@ func generousLimits() api.AuthRateLimits {
 		OtpRequestEmail: g,
 		OtpVerifyIP:     g,
 		RefreshIP:       g,
+		Report:          g,
 	}
 }
 

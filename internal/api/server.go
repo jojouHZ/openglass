@@ -36,6 +36,7 @@ type Server struct {
 	otpVerifyIP    *rateLimiter
 	refreshIP      *rateLimiter
 	contactReq     *rateLimiter // per-user key (consent model anti-spam)
+	reportReq      *rateLimiter // per-user key (abuse reports)
 	editWindow     time.Duration
 
 	// optional probes for /healthz — nil dep reports "down"
@@ -163,8 +164,8 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("POST /group-invites/{chatId}/accept", s.requireAuth(s.acceptGroupInvite))
 	v1.HandleFunc("POST /group-invites/{chatId}/decline", s.requireAuth(s.declineGroupInvite))
 
-	// abuse reports — replaced by the real handler in the F4b step
-	v1.HandleFunc("POST /reports", s.requireAuth(func(w http.ResponseWriter, _ *http.Request) { notImplemented(w) }))
+	// abuse reports — read by the operator (cmd/ogadmin), no automatic effect
+	v1.HandleFunc("POST /reports", s.requireAuth(s.createReport))
 
 	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", v1))
 	mux.HandleFunc("GET /healthz", s.healthz) // infra convenience alias

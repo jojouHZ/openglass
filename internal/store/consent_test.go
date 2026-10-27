@@ -5,6 +5,7 @@ package store_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -312,5 +313,73 @@ func runTimeline(t *testing.T, st consentStore) {
 		if s.ID == chat.ID && (s.UnreadCount != 1 || s.LastMessage == nil || s.LastMessage.Kind != "system") {
 			t.Fatalf("summary after a system line: unread=%d last=%+v", s.UnreadCount, s.LastMessage)
 		}
+	}
+}
+
+// Reports — same behaviour on both stores.
+func TestMem_Reports(t *testing.T) { runReports(t, store.NewMem()) }
+func TestPG_Reports(t *testing.T)  { runReports(t, pgOrSkip(t)) }
+
+func runReports(t *testing.T, st consentStore) {
+	ctx := context.Background()
+	a, b := mkUser(t, st, "ra"), mkUser(t, st, "rb")
+
+	if _, err := st.CreateReport(ctx, a.ID, a.ID, "me"); err != store.ErrInvalid {
+		t.Fatalf("self report: %v", err)
+	}
+	for _, bad := range []string{"", "  \t\n ", strings.Repeat("x", 1025)} {
+		if _, err := st.CreateReport(ctx, a.ID, b.ID, bad); err != store.ErrInvalid {
+			t.Fatalf("reason %q…: %v", bad[:min(len(bad), 8)], err)
+		}
+	}
+	if _, err := st.CreateReport(ctx, a.ID, "00000000-0000-4000-8000-000000000000", "x"); err != store.ErrNotFound {
+		t.Fatalf("unknown target: %v", err)
+	}
+
+	r1, err := st.CreateReport(ctx, a.ID, b.ID, "  rude  ")
+	if err != nil || r1.Reason != "rude" || r1.Status != "open" || r1.ID == "" {
+		t.Fatalf("create: %+v %v", r1, err)
+	}
+	if _, err := st.CreateReport(ctx, b.ID, a.ID, strings.Repeat("é", 1024)); err != nil {
+		t.Fatalf("1024 characters must be accepted: %v", err)
+	}
+
+	open, _ := st.ListReports(ctx, "open")
+	var mine int
+	for _, r := range open {
+		if r.ID == r1.ID {
+			mine++
+			if r.ReporterID == nil || *r.ReporterID != a.ID || r.TargetUserID == nil || *r.TargetUserID != b.ID {
+				t.Fatalf("who: %+v", r)
+			}
+		}
+	}
+	if mine != 1 {
+		t.Fatalf("created report missing from the open list")
+	}
+
+	if err := st.ResolveReport(ctx, r1.ID, "warned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ResolveReport(ctx, "00000000-0000-4000-8000-000000000000", ""); err != store.ErrNotFound {
+		t.Fatalf("resolve unknown: %v", err)
+	}
+	resolved, _ := st.ListReports(ctx, "resolved")
+	var found bool
+	for _, r := range resolved {
+		if r.ID == r1.ID {
+			found = r.Status == "resolved" && r.ResolvedAt != nil && r.ResolvedNote != nil && *r.ResolvedNote == "warned"
+		}
+	}
+	if !found {
+		t.Fatalf("resolved report not listed correctly: %+v", resolved)
+	}
+	for _, r := range func() []store.Report { o, _ := st.ListReports(ctx, "open"); return o }() {
+		if r.ID == r1.ID {
+			t.Fatal("a resolved report must leave the open list")
+		}
+	}
+	if _, err := st.ListReports(ctx, "bogus"); err != store.ErrInvalid {
+		t.Fatalf("bad status: %v", err)
 	}
 }

@@ -98,6 +98,8 @@ type AuthRateLimits struct {
 	// ContactRequest — per-USER bucket on POST /contacts (request spam).
 	// Zero value falls back to the default.
 	ContactRequest RateLimitSpec
+	// Report — per-USER bucket on POST /reports. Zero value = default.
+	Report RateLimitSpec
 }
 
 func DefaultAuthRateLimits() AuthRateLimits {
@@ -107,6 +109,7 @@ func DefaultAuthRateLimits() AuthRateLimits {
 		OtpVerifyIP:     RateLimitSpec{PerMinute: 30, Burst: 5},
 		RefreshIP:       RateLimitSpec{PerMinute: 60, Burst: 10},
 		ContactRequest:  RateLimitSpec{PerMinute: 6, Burst: 20},
+		Report:          RateLimitSpec{PerMinute: 6, Burst: 5},
 	}
 }
 
@@ -122,6 +125,11 @@ func WithAuthRateLimits(l AuthRateLimits) Option {
 			cr = DefaultAuthRateLimits().ContactRequest
 		}
 		s.contactReq = newRateLimiter(cr.PerMinute, cr.Burst)
+		rp := l.Report
+		if rp.PerMinute == 0 && rp.Burst == 0 {
+			rp = DefaultAuthRateLimits().Report
+		}
+		s.reportReq = newRateLimiter(rp.PerMinute, rp.Burst)
 	}
 }
 

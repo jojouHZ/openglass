@@ -39,7 +39,6 @@ Every non-2xx response body is:
 | `not_found` | 404 | resource absent or invisible | empty state |
 | `conflict` | 409 | duplicate state (e.g. already in contacts) | idempotent UI, refresh |
 | `too_large` | 413 | attachment over limit (also HTTP body cap) | composer error |
-| `not_implemented` | 501 | route exists in the contract but the feature is stubbed (push, reports) | hide feature UI |
 | `internal` / `internal_error` | 500 | server fault | generic error screen |
 | `rate_limited` | 429 | auth-endpoint IP/email bucket or per-user contact-request bucket tripped; `Retry-After` header + `details.retryAfterS` | backoff + toast |
 

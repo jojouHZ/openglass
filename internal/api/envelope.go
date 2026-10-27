@@ -48,11 +48,6 @@ func conflict(w http.ResponseWriter, msg string, details map[string]any) {
 	writeErr(w, http.StatusConflict, "conflict", msg, details)
 }
 
-func notImplemented(w http.ResponseWriter) {
-	writeErr(w, http.StatusNotImplemented, "not_implemented",
-		"Endpoint lands with its slice — see docs/api/", nil)
-}
-
 func decode(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
