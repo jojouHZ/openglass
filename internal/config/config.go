@@ -31,6 +31,19 @@ type Config struct {
 	UploadsDir string
 }
 
+// #nosec G101 — local dev default (the compose database), overridden by OPENGLASS_PG_DSN
+const defaultPgDSN = "postgres://openglass:openglass_dev@localhost:5432/openglass"
+
+// AdminConfig — what the operator CLI (cmd/ogadmin) needs: the database only.
+type AdminConfig struct {
+	PgDSN string // postgres://…
+}
+
+// AdminFromEnv reads the operator CLI's configuration (no JWT secret needed).
+func AdminFromEnv() AdminConfig {
+	return AdminConfig{PgDSN: get("OPENGLASS_PG_DSN", defaultPgDSN)}
+}
+
 func FromEnv() (*Config, error) {
 	secret := os.Getenv("OPENGLASS_JWT_SECRET")
 	dev := os.Getenv("OPENGLASS_DEV_MODE") == "1"
@@ -45,7 +58,7 @@ func FromEnv() (*Config, error) {
 	return &Config{
 		// :8080 is owned by the TEI embedder in compose — server on :8081
 		ListenAddr:        get("OPENGLASS_LISTEN", ":8081"),
-		PgDSN:             get("OPENGLASS_PG_DSN", "postgres://openglass:openglass_dev@localhost:5432/openglass"),
+		PgDSN:             get("OPENGLASS_PG_DSN", defaultPgDSN),
 		RedisAddr:         get("OPENGLASS_REDIS_ADDR", "localhost:6379"),
 		JWTSecret:         []byte(secret),
 		AccessTokenTTL:    getDur("OPENGLASS_ACCESS_TTL_S", 900),

@@ -9,7 +9,8 @@ otherwise.
 
 - **Registration**: email + 6-digit one-time code (OTP) → display name +
   unique tag (`name#NNNN`).
-- **Invite-only**: admins generate invite codes; there is no open
+- **Invite-only**: the operator generates invite codes with `ogadmin
+  invites create` (see Operator surface); there is no open
   registration. A new email without an invite gets `invite_required`.
 - **OTP safety**: codes are Argon2id-hashed at rest, attempt-limited and
   resend-cooldowned server-side.
@@ -84,6 +85,29 @@ One authenticated channel per session (`/api/v1/ws`):
   contacts only; a disconnect has a grace window before `offline`
   broadcasts, so flaky reconnects don't flap.
 - Full contract: `docs/api/ws-events.md`.
+
+## Operator surface
+
+`ogadmin` (built into the server image next to `server`) is the
+instance owner's tool. It talks to the database directly with the same
+`OPENGLASS_PG_DSN` as the server, so it needs credentials and adds **no
+network surface** — there are no admin HTTP routes.
+
+```
+docker compose exec server ogadmin reports list [--status open|resolved|all]
+docker compose exec server ogadmin reports resolve <id> [--note "..."]
+docker compose exec server ogadmin invites create [--count N] [--uses N] [--days N]
+docker compose exec server ogadmin invites list
+```
+
+- **Reports** (`POST /reports`): a user reports another user; the owner
+  sees who reported (stated in the dialog). A report has *no automatic
+  effect* — the reported user is never told and nothing changes; the
+  reporter learns "received", not an outcome. Reports outlive accounts
+  (tags are snapshotted, references become NULL). User-supplied text is
+  printed quoted, so control characters never reach the terminal raw.
+- **Invites**: codes `GLS-XXXXXXXX` from an unambiguous alphabet, with
+  optional use count and expiry.
 
 ## Notifications
 

@@ -416,8 +416,8 @@ silent.
 ## Recorded Product Decisions
 
 - **Invite issuance**: no in-app UI. The hoster generates invite codes via
-  a CLI script shipped with the instance (`POST /admin/invites`, local
-  only). Fits the ~100-user closed-instance scope; revisit if instances
+  the operator CLI shipped with the instance (`ogadmin invites create`,
+  local — no HTTP route). Fits the ~100-user closed-instance scope; revisit if instances
   grow.
 - **Push payload privacy**: notifications carry no message content —
   "New message" + sender display name at most. Private sessions never

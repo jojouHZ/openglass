@@ -31,6 +31,10 @@ SAS verification, view-once burn, zero-trace teardown. Requires
 `VITE_PRIVATE_MODULE=1` + `VITE_API_MODE=live`; gated out of the
 production PWA bundle.
 
+**Operator tool:** `ogadmin` — read and resolve user reports, create invite
+codes (`docker compose exec server ogadmin …`, see
+`docs/architecture/01-public-layer.md`).
+
 **Not in the MVP:** push notifications (post-MVP, as a complete feature).
 
 ## Tech Stack
