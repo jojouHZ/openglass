@@ -30,9 +30,13 @@ file.
    never notified, the reporter gets "received" — not "reviewed".
 4. **Operator read path = a small CLI** (`cmd/ogadmin`), because a report
    nobody can comfortably read is another stub. The same binary delivers
-   the invite tool the docs already promise. *(Flagged for owner review:
-   if you prefer "SQL only for now", step B3 drops and the docs say
-   "operator queries the table".)*
+   the invite tool the docs already promise. **Confirmed by the owner.**
+5. **The operator sees who reported** (single-operator instance) — stated
+   in the dialog copy. **Confirmed by the owner.**
+6. **Reports outlive accounts**: `reporter_id` / `target_user_id` use
+   `ON DELETE SET NULL` plus a stored `target_tag` snapshot — deleting an
+   account must not erase evidence (review finding). There is no account
+   deletion today; this keeps the schema ready.
 
 ## Work, in order
 
@@ -51,11 +55,10 @@ file.
 ### B. Reports, for real
 **B1 — storage & API (backend agent)**
 - Migration `0005_reports.sql`:
-  `reports(id uuid pk, reporter_id → users, target_user_id → users,
+  `reports(id uuid pk, reporter_id → users ON DELETE SET NULL,
+  target_user_id → users ON DELETE SET NULL, target_tag text,
   reason text 1..1024, status 'open'|'resolved' default 'open',
-  created_at, resolved_at, resolved_note)`; index on `(status, created_at)`;
-  `ON DELETE CASCADE` for both users (a deleted account takes its
-  reports with it — documented trade-off).
+  created_at, resolved_at, resolved_note)`; index on `(status, created_at)`.
 - `POST /reports` → validation (`reason` trimmed, 1..1024; target must
   exist → 404; not yourself → 400), per-user token bucket (new
   `ReportRate` in the existing limiter config, default burst 5, 6/min),
@@ -93,12 +96,27 @@ file.
 ### C. Sweep and guard
 - Delete `notImplemented` from `envelope.go` and
   `TestStubsAre501_NotSilent`; golangci `unused` keeps it deleted.
-- Repo guard (a Go test): no handler registered in the router may be a
-  shared "stub" closure — implemented as: walk the contract (OpenAPI path
-  list) and assert every path+method answers something other than `501`
-  on a smoke call set (auth'd). Fails the build if a stub is ever
-  reintroduced.
+- Repo guard (a Go test): walk the router's route table (not the OpenAPI
+  paths — parameters make smoke calls brittle) and assert that no
+  registered route is served by a stub; additionally grep-style test that
+  `not_implemented` appears nowhere in `internal/`. Fails the build if a
+  stub is ever reintroduced. The OpenAPI path set and the route table must
+  match (also catches contract drift).
 - `README`, `ROADMAP`, journal `17-f4-no-stubs.md`, vectorize.
+
+## Order and commits (each commit leaves `main` green)
+1. `F4a` — push removal (server, contract, schema, client, mock, docs) +
+   404 test.
+2. `F4b` — migration `0005`, store `Create/List/ResolveReport` (Mem+PG
+   parity), `POST /reports`, limiter, API tests, contract/schema.
+3. `F4c` — core client/mock + PWA `ReportDialog` + S7 action + unit tests.
+4. `F4d` — `cmd/ogadmin` + Dockerfile + operator docs + tests.
+5. `F4e` — sweep (`notImplemented`, stub test), route-table guard, E2E,
+   journal `17-f4-no-stubs.md`, vectorize.
+Before each push: Go race tests (Mem+PG), lint, PWA tests **3 runs in a
+row**, core tests, typecheck, build, bundle guard; before the last push
+also the full local Chromium E2E. New async tests wait on conditions
+(`vi.waitFor`), never on fixed delays.
 
 ## Tests
 - **Backend:** report create (valid, whitespace-only, too long, self,
@@ -142,7 +160,4 @@ file.
   grows into moderation belongs to the post-MVP admin surface.
 
 ## Open for owner review
-1. Keep **B3 (ogadmin)** in F4 (recommended — it also delivers the invite
-   tool the docs already promise) or defer to "SQL only"?
-2. Reporter identity visible to the operator: confirmed acceptable
-   (single-operator instance)?
+None — `ogadmin` and operator-visible reporter identity were confirmed.
