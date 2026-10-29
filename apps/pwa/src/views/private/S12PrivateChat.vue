@@ -97,7 +97,7 @@ function fmtTs(ts: number) {
 </script>
 
 <template>
-  <main class="private-mode relative flex h-dvh flex-col overflow-hidden">
+  <main class="private-mode relative flex h-full flex-col overflow-hidden">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line/30 px-6 pb-3 pt-8">
       <button class="text-ink" aria-label="back" @click="router.back()">

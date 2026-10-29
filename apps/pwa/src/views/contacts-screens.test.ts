@@ -73,6 +73,33 @@ describe("S6 contacts and requests", () => {
     expect(contacts().isContact(lena.id)).toBe(false);
   });
 
+  it("is a root screen: titled, no back button, sections labelled, search not stealing focus", async () => {
+    const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] }, attachTo: document.body });
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="contacts-header"]').exists()).toBe(true);
+    });
+    expect(w.find("h1").text()).toBe("Contacts");
+    expect(w.find('[aria-label="back"]').exists()).toBe(false);
+    expect(w.find('[data-testid="contacts-header"]').text()).toMatch(/all contacts · \d+/);
+    expect(w.find('[data-testid="requests-header"]').text()).toMatch(/^requests\s*2/i);
+    expect(w.find('[data-testid="req-accept"]').text()).toBe("Accept");
+    expect(document.activeElement).not.toBe(w.find('[data-testid="contact-search-input"]').element);
+    w.unmount();
+  });
+
+  it("a verified contact gets a shield and 'verified' in its subtitle", async () => {
+    await contacts().refresh();
+    const first = contacts().list[0]!;
+    first.verifiedAt = new Date().toISOString();
+    const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => {
+      expect(w.findAll('[data-testid="verified-mark"]')).toHaveLength(1);
+    });
+    expect(w.text()).toContain(`${first.user.tag} · verified`);
+    first.verifiedAt = null;
+    w.unmount();
+  });
+
   it("queries filter the local roster without duplicating global hits", async () => {
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
     await flush();

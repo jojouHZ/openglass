@@ -1,8 +1,8 @@
 <!-- Copyright (C) 2025 OpenGlass contributors -->
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
-<!-- App shell: mobile grid rows per docs/ux/design-tokens.md —
-     chrome rows (header/nav) are shell rows, only the 1fr row scrolls. -->
+<!-- App shell: chrome rows (offline strip, tab bar) are shell rows; the
+     middle row holds the routed screen and is the only scroller. -->
 
 <script setup lang="ts">
 import { computed, watch } from "vue";
@@ -10,6 +10,7 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 
 import { useChatsStore, useSessionStore } from "@openglass/core";
 
+import TabBar from "./components/TabBar.vue";
 import { pinia } from "./pinia";
 
 const session = useSessionStore(pinia);
@@ -35,10 +36,13 @@ const offline = computed(
   () => session.authed && chats.wsConnected && chats.connState === "offline",
 );
 const connecting = computed(() => session.authed && chats.connState === "connecting");
+
+// root navigation: only on root screens (route meta), never in a chat or sub-screen
+const showNav = computed(() => session.authed && route.meta.nav === true);
 </script>
 
 <template>
-  <div class="grid min-h-dvh grid-rows-[auto_1fr_auto]">
+  <div class="flex h-dvh flex-col">
     <div
       v-if="offline || connecting"
       class="pointer-events-none fixed inset-x-0 top-0 z-50 bg-bubble-in px-6 py-1.5 text-center text-meta text-muted"
@@ -46,6 +50,10 @@ const connecting = computed(() => session.authed && chats.connState === "connect
     >
       {{ offline ? "offline — reconnecting" : "connecting…" }}
     </div>
-    <RouterView />
+    <!-- the only scroll container of the shell; screens fill it (h-full) -->
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <RouterView />
+    </div>
+    <TabBar v-if="showNav" />
   </div>
 </template>

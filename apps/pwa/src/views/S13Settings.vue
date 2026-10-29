@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { ChevronRight, Download, LogOut, Pencil, Shield } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 
 import { useSessionStore } from "@openglass/core";
@@ -10,6 +11,7 @@ import AppButton from "../components/AppButton.vue";
 import AppInput from "../components/AppInput.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import Avatar from "../components/ui/Avatar.vue";
+import Chip from "../components/ui/Chip.vue";
 import { useThemeStore, type ThemePref } from "../stores/theme";
 
 const router = useRouter();
@@ -28,6 +30,7 @@ const draft = ref("");
 const busy = ref(false);
 const errorMsg = ref("");
 const confirmSignOut = ref(false);
+const host = location.host;
 
 async function saveName() {
   const name = draft.value.trim();
@@ -57,42 +60,37 @@ async function signOut() {
 </script>
 
 <template>
-  <main class="flex h-dvh flex-col overflow-hidden">
-    <div class="flex items-center gap-3 px-6 pb-4 pt-8">
-      <button
-        class="grid size-10 shrink-0 place-items-center text-ink"
-        aria-label="back"
-        @click="router.push({ name: 's4-chat-list' })"
-      >
-        <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.25">
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-      </button>
-      <div class="text-name text-ink">Settings</div>
+  <main class="flex h-full flex-col overflow-hidden">
+    <div class="px-6 pb-3 pt-8">
+      <h1 class="text-header text-ink">Settings</h1>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <div class="flex flex-col items-center gap-2 px-6 pt-2 text-center">
+    <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+      <div class="flex items-center gap-4 rounded-card border border-line bg-card p-4">
         <span data-testid="avatar">
           <Avatar :name="user?.displayName ?? '?'" :tag="user?.tag" size="lg" />
         </span>
-        <div class="text-header text-ink" data-testid="display-name">{{ user?.displayName }}</div>
-        <div class="text-msg text-muted" data-testid="tag">{{ user?.tag }}</div>
-        <div v-if="session.email" class="text-meta text-muted" data-testid="email">{{ session.email }}</div>
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-name font-semibold text-ink" data-testid="display-name">{{ user?.displayName }}</div>
+          <div class="truncate text-meta text-muted" data-testid="tag">{{ user?.tag }}</div>
+          <div v-if="session.email" class="truncate text-meta text-muted" data-testid="email">{{ session.email }}</div>
+          <Chip class="mt-1.5">tag can't change</Chip>
+        </div>
       </div>
 
-      <div class="mt-6 px-6 pb-1 text-meta text-muted">account</div>
-
-      <div v-if="!editing" class="px-6">
+      <div class="px-1 pb-1 pt-5 text-sub font-semibold uppercase tracking-wide text-muted">account</div>
+      <div v-if="!editing">
         <button
-          class="w-full py-3 text-left text-name text-ink"
+          class="flex w-full items-center gap-3 py-3 text-left text-name text-ink"
           data-testid="edit-profile"
           @click="((editing = true), (draft = user?.displayName ?? ''))"
         >
-          my profile — edit name
+          <span class="grid size-9 place-items-center rounded-input bg-soft text-primary"><Pencil class="size-4" :stroke-width="1.75" /></span>
+          <span class="flex-1">edit display name</span>
+          <ChevronRight class="size-4 text-muted" :stroke-width="1.75" />
         </button>
       </div>
-      <div v-else class="px-6 py-2" data-testid="profile-editor">
+      <div v-else class="py-2" data-testid="profile-editor">
         <AppInput v-model="draft" label="display name" placeholder="display name" />
         <div class="mt-2 flex items-center gap-3">
           <AppButton :loading="busy" data-testid="name-save" @click="saveName">save</AppButton>
@@ -101,9 +99,9 @@ async function signOut() {
         <div v-if="errorMsg" class="mt-2 text-meta text-danger" data-testid="name-error">{{ errorMsg }}</div>
       </div>
 
-      <div class="mt-4 px-6 pb-1 text-meta text-muted">preferences</div>
-      <div class="px-6 py-3" data-testid="appearance">
-        <div class="mb-2 text-name text-ink" id="appearance-label">appearance</div>
+      <div class="px-1 pb-1 pt-5 text-sub font-semibold uppercase tracking-wide text-muted">appearance</div>
+      <div data-testid="appearance">
+        <div class="sr-only" id="appearance-label">appearance</div>
         <div
           class="grid grid-cols-3 gap-1 rounded-input bg-soft p-1"
           role="radiogroup"
@@ -116,7 +114,7 @@ async function signOut() {
             role="radio"
             :aria-checked="theme.pref === t.value"
             class="h-9 rounded-input text-meta transition-colors"
-            :class="theme.pref === t.value ? 'bg-card text-ink shadow-pop' : 'text-muted'"
+            :class="theme.pref === t.value ? 'bg-card font-semibold text-ink shadow-pop' : 'text-muted'"
             :data-testid="`theme-${t.value}`"
             @click="theme.set(t.value)"
           >
@@ -124,29 +122,39 @@ async function signOut() {
           </button>
         </div>
       </div>
+
+      <div class="px-1 pb-1 pt-5 text-sub font-semibold uppercase tracking-wide text-muted">security</div>
       <button
-        class="w-full px-6 py-3 text-left text-name text-ink"
+        class="flex w-full items-center gap-3 border-b border-line py-3 text-left text-name text-ink"
         data-testid="security-link"
         @click="router.push({ name: 's14-security' })"
       >
-        security & sessions
+        <span class="grid size-9 place-items-center rounded-input bg-soft text-primary"><Shield class="size-4" :stroke-width="1.75" /></span>
+        <span class="flex-1">security & sessions</span>
+        <ChevronRight class="size-4 text-muted" :stroke-width="1.75" />
       </button>
       <button
-        class="w-full px-6 py-3 text-left text-name text-ink"
+        class="flex w-full items-center gap-3 border-b border-line py-3 text-left text-name text-ink"
         data-testid="app-link"
         @click="router.push({ name: 's15-pwa' })"
       >
-        app — install & offline
+        <span class="grid size-9 place-items-center rounded-input bg-soft text-primary"><Download class="size-4" :stroke-width="1.75" /></span>
+        <span class="flex-1">app — install & offline</span>
+        <ChevronRight class="size-4 text-muted" :stroke-width="1.75" />
+      </button>
+      <button
+        class="flex w-full items-center gap-3 border-b border-line py-3 text-left text-name text-danger"
+        data-testid="sign-out"
+        @click="confirmSignOut = true"
+      >
+        <span class="grid size-9 place-items-center rounded-input bg-soft"><LogOut class="size-4" :stroke-width="1.75" /></span>
+        <span class="flex-1">sign out</span>
       </button>
 
-      <div class="mt-6 px-6">
-        <button
-          class="w-full py-3 text-left text-name text-danger"
-          data-testid="sign-out"
-          @click="confirmSignOut = true"
-        >
-          sign out
-        </button>
+      <div class="px-1 pb-1 pt-5 text-sub font-semibold uppercase tracking-wide text-muted">about</div>
+      <div class="flex items-center justify-between py-3 text-name text-ink" data-testid="instance">
+        <span>instance</span>
+        <span class="text-meta text-muted">{{ host }}</span>
       </div>
     </div>
 

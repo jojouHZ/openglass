@@ -23,6 +23,7 @@ import { directChatId, groupInviteFx, selfUser, wife } from "@openglass/core/api
 
 import { pinia } from "../pinia";
 import { createAppRouter } from "../router";
+import TabBar from "../components/TabBar.vue";
 import S4ChatList from "./S4ChatList.vue";
 import S5ChatView from "./S5ChatView.vue";
 
@@ -46,11 +47,14 @@ beforeAll(async () => {
 afterAll(() => ctx.server.close());
 
 describe("S4 consent surfaces", () => {
-  it("shows the pending-request count on the contacts entry", async () => {
+  it("pending requests are counted in the store and badged on the Contacts tab, not in the list", async () => {
     const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
     await flush();
     expect(contacts().requestCount).toBe(2);
-    expect(w.find('[data-testid="requests-badge"]').text()).toBe("2");
+    expect(w.find('[data-testid="requests-badge"]').exists()).toBe(false);
+    const bar = mount(TabBar, { global: { plugins: [router, pinia] } });
+    expect(bar.find('[data-testid="requests-badge"]').text()).toBe("2");
+    bar.unmount();
   });
 
   it("lists the group invitation but not the group itself", async () => {

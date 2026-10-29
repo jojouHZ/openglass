@@ -3,12 +3,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { ChevronLeft, Search, Users } from "lucide-vue-next";
+import { Search, ShieldCheck, Users } from "lucide-vue-next";
 
 import type { ContactRequest, User } from "@openglass/core";
 import { api, useContactsStore, useSessionStore } from "@openglass/core";
 
 import UserRow from "../components/UserRow.vue";
+import Chip from "../components/ui/Chip.vue";
 
 const router = useRouter();
 const contacts = useContactsStore();
@@ -77,41 +78,42 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
 </script>
 
 <template>
-  <main class="flex h-dvh flex-col overflow-hidden">
-    <div class="flex items-center gap-3 px-6 pb-4 pt-8">
-      <button
-        class="grid size-10 shrink-0 place-items-center text-ink"
-        aria-label="back"
-        @click="router.back()"
-      >
-        <ChevronLeft class="size-5" :stroke-width="1.25" />
-      </button>
-      <div class="flex min-w-0 flex-1 items-center gap-2 rounded-input bg-canvas px-3 py-2">
+  <main class="flex h-full flex-col overflow-hidden">
+    <div class="px-6 pb-3 pt-8">
+      <h1 class="text-header text-ink">Contacts</h1>
+    </div>
+
+    <div class="px-6 pb-3">
+      <div class="flex items-center gap-2 rounded-input bg-soft px-3 py-2.5">
         <Search class="size-4 shrink-0 text-muted" :stroke-width="1.5" />
         <input
           v-model="q"
           class="w-full bg-transparent text-msg text-ink outline-none placeholder:text-muted"
-          placeholder="name or tag…"
+          placeholder="Find by tag, e.g. name#1234"
+          aria-label="find people"
           data-testid="contact-search-input"
-          autofocus
         />
       </div>
     </div>
 
     <button
-      class="flex w-full items-center gap-3 px-6 py-3 text-left hover:bg-canvas"
+      class="flex w-full items-center gap-3 px-6 py-2 text-left hover:bg-canvas"
       data-testid="new-group"
       @click="router.push({ name: 's8-group-create' })"
     >
-      <span class="grid size-[52px] shrink-0 place-items-center rounded-full bg-soft text-ink">
+      <span class="grid size-11 shrink-0 place-items-center rounded-full bg-soft text-primary">
         <Users class="size-5" :stroke-width="1.5" />
       </span>
-      <span class="text-name text-ink">new group</span>
+      <span class="text-name text-ink">New group</span>
     </button>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <div v-if="contacts.incoming.length" class="px-6 pb-1 pt-2 text-meta text-muted" data-testid="requests-header">
-        requests · {{ contacts.incoming.length }}
+    <div class="min-h-0 flex-1 overflow-y-auto pb-4">
+      <div
+        v-if="contacts.incoming.length"
+        class="flex items-center gap-2 px-6 pb-1 pt-3 text-sub font-semibold uppercase tracking-wide text-muted"
+        data-testid="requests-header"
+      >
+        requests <Chip variant="warning">{{ contacts.incoming.length }}</Chip>
       </div>
       <UserRow
         v-for="r in contacts.incoming"
@@ -122,25 +124,28 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
       >
         <div class="flex gap-2">
           <button
-            class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
+            class="h-9 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-accept"
             @click.stop="accept(r)"
           >
-            accept
+            Accept
           </button>
           <button
-            class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+            class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-decline"
             @click.stop="decline(r)"
           >
-            decline
+            Decline
           </button>
         </div>
       </UserRow>
 
-      <div v-if="!q.trim() && contacts.outgoing.length" class="px-6 pb-1 pt-2 text-meta text-muted">
+      <div
+        v-if="!q.trim() && contacts.outgoing.length"
+        class="px-6 pb-1 pt-3 text-sub font-semibold uppercase tracking-wide text-muted"
+      >
         sent · {{ contacts.outgoing.length }}
       </div>
       <UserRow
@@ -151,64 +156,71 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         @open="openProfile(r.user)"
       >
         <div class="flex items-center gap-2">
-          <span class="text-meta text-muted">pending</span>
+          <Chip>pending</Chip>
           <button
-            class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+            class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-cancel"
             @click.stop="cancel(r)"
           >
-            cancel
+            Cancel
           </button>
         </div>
       </UserRow>
 
-      <div v-if="local.length" class="px-6 pb-1 pt-2 text-meta text-muted">contacts</div>
+      <div
+        v-if="local.length"
+        class="px-6 pb-1 pt-3 text-sub font-semibold uppercase tracking-wide text-muted"
+        data-testid="contacts-header"
+      >
+        {{ q.trim() ? "contacts" : `all contacts · ${local.length}` }}
+      </div>
       <UserRow
         v-for="c in local"
         :key="c.user.id"
         :user="c.user"
+        :subtitle="c.verifiedAt ? `${c.user.tag} · verified` : c.user.tag"
         @open="openProfile(c.user)"
       >
-        <svg
-          viewBox="0 0 24 24" class="size-4 text-muted" fill="none"
-          stroke="currentColor" stroke-width="2"
-        >
-          <path d="m9 18 6-6-6-6" />
-        </svg>
+        <ShieldCheck
+          v-if="c.verifiedAt"
+          class="size-4 text-primary"
+          :stroke-width="1.75"
+          aria-label="verified"
+          data-testid="verified-mark"
+        />
       </UserRow>
 
-      <div v-if="globalFiltered.length" class="px-6 pb-1 pt-2 text-meta text-muted">global</div>
+      <div
+        v-if="globalFiltered.length"
+        class="px-6 pb-1 pt-3 text-sub font-semibold uppercase tracking-wide text-muted"
+      >
+        people on this server
+      </div>
       <UserRow
         v-for="u in globalFiltered"
         :key="u.id"
         :user="u"
         @open="openProfile(u)"
       >
-        <span
-          v-if="contacts.hasOutgoing(u.id)"
-          class="text-meta text-muted"
-          data-testid="request-sent"
-        >
-          requested
-        </span>
+        <Chip v-if="contacts.hasOutgoing(u.id)" data-testid="request-sent">requested</Chip>
         <button
           v-else-if="contacts.hasIncoming(u.id)"
-          class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
+          class="h-9 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
           :disabled="busyId === u.id"
           data-testid="accept-contact"
           @click.stop="contacts.accept(u.id).catch(() => undefined)"
         >
-          accept
+          Accept
         </button>
         <button
           v-else
-          class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+          class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
           :disabled="busyId === u.id"
           data-testid="add-contact"
           @click.stop="sendRequest(u.id)"
         >
-          request
+          Request
         </button>
       </UserRow>
 
