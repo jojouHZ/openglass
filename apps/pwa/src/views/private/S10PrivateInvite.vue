@@ -62,7 +62,7 @@ function declineIncoming() {
 </script>
 
 <template>
-  <main class="private-mode grid min-h-dvh place-items-center px-6">
+  <main class="private-mode grid min-h-full place-items-center px-6">
     <!-- incoming invite — we are the invitee -->
     <div
       v-if="incoming"

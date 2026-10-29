@@ -192,7 +192,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="flex h-dvh flex-col overflow-hidden">
+  <main class="flex h-full flex-col overflow-hidden">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
         class="grid size-10 shrink-0 place-items-center text-ink"

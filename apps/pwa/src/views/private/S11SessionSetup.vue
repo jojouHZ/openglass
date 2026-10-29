@@ -48,7 +48,7 @@ function start() {
 </script>
 
 <template>
-  <main class="private-mode flex min-h-dvh flex-col px-6 pt-8">
+  <main class="private-mode flex min-h-full flex-col px-6 pt-8">
     <button class="self-start p-1 text-muted" aria-label="back" @click="router.back()">
       <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2">
         <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />

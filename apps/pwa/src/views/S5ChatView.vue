@@ -435,7 +435,7 @@ watch(
 
 <template>
   <!-- valid path, gone entity: deleted chat / revoked membership -->
-  <main v-if="notFound" class="grid h-dvh place-items-center px-6" data-testid="not-found">
+  <main v-if="notFound" class="grid h-full place-items-center px-6" data-testid="not-found">
     <div class="flex flex-col items-center gap-3 text-center">
       <div class="text-body text-ink">chat not found</div>
       <div class="text-meta text-muted">it was deleted or you're no longer a member</div>
@@ -448,9 +448,9 @@ watch(
     </div>
   </main>
 
-  <!-- h-dvh + overflow-hidden: the header and composer stay pinned;
+  <!-- h-full + overflow-hidden: the header and composer stay pinned;
        only the messages layer scrolls (flex child needs min-h-0) -->
-  <main v-else class="relative flex h-dvh flex-col overflow-hidden">
+  <main v-else class="relative flex h-full flex-col overflow-hidden">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line px-6 pb-3 pt-8">
       <button class="text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">

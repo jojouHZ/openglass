@@ -15,7 +15,7 @@ const name = computed(() => String(route.name ?? ""));
 </script>
 
 <template>
-  <main class="flex min-h-dvh items-center justify-center p-6">
+  <main class="flex min-h-full items-center justify-center p-6">
     <div class="text-center">
       <p class="text-screen-title text-ink">{{ screen }}</p>
       <p class="text-meta text-muted mt-2">{{ name }}</p>

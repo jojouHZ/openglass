@@ -85,6 +85,20 @@ describe("S13 appearance", () => {
   });
 });
 
+describe("S13 as a root screen", () => {
+  it("has a title and no back button; sections group account / appearance / security / about", async () => {
+    await router.push({ name: "s13-settings" });
+    const w = mount(S13Settings, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => expect(w.find("h1").text()).toBe("Settings"));
+    expect(w.find('[aria-label="back"]').exists()).toBe(false);
+    const labels = w.text().toLowerCase();
+    for (const section of ["account", "appearance", "security", "about"]) expect(labels).toContain(section);
+    expect(w.find('[data-testid="instance"]').text()).toContain(location.host);
+    expect(w.find('[data-testid="sign-out"]').exists()).toBe(true);
+    w.unmount();
+  });
+});
+
 describe("S13 settings", () => {
   it("shows the profile card and edits the display name", async () => {
     await router.push({ name: "s13-settings" });

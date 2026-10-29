@@ -47,7 +47,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
 </script>
 
 <template>
-  <main class="flex h-dvh flex-col overflow-hidden">
+  <main class="flex h-full flex-col overflow-hidden">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
         class="relative grid size-10 place-items-center text-ink"
@@ -58,11 +58,6 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
           <path d="M5 12h14" />
           <path d="M12 5v14" />
         </svg>
-        <span
-          v-if="contacts.requestCount"
-          class="absolute right-0 top-0 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-primary-foreground"
-          data-testid="requests-badge"
-        >{{ contacts.requestCount }}</span>
       </button>
       <h1 class="flex-1 text-center text-header text-ink">Chats</h1>
       <button

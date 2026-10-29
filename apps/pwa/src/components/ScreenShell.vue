@@ -13,7 +13,7 @@ defineProps<{ back?: () => void }>();
 </script>
 
 <template>
-  <main class="relative flex min-h-dvh flex-col items-center justify-center px-6">
+  <main class="relative flex min-h-full flex-col items-center justify-center px-6">
     <button
       v-if="back"
       type="button"
