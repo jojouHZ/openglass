@@ -113,7 +113,7 @@ async function signOut() {
             type="button"
             role="radio"
             :aria-checked="theme.pref === t.value"
-            class="h-9 rounded-input text-meta transition-colors"
+            class="h-11 rounded-input text-meta transition-colors"
             :class="theme.pref === t.value ? 'bg-card font-semibold text-ink shadow-pop' : 'text-muted'"
             :data-testid="`theme-${t.value}`"
             @click="theme.set(t.value)"

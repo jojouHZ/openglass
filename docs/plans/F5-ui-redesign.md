@@ -137,7 +137,7 @@ Desktop split view is a separate later slice (F6).
 
 ### DevOps Agent
 - Branch stays local, so CI cannot run before merge: a single `pnpm
-  gate:f5` script replicates CI locally (Go race+lint incl. Postgres,
+  gate` script (`scripts/gate.sh`, done) replicates CI locally (Go race+lint incl. Postgres,
   typecheck, unit ×3, build, bundle guard, E2E) so the "green" claim is
   evidence, not hope. First real CI run happens on the merge commit —
   mitigated by the identical local gate and by rebasing on `main` right

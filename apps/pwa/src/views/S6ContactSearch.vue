@@ -84,7 +84,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
     </div>
 
     <div class="px-6 pb-3">
-      <div class="flex items-center gap-2 rounded-input bg-soft px-3 py-2.5">
+      <label class="flex min-h-11 items-center gap-2 rounded-input bg-soft px-3">
         <Search class="size-4 shrink-0 text-muted" :stroke-width="1.5" />
         <input
           v-model="q"
@@ -93,7 +93,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
           aria-label="find people"
           data-testid="contact-search-input"
         />
-      </div>
+      </label>
     </div>
 
     <button
@@ -124,7 +124,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
       >
         <div class="flex gap-2">
           <button
-            class="h-9 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
+            class="h-11 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-accept"
             @click.stop="accept(r)"
@@ -132,7 +132,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
             Accept
           </button>
           <button
-            class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
+            class="h-11 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-decline"
             @click.stop="decline(r)"
@@ -158,7 +158,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         <div class="flex items-center gap-2">
           <Chip>pending</Chip>
           <button
-            class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
+            class="h-11 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-cancel"
             @click.stop="cancel(r)"
@@ -206,7 +206,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         <Chip v-if="contacts.hasOutgoing(u.id)" data-testid="request-sent">requested</Chip>
         <button
           v-else-if="contacts.hasIncoming(u.id)"
-          class="h-9 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
+          class="h-11 rounded-input bg-primary px-3 text-meta font-semibold text-primary-foreground disabled:opacity-40"
           :disabled="busyId === u.id"
           data-testid="accept-contact"
           @click.stop="contacts.accept(u.id).catch(() => undefined)"
@@ -215,7 +215,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         </button>
         <button
           v-else
-          class="h-9 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
+          class="h-11 rounded-input border border-line px-3 text-meta text-ink disabled:opacity-40"
           :disabled="busyId === u.id"
           data-testid="add-contact"
           @click.stop="sendRequest(u.id)"
