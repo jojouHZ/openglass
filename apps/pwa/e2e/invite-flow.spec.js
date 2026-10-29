@@ -143,7 +143,7 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await bobCtx.close();
 });
 
-test("zero-trace teardown: tab close ejects peer and leaves no IndexedDB", async ({ browser }) => {
+test("zero-trace teardown: tab close ejects peer and leaves no identity in IndexedDB", async ({ browser }) => {
   const aliceCtx = await browser.newContext();
   const alice = await aliceCtx.newPage();
   const bobCtx = await browser.newContext();
@@ -156,16 +156,23 @@ test("zero-trace teardown: tab close ejects peer and leaves no IndexedDB", async
   await establishSession(alice, bob, { strict: true });
 
   // Give teardown something real to wipe: stand up the private identity
-  // DB the dev-tier keystore uses. (The runtime store is volatile-only
-  // today; this exercises the real wipe path, not a trivial absence.)
+  // DB the dev-tier keystore uses and put a marker record in it. (The
+  // runtime store is volatile-only today; this exercises the real wipe
+  // path, not a trivial absence.)
   await bob.evaluate(
     () =>
       new Promise((resolve, reject) => {
         const req = indexedDB.open("openglass-private", 1);
         req.onupgradeneeded = () => req.result.createObjectStore("identity");
         req.onsuccess = () => {
-          req.result.close();
-          resolve(undefined);
+          const db = req.result;
+          const tx = db.transaction("identity", "readwrite");
+          tx.objectStore("identity").put("secret", "marker");
+          tx.oncomplete = () => {
+            db.close();
+            resolve(undefined);
+          };
+          tx.onerror = () => reject(tx.error);
         };
         req.onerror = () => reject(req.error);
       }),
@@ -179,16 +186,42 @@ test("zero-trace teardown: tab close ejects peer and leaves no IndexedDB", async
   await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 15000 });
 
   // A fresh page in Bob's context boots the module — whichever path ran
-  // (graceful teardown or the dirty-boot sweep), the DB must be gone
+  // (graceful teardown or the dirty-boot sweep), the marker must be gone.
+  // The assertion is about the identity record, not about the DB name: the
+  // boot sweep itself may leave an empty DB behind, and polling for the
+  // name raced with that boot (flaky on a loaded machine).
   const probe = await bobCtx.newPage();
   await probe.goto("/");
   await expect
     .poll(
-      async () =>
-        (await probe.evaluate(() => indexedDB.databases())).map((d) => d.name),
-      { timeout: 15000 },
+      () =>
+        probe.evaluate(async () => {
+          const names = (await indexedDB.databases()).map((d) => d.name);
+          if (!names.includes("openglass-private")) return false;
+          return new Promise((resolve) => {
+            const req = indexedDB.open("openglass-private");
+            req.onerror = () => resolve(false);
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains("identity")) {
+                db.close();
+                return resolve(false);
+              }
+              const get = db.transaction("identity").objectStore("identity").get("marker");
+              get.onsuccess = () => {
+                db.close();
+                resolve(get.result === "secret");
+              };
+              get.onerror = () => {
+                db.close();
+                resolve(false);
+              };
+            };
+          });
+        }),
+      { timeout: 15000, message: "identity marker must not survive a dirty close" },
     )
-    .not.toContain("openglass-private");
+    .toBe(false);
 
   await probe.close();
   await aliceCtx.close();
