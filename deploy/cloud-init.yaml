@@ -1,0 +1,89 @@
+#cloud-config
+# Copyright (C) 2025 OpenGlass contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# First-boot setup for an OpenGlass test server (Ubuntu 24.04, 1 vCPU / 2 GB).
+# Paste into the provider's "cloud-init" field. It prepares the machine —
+# Docker, firewall, a locked-down `deploy` user, swap — and does NOT install
+# the app: the app is shipped afterwards over SSH (deploy/deploy.sh), because
+# the branch under test is deliberately not pushed to GitHub.
+#
+# Contains only a PUBLIC key; no secret of any kind.
+
+hostname: openglass
+timezone: UTC
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - rsync
+
+users:
+  - name: deploy
+    gecos: OpenGlass deploy
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICEseyzeZyo81UW/JoeJ/JANSxj/A5vyqTwgFxCIWiEL openglass-deploy@JOJOU-112BLSK
+
+write_files:
+  # key-only SSH; root may still log in with a key (never with a password) so a
+  # failed first boot cannot lock the owner out
+  - path: /etc/ssh/sshd_config.d/99-openglass.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+      MaxAuthTries 3
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" }
+      }
+  - path: /etc/fail2ban/jail.d/openglass.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+
+runcmd:
+  # --- Docker Engine + compose plugin from Docker's official apt repository
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list'
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker deploy
+  - systemctl enable --now docker
+  # --- firewall: SSH, HTTP (certificate challenge + redirect), HTTPS. Nothing else.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  # --- 1 GB swap: image builds on a 2 GB machine must not be OOM-killed
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  # --- app directory + services
+  - install -d -o deploy -g deploy /opt/openglass
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+  - touch /var/lib/cloud/instance/openglass-bootstrap-done
+
+final_message: "OpenGlass bootstrap finished after $UPTIME seconds"
