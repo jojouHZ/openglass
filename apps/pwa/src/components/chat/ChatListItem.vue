@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed } from "vue";
+import { Bookmark, Users } from "lucide-vue-next";
 
 import type { ChatSummary } from "@openglass/core";
 import { useChatsStore, useSessionStore } from "@openglass/core";
+
+import Avatar from "../ui/Avatar.vue";
 
 const props = defineProps<{ chat: ChatSummary }>();
 const emit = defineEmits<{ open: [] }>();
@@ -13,6 +16,9 @@ const chats = useChatsStore();
 const session = useSessionStore();
 
 const saved = computed(() => chats.isSaved(props.chat));
+const isGroup = computed(() => props.chat.type === "group");
+// colour seed: the peer's tag for a direct chat, the title for a group
+const seed = computed(() => (props.chat.type === "direct" && props.chat.peer?.tag) || title.value);
 const title = computed(() => chats.chatTitle(props.chat));
 const typing = computed(() => !!chats.typingIn(props.chat.id));
 
@@ -48,28 +54,31 @@ const time = computed(() => {
     data-testid="chat-item"
     @click="emit('open')"
   >
-    <span
-      class="grid size-[52px] shrink-0 place-items-center rounded-full bg-bubble-in text-muted"
-    >
-      <!-- saved messages: bookmark glyph instead of initials -->
-      <svg v-if="saved" viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-      </svg>
-      <span v-else class="text-name">{{ title.slice(0, 1) }}</span>
+    <span class="relative shrink-0">
+      <!-- saved messages: bookmark glyph, not initials -->
+      <span
+        v-if="saved"
+        class="grid size-12 place-items-center rounded-full bg-soft text-primary"
+        data-testid="saved-avatar"
+      >
+        <Bookmark class="size-5" :stroke-width="1.75" />
+      </span>
+      <Avatar v-else :name="title" :tag="seed" class="!size-12" />
+      <span
+        v-if="isGroup"
+        class="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full border-2 border-bg bg-neutral text-neutral-fg"
+        data-testid="group-badge"
+      >
+        <Users class="size-2.5" :stroke-width="2.25" />
+      </span>
     </span>
     <span class="min-w-0 flex-1">
-      <span class="flex items-center gap-1 text-name text-ink">
-        {{ title }}
-      </span>
-      <span
-        v-if="typing"
-        class="block truncate text-msg text-accent"
-        data-testid="typing"
-      >
+      <span class="block truncate text-name font-semibold text-ink">{{ title }}</span>
+      <span v-if="typing" class="block truncate text-msg text-primary" data-testid="typing">
         typing…
       </span>
       <span v-else class="block truncate text-msg text-muted" data-testid="preview">
-        <span v-if="ownLast" class="text-sub">you: </span>{{ preview }}
+        <span v-if="ownLast" class="text-ink/70">you: </span>{{ preview }}
       </span>
     </span>
     <span class="flex shrink-0 flex-col items-end gap-1">
@@ -82,6 +91,7 @@ const time = computed(() => {
           fill="none"
           stroke="currentColor"
           stroke-width="2"
+          aria-label="pinned"
         >
           <path
             d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"
@@ -89,7 +99,7 @@ const time = computed(() => {
         </svg>
         <span
           v-if="chat.unreadCount"
-          class="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 py-0.5 text-sub text-primary-foreground"
+          class="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-sub font-semibold text-primary-foreground"
           data-testid="unread"
         >{{ chat.unreadCount }}</span>
       </span>

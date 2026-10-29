@@ -118,7 +118,7 @@ const placeholder = () =>
     </div>
 
     <div class="flex items-end gap-2 px-6 pb-6" :class="offline ? 'opacity-40' : ''">
-      <div class="flex min-h-11 flex-1 items-center gap-2 rounded-pill border border-line px-4">
+      <div class="flex min-h-11 flex-1 items-center gap-2 rounded-search bg-soft px-4">
         <button
           class="text-muted disabled:opacity-40"
           aria-label="attach"
