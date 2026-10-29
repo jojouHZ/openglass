@@ -11,7 +11,7 @@ defineProps<{ disabled?: boolean; loading?: boolean }>();
   <button
     type="submit"
     :disabled="disabled || loading"
-    class="btn h-11 w-full rounded-input bg-ink text-bg transition-opacity disabled:opacity-40"
+    class="btn h-11 w-full rounded-input bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
   >
     <slot v-if="!loading" />
     <span v-else>…</span>

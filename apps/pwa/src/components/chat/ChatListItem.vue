@@ -89,7 +89,7 @@ const time = computed(() => {
         </svg>
         <span
           v-if="chat.unreadCount"
-          class="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 py-0.5 text-sub text-bg"
+          class="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 py-0.5 text-sub text-primary-foreground"
           data-testid="unread"
         >{{ chat.unreadCount }}</span>
       </span>

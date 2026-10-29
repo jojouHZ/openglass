@@ -10,7 +10,7 @@ const model = defineModel<boolean>({ default: false });
 <template>
   <SwitchRoot
     v-model="model"
-    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-soft outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-ink"
+    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-soft outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary"
   >
     <SwitchThumb
       class="block size-5 translate-x-0.5 rounded-full bg-bg shadow-pop transition-transform data-[state=checked]:translate-x-[22px]"

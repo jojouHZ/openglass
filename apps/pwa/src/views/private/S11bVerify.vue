@@ -12,6 +12,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useChatsStore } from "@openglass/core";
 
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
+import "../../styles/private.css";
 
 const route = useRoute();
 const router = useRouter();
@@ -76,7 +77,7 @@ function notMatching() {
         doesn't match
       </button>
       <button
-        class="h-12 flex-1 rounded-pill bg-ink text-msg text-bg disabled:opacity-40"
+        class="h-12 flex-1 rounded-pill bg-primary text-msg text-primary-foreground disabled:opacity-40"
         :disabled="!session?.sas"
         data-testid="sas-confirm"
         @click="confirm"

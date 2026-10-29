@@ -60,7 +60,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
         </svg>
         <span
           v-if="contacts.requestCount"
-          class="absolute right-0 top-0 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-bg"
+          class="absolute right-0 top-0 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-primary-foreground"
           data-testid="requests-badge"
         >{{ contacts.requestCount }}</span>
       </button>
@@ -109,7 +109,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
             </span>
           </span>
           <button
-            class="rounded-pill bg-ink px-3 py-1 text-meta text-bg disabled:opacity-40"
+            class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
             :disabled="inviteBusy === inv.chatId"
             data-testid="invite-accept"
             @click="answer(inv.chatId, true)"
@@ -152,7 +152,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
           <div class="text-body text-ink">no chats yet</div>
           <div class="text-meta text-muted">find people by tag to start</div>
           <button
-            class="mt-1 h-11 rounded-pill bg-ink px-6 text-msg text-bg"
+            class="mt-1 h-11 rounded-pill bg-primary px-6 text-msg text-primary-foreground"
             @click="router.push({ name: 's6-contact-search' })"
           >
             find contacts

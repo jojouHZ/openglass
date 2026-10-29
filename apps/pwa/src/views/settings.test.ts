@@ -47,6 +47,44 @@ beforeAll(async () => {
 });
 afterAll(() => ctx.server.close());
 
+describe("S13 appearance", () => {
+  it("offers Light / Dark / System, applies the choice live and remembers it", async () => {
+    await router.push({ name: "s13-settings" });
+    const w = mount(S13Settings, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="appearance"]').exists()).toBe(true);
+    });
+    const radio = (v: string) => w.find(`[data-testid="theme-${v}"]`);
+    expect(w.findAll('[role="radio"]')).toHaveLength(3);
+    expect(radio("system").attributes("aria-checked")).toBe("true");
+
+    await radio("dark").trigger("click");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(radio("dark").attributes("aria-checked")).toBe("true");
+    expect(radio("system").attributes("aria-checked")).toBe("false");
+    expect(localStorage.getItem("og.theme")).toBe("dark");
+
+    await radio("light").trigger("click");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(localStorage.getItem("og.theme")).toBe("light");
+
+    await radio("system").trigger("click"); // leave the shared store as we found it
+    w.unmount();
+  });
+
+  it("the profile avatar is the tag-coloured initial", async () => {
+    await router.push({ name: "s13-settings" });
+    const w = mount(S13Settings, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => {
+      expect(w.find('[data-testid="avatar"]').text()).not.toBe("");
+    });
+    const av = w.find('[data-testid="avatar"] span');
+    expect(av.text()).toBe("J");
+    expect(av.attributes("style")).toMatch(/background: hsl\(/);
+    w.unmount();
+  });
+});
+
 describe("S13 settings", () => {
   it("shows the profile card and edits the display name", async () => {
     await router.push({ name: "s13-settings" });

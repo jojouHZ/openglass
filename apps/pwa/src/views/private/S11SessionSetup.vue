@@ -12,6 +12,7 @@ import type { ConnState } from "@openglass/core/private/remote";
 
 import Switch from "../../components/ui/Switch.vue";
 import { usePrivateRemote } from "../../privateRemote";
+import "../../styles/private.css";
 
 const route = useRoute();
 const router = useRouter();
@@ -67,7 +68,7 @@ function start() {
         v-for="o in TTL_OPTIONS"
         :key="o.value"
         class="h-10 rounded-pill px-5 text-meta"
-        :class="ttl === o.value ? 'bg-ink text-bg' : 'bg-bubble-in text-ink'"
+        :class="ttl === o.value ? 'bg-primary text-primary-foreground' : 'bg-bubble-in text-ink'"
         :data-testid="`ttl-${o.value}`"
         @click="ttl = o.value"
       >
@@ -84,7 +85,7 @@ function start() {
     </label>
 
     <button
-      class="mt-10 h-12 rounded-pill bg-ink text-msg text-bg disabled:opacity-40"
+      class="mt-10 h-12 rounded-pill bg-primary text-msg text-primary-foreground disabled:opacity-40"
       :disabled="!peer || relayState !== 'online'"
       data-testid="start-private"
       @click="start"

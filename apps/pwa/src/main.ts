@@ -14,6 +14,7 @@ import {
 import App from "./App.vue";
 import { pinia } from "./pinia";
 import { initInstallPrompt } from "./pwa/install";
+import { useThemeStore } from "./stores/theme";
 import { ApiClientKey } from "./provide";
 import { createAppRouter } from "./router";
 import "@fontsource-variable/inter";
@@ -32,6 +33,7 @@ async function bootstrap() {
 
   const app = createApp(App);
   app.use(pinia);
+  useThemeStore(pinia).init();
 
   // Restored session → reopen realtime (fresh sessions connect on S4 mount)
   const session = useSessionStore(pinia);

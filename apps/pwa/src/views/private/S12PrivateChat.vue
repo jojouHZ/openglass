@@ -12,6 +12,7 @@ import { useChatsStore } from "@openglass/core";
 
 import ConfirmDialog from "../../components/ConfirmDialog.vue";
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
+import "../../styles/private.css";
 
 const route = useRoute();
 const router = useRouter();
@@ -158,7 +159,7 @@ function fmtTs(ts: number) {
       >
         <div
           class="max-w-[80%] rounded-card px-3 py-2 text-msg"
-          :class="m.fromMe ? 'bg-bubble-own text-bg' : 'bg-bubble-in text-ink'"
+          :class="m.fromMe ? 'bg-bubble-own text-own-fg' : 'bg-bubble-in text-ink'"
         >
           <div class="whitespace-pre-wrap break-words">{{ m.text }}</div>
           <div class="mt-0.5 flex items-center justify-end gap-1 text-micro opacity-60">
@@ -209,7 +210,7 @@ function fmtTs(ts: number) {
         </svg>
       </button>
       <button
-        class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-bg"
+        class="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
         aria-label="send"
         data-testid="priv-send"
         @click="send"

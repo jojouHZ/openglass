@@ -150,7 +150,7 @@ const placeholder = () =>
         />
       </div>
       <button
-        class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-bg disabled:opacity-40"
+        class="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
         aria-label="send"
         data-testid="send"
         :disabled="offline || (!!staged && !staged.attachmentId && !staged.error)"

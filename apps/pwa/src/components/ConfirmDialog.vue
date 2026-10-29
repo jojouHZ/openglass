@@ -18,7 +18,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
 
 <template>
   <AlertDialogRoot :open="true" @update:open="(v) => !v && emit('cancel')">
-    <AlertDialogOverlay class="fixed inset-0 z-50 bg-ink/40" />
+    <AlertDialogOverlay class="fixed inset-0 z-50 bg-scrim" />
     <div class="pointer-events-none fixed inset-0 z-50 grid place-items-center px-6">
       <AlertDialogContent
         class="pointer-events-auto flex w-[min(342px,100%)] flex-col gap-4 rounded-card bg-bg p-6 shadow-pop outline-none"
@@ -38,7 +38,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
           </button>
           <button
             type="button"
-            class="h-11 flex-1 rounded-input bg-ink text-msg text-bg focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+            class="h-11 flex-1 rounded-input bg-primary text-msg text-primary-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
             :disabled="busy"
             data-testid="confirm-action"
             @click="emit('confirm')"

@@ -43,7 +43,7 @@ const ITEM =
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-40 bg-ink/30"
+      class="fixed inset-0 z-40 bg-scrim"
       data-testid="menu-scrim"
       @click="emit('close')"
       @contextmenu.prevent="emit('close')"

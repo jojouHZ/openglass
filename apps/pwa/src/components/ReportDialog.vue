@@ -48,7 +48,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
 <template>
   <div
-    class="fixed inset-0 z-50 grid place-items-center bg-ink/40 px-6"
+    class="fixed inset-0 z-50 grid place-items-center bg-scrim px-6"
     data-testid="report-dialog"
     role="dialog"
     aria-modal="true"

@@ -440,7 +440,7 @@ watch(
       <div class="text-body text-ink">chat not found</div>
       <div class="text-meta text-muted">it was deleted or you're no longer a member</div>
       <button
-        class="mt-1 h-11 rounded-pill bg-ink px-6 text-msg text-bg"
+        class="mt-1 h-11 rounded-pill bg-primary px-6 text-msg text-primary-foreground"
         @click="router.push({ name: 's4-chat-list' })"
       >
         back to chats
@@ -628,7 +628,7 @@ watch(
       </div>
       <div v-if="!win.atTail && win.newerCursor" class="sticky bottom-2 pb-2 text-center">
         <button
-          class="rounded-pill bg-ink px-4 py-1 text-meta text-bg"
+          class="rounded-pill bg-primary px-4 py-1 text-meta text-primary-foreground"
           data-testid="load-newer"
           @click="chats.loadNewer(chatId)"
         >
@@ -680,7 +680,7 @@ watch(
               class="rounded-card px-3 py-2 text-msg"
               :class="[
                 m.senderId === session.user?.id
-                  ? 'bg-bubble-own text-bg'
+                  ? 'bg-bubble-own text-own-fg'
                   : 'bg-bubble-in text-ink',
                 m.failed ? 'outline outline-1 outline-danger' : '',
                 highlightId === m.id ? 'ring-2 ring-accent' : '',

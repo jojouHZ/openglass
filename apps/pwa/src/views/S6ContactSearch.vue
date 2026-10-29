@@ -122,7 +122,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
       >
         <div class="flex gap-2">
           <button
-            class="rounded-pill bg-ink px-3 py-1 text-meta text-bg disabled:opacity-40"
+            class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
             :disabled="busyId === r.user.id"
             data-testid="req-accept"
             @click.stop="accept(r)"
@@ -194,7 +194,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         </span>
         <button
           v-else-if="contacts.hasIncoming(u.id)"
-          class="rounded-pill bg-ink px-3 py-1 text-meta text-bg disabled:opacity-40"
+          class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
           :disabled="busyId === u.id"
           data-testid="accept-contact"
           @click.stop="contacts.accept(u.id).catch(() => undefined)"

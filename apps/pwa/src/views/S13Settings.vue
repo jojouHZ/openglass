@@ -9,9 +9,18 @@ import { useSessionStore } from "@openglass/core";
 import AppButton from "../components/AppButton.vue";
 import AppInput from "../components/AppInput.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import Avatar from "../components/ui/Avatar.vue";
+import { useThemeStore, type ThemePref } from "../stores/theme";
 
 const router = useRouter();
 const session = useSessionStore();
+const theme = useThemeStore();
+
+const THEMES: Array<{ value: ThemePref; label: string }> = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
 
 const user = computed(() => session.user);
 const editing = ref(false);
@@ -64,11 +73,8 @@ async function signOut() {
 
     <div class="min-h-0 flex-1 overflow-y-auto">
       <div class="flex flex-col items-center gap-2 px-6 pt-2 text-center">
-        <span
-          class="grid size-20 place-items-center rounded-full bg-bubble-in text-header text-muted"
-          data-testid="avatar"
-        >
-          {{ user?.displayName.slice(0, 1) }}
+        <span data-testid="avatar">
+          <Avatar :name="user?.displayName ?? '?'" :tag="user?.tag" size="lg" />
         </span>
         <div class="text-header text-ink" data-testid="display-name">{{ user?.displayName }}</div>
         <div class="text-msg text-muted" data-testid="tag">{{ user?.tag }}</div>
@@ -96,6 +102,28 @@ async function signOut() {
       </div>
 
       <div class="mt-4 px-6 pb-1 text-meta text-muted">preferences</div>
+      <div class="px-6 py-3" data-testid="appearance">
+        <div class="mb-2 text-name text-ink" id="appearance-label">appearance</div>
+        <div
+          class="grid grid-cols-3 gap-1 rounded-input bg-soft p-1"
+          role="radiogroup"
+          aria-labelledby="appearance-label"
+        >
+          <button
+            v-for="t in THEMES"
+            :key="t.value"
+            type="button"
+            role="radio"
+            :aria-checked="theme.pref === t.value"
+            class="h-9 rounded-input text-meta transition-colors"
+            :class="theme.pref === t.value ? 'bg-card text-ink shadow-pop' : 'text-muted'"
+            :data-testid="`theme-${t.value}`"
+            @click="theme.set(t.value)"
+          >
+            {{ t.label }}
+          </button>
+        </div>
+      </div>
       <button
         class="w-full px-6 py-3 text-left text-name text-ink"
         data-testid="security-link"

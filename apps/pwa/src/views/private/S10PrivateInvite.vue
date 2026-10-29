@@ -12,6 +12,7 @@ import { useChatsStore } from "@openglass/core";
 import type { PrivateInviteView } from "@openglass/core/private/remote";
 
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
+import "../../styles/private.css";
 
 const route = useRoute();
 const router = useRouter();
@@ -87,7 +88,7 @@ function declineIncoming() {
           decline
         </button>
         <button
-          class="rounded-pill bg-ink px-6 py-2 text-meta text-bg"
+          class="rounded-pill bg-primary px-6 py-2 text-meta text-primary-foreground"
           data-testid="invite-accept"
           @click="accept"
         >
