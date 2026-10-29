@@ -25,7 +25,7 @@ async function install() {
   <main class="flex h-full flex-col overflow-hidden">
     <div class="flex items-center gap-3 px-6 pb-4 pt-8">
       <button
-        class="grid size-10 shrink-0 place-items-center text-ink"
+        class="grid size-11 shrink-0 place-items-center text-ink"
         aria-label="back"
         @click="router.push({ name: 's13-settings' })"
       >

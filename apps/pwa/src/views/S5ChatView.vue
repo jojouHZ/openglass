@@ -459,12 +459,12 @@ watch(
   <main v-else class="relative flex h-full flex-col overflow-hidden">
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line bg-card px-4 pb-3 pt-8">
-      <button class="grid size-10 place-items-center text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
+      <button class="grid size-11 place-items-center text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
         <ArrowLeft class="size-5" :stroke-width="1.75" />
       </button>
       <button
         v-if="chat?.type === 'direct' && peer && peer.id !== session.user?.id"
-        class="shrink-0 rounded-full"
+        class="grid size-11 shrink-0 place-items-center rounded-full"
         aria-label="open profile"
         data-testid="peer-avatar"
         @click="router.push({ name: 's7-contact-profile', params: { userId: peer.id } })"
@@ -473,7 +473,7 @@ watch(
       </button>
       <button
         v-else-if="chat?.type === 'group'"
-        class="shrink-0 rounded-full"
+        class="grid size-11 shrink-0 place-items-center rounded-full"
         aria-label="group settings"
         data-testid="group-avatar"
         @click="router.push({ name: 's9a-group-manage', params: { chatId } })"
@@ -483,7 +483,7 @@ watch(
       <Avatar v-else :name="title" class="!size-10" />
       <component
         :is="headerTarget ? 'button' : 'div'"
-        class="min-w-0 flex-1 text-left"
+        class="min-h-11 min-w-0 flex-1 text-left"
         @click="headerTarget && router.push(headerTarget)"
       >
         <div class="truncate text-name font-semibold text-ink">{{ title }}</div>
@@ -493,7 +493,7 @@ watch(
       </component>
       <button
         v-if="privateEnabled && peer && peer.id !== session.user?.id"
-        class="p-1"
+        class="grid size-11 place-items-center"
         :class="privSession ? 'text-primary' : 'text-muted'"
         aria-label="private session"
         data-testid="private-toggle"
@@ -504,7 +504,7 @@ watch(
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       </button>
-      <button class="grid size-10 place-items-center text-muted" aria-label="chat menu" @click="headMenu = !headMenu">
+      <button class="grid size-11 place-items-center text-muted" aria-label="chat menu" @click="headMenu = !headMenu">
         <MoreHorizontal class="size-5" :stroke-width="1.75" />
       </button>
     </div>
@@ -620,7 +620,7 @@ watch(
         </button>
       </div>
       <div v-else-if="win.nextCursor" class="pb-2 text-center">
-        <button class="text-meta text-accent" data-testid="load-older" @click="loadOlder">
+        <button class="min-h-11 px-4 text-meta text-accent" data-testid="load-older" @click="loadOlder">
           load earlier
         </button>
       </div>

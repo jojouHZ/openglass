@@ -5,12 +5,14 @@
 // /api/* and /api/v1/ws are always network: no authenticated or realtime
 // payload may ever be served from cache.
 
-const CACHE = "openglass-shell-v1";
+const CACHE = "openglass-shell-v2";
+// non-hashed shell files that must also work offline (see index.html)
+const SHELL_FILES = ["/", "/theme-init.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.add("/"))
+      .then((cache) => cache.addAll(SHELL_FILES))
       .then(() => self.skipWaiting()),
   );
 });
@@ -29,7 +31,7 @@ self.addEventListener("activate", (event) => {
           cache.keys().then((keys) =>
             Promise.all(
               keys
-                .filter((k) => new URL(k.url).pathname !== "/")
+                .filter((k) => !SHELL_FILES.includes(new URL(k.url).pathname))
                 .map((k) => cache.delete(k)),
             ),
           ),
@@ -53,6 +55,20 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() => caches.match("/")),
+    );
+    return;
+  }
+
+  // the pre-paint theme script: fresh when online, cached when offline
+  if (url.pathname === "/theme-init.js") {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put("/theme-init.js", copy));
+          return res;
+        })
+        .catch(() => caches.match("/theme-init.js")),
     );
     return;
   }

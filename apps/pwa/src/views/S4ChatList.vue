@@ -58,7 +58,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
     <div class="flex items-center gap-3 px-6 pb-3 pt-8">
       <h1 class="flex-1 text-header text-ink">Chats</h1>
       <button
-        class="grid size-10 place-items-center rounded-input bg-soft text-ink"
+        class="grid size-11 place-items-center rounded-input bg-soft text-ink"
         aria-label="new chat"
         data-testid="new-chat"
         @click="router.push({ name: 's6-contact-search' })"
@@ -66,7 +66,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
         <Plus class="size-5" :stroke-width="2" />
       </button>
       <button
-        class="rounded-full"
+        class="grid size-11 place-items-center rounded-full"
         aria-label="settings"
         data-testid="avatar-to-settings"
         @click="router.push({ name: 's13-settings' })"
@@ -76,7 +76,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
     </div>
 
     <div class="px-6 pb-3">
-      <div class="flex items-center gap-2 rounded-input bg-soft px-3 py-2.5">
+      <label class="flex min-h-11 items-center gap-2 rounded-input bg-soft px-3">
         <Search class="size-4 shrink-0 text-muted" :stroke-width="1.5" />
         <input
           v-model="q"
@@ -85,7 +85,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
           aria-label="search chats"
           data-testid="chat-search"
         />
-      </div>
+      </label>
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
@@ -109,7 +109,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
             </span>
           </span>
           <button
-            class="rounded-pill bg-primary px-3 py-1 text-meta text-primary-foreground disabled:opacity-40"
+            class="h-11 rounded-pill bg-primary px-4 text-meta text-primary-foreground disabled:opacity-40"
             :disabled="inviteBusy === inv.chatId"
             data-testid="invite-accept"
             @click="answer(inv.chatId, true)"
@@ -117,7 +117,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
             join
           </button>
           <button
-            class="rounded-pill border border-line px-3 py-1 text-meta text-ink disabled:opacity-40"
+            class="h-11 rounded-pill border border-line px-4 text-meta text-ink disabled:opacity-40"
             :disabled="inviteBusy === inv.chatId"
             data-testid="invite-decline"
             @click="answer(inv.chatId, false)"

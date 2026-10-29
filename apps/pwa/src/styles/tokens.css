@@ -116,6 +116,12 @@
     font-family: var(--font-heading);
   }
 
+  /* keyboard users always see where they are — one ring for every control */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
   body {
     margin: 0;
     /* 100dvh full-height, never fixed 100vh under iOS Safari */

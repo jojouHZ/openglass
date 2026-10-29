@@ -127,7 +127,7 @@ async function message() {
   <main class="flex h-full flex-col overflow-hidden">
     <div class="flex items-center px-6 pb-4 pt-8">
       <button
-        class="grid size-10 place-items-center text-ink"
+        class="grid size-11 place-items-center text-ink"
         aria-label="back"
         @click="router.back()"
       >
