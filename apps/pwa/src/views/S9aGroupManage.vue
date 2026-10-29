@@ -306,7 +306,7 @@ onMounted(async () => {
         >
           <span
             class="grid size-6 place-items-center rounded-full border text-micro"
-            :class="picked.has(c.user.id) ? 'border-ink bg-ink text-bg' : 'border-line text-transparent'"
+            :class="picked.has(c.user.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-line text-transparent'"
           >✓</span>
         </UserRow>
         <div v-if="!addCandidates.length" class="px-6 py-8 text-center text-meta text-muted">
@@ -345,7 +345,7 @@ onMounted(async () => {
               v-for="[key, label] in RIGHT_KEYS"
               :key="key"
               class="rounded-pill border px-3 py-1 text-meta"
-              :class="sheet.rights?.[key] ? 'border-ink bg-ink text-bg' : 'border-line text-muted'"
+              :class="sheet.rights?.[key] ? 'border-primary bg-primary text-primary-foreground' : 'border-line text-muted'"
               :disabled="busy"
               :data-testid="`right-${key}`"
               @click="toggleRight(sheet, key)"

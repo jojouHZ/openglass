@@ -7,21 +7,43 @@
 
 @import "tailwindcss";
 
+/* Colour model (tokens v3, docs/ux/concept-07): every colour is a CSS
+   variable resolved at runtime, so one set of utilities (bg-bg, text-ink,
+   bg-primary…) follows the active mode. Public modes live here; the
+   private palette is in private.css and ships ONLY inside the private
+   chunk (bundle guard). `@theme inline` makes utilities emit var(--og-*)
+   instead of baking the light values in. */
+@theme inline {
+  --color-bg: var(--og-bg);
+  --color-card: var(--og-card);
+  --color-ink: var(--og-fg);
+  --color-body: var(--og-fg);
+  --color-muted: var(--og-mfg); /* secondary TEXT */
+  --color-line: var(--og-border);
+  --color-soft: var(--og-muted); /* recessed SURFACE */
+  --color-canvas: var(--og-muted);
+  --color-primary: var(--og-primary);
+  --color-primary-foreground: var(--og-pfg);
+  --color-accent: var(--og-primary);
+  --color-link: var(--og-link);
+  --color-bubble-in: var(--og-inb);
+  --color-in-fg: var(--og-infg);
+  --color-bubble-own: var(--og-ownb);
+  --color-own-fg: var(--og-ownfg);
+  --color-ok: var(--og-okb);
+  --color-ok-fg: var(--og-okf);
+  --color-pv: var(--og-pvb);
+  --color-pv-fg: var(--og-pvf);
+  --color-neutral: var(--og-nb);
+  --color-neutral-fg: var(--og-nf);
+  --color-warn: var(--og-warnb);
+  --color-warn-fg: var(--og-warnf);
+  --color-danger: var(--og-danger);
+}
+
 @theme {
-  /* Colors */
-  --color-ink: #181818;
-  --color-body: #3c3c43;
-  --color-muted: #666666;
-  --color-line: #c4c4c4;
-  --color-soft: #dedede;
-  --color-bg: #ffffff;
-  --color-bg-private: #0e0e10;
-  --color-accent: #3d6b99;
-  --color-bubble-own: #181818;
-  --color-bubble-in: #f1f1f4;
-  --color-danger: #b00000;
-  --color-canvas: #f8f8f8;
-  --color-burn: #e03131;
+  --color-burn: #c62828; /* destructive fill, white label — same in every mode */
+  --color-scrim: rgb(2 6 23 / 0.5);
 
   /* Typography v2 — Source Code Pro for headings only, Inter for
      everything else (both self-hosted via @fontsource). */
@@ -42,20 +64,17 @@
      onto our tokens so copied components resolve without edits. */
   --color-background: var(--color-bg);
   --color-foreground: var(--color-ink);
-  --color-primary: var(--color-ink);
-  --color-primary-foreground: var(--color-bg);
   --color-secondary: var(--color-bubble-in);
-  --color-secondary-foreground: var(--color-ink);
+  --color-secondary-foreground: var(--color-in-fg);
   --color-muted-foreground: var(--color-muted);
   --color-border: var(--color-line);
   --color-input: var(--color-line);
-  --color-ring: var(--color-accent);
+  --color-ring: var(--color-primary);
   --color-destructive: var(--color-danger);
-  --color-popover: var(--color-bg);
+  --color-popover: var(--color-card);
   --color-popover-foreground: var(--color-ink);
-  --color-card: var(--color-bg);
   --color-card-foreground: var(--color-ink);
-  --color-accent-foreground: var(--color-bg);
+  --color-accent-foreground: var(--color-primary-foreground);
 
   /* Elevation */
   --shadow-pop: 0 4px 16px rgb(0 0 0 / 0.12);
@@ -106,16 +125,28 @@
   #app {
     min-height: 100dvh;
   }
+}
 
-  /* Private-mode inversion — applied on a scoped root, never globally.
-     The element MUST paint its own background: redefining --color-ink
-     to white over the body's white background makes everything
-     invisible otherwise. */
-  .private-mode {
-    --color-bg: #0e0e10;
-    --color-bubble-in: #3c3c43;
-    --color-bubble-own: #c4c4c4;
-    --color-ink: #ffffff;
-    background: var(--color-bg);
-  }
+/* Public palettes — AA-checked pairs, see src/styles/contrast.test.ts.
+   `.dark` is toggled on <html> by the theme store (Light / Dark / System). */
+:root {
+  --og-bg: #f8fafc; --og-card: #ffffff; --og-fg: #0f172a; --og-mfg: #53627a;
+  --og-muted: #eef2f7; --og-border: #dbe3ee;
+  --og-primary: #3b5bdb; --og-pfg: #ffffff; --og-link: #3b5bdb;
+  --og-inb: #ffffff; --og-infg: #0f172a; --og-ownb: #3b5bdb; --og-ownfg: #ffffff;
+  --og-okb: #dcfce7; --og-okf: #14532d; --og-pvb: #ede9fe; --og-pvf: #4c1d95;
+  --og-nb: #e6ecf5; --og-nf: #2b3a52; --og-warnb: #ffedd5; --og-warnf: #9a3412;
+  --og-danger: #b91c1c;
+  color-scheme: light;
+}
+
+.dark {
+  --og-bg: #0b1220; --og-card: #111a2e; --og-fg: #e6ebf5; --og-mfg: #9aa8c4;
+  --og-muted: #18233b; --og-border: #25345a;
+  --og-primary: #8ea2f7; --og-pfg: #0b1220; --og-link: #8ea2f7;
+  --og-inb: #18233b; --og-infg: #e6ebf5; --og-ownb: #3b5bdb; --og-ownfg: #ffffff;
+  --og-okb: #123524; --og-okf: #86efac; --og-pvb: #2b2160; --og-pvf: #d6ccff;
+  --og-nb: #1f2b46; --og-nf: #cbd5e1; --og-warnb: #3a1d0c; --og-warnf: #fdba74;
+  --og-danger: #f87171;
+  color-scheme: dark;
 }

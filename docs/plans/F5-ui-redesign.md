@@ -47,9 +47,9 @@ Desktop split view is a separate later slice (F6).
 ## Milestones
 | # | Scope |
 |---|-------|
-| M1 ✅ | shadcn stack, fonts, token aliases |
+| M1 ✅ | shadcn stack, fonts, token aliases (tokens v2 replaced in M3) |
 | M2 ✅ | Reka primitives: ConfirmDialog, MessageMenu, Sheet, Switch |
-| M3 | Tokens v3 (four modes as CSS variables), theme store + Appearance setting + `theme-color` meta, Avatar (hash colour), Chip, contrast + hue tests |
+| M3 ✅ | Tokens v3 (four modes as CSS variables), theme store + Appearance setting + `theme-color` meta, Avatar (hash colour), Chip, contrast + hue tests |
 | M4 | App shell + tab bar (route meta `nav`), Contacts root (requests / sent / contacts — needs F1), Settings root restyle |
 | M5 | Chat list rows, chat view: header, bubbles (tail style), grouping, pinned bar, attachments (photo/file cards), reply quote, typing, composer |
 | M6 | Private pane + sheet + lock/switch states (= F2 plan, after F7) |

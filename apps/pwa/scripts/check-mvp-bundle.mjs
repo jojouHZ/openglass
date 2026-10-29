@@ -16,6 +16,8 @@ const MARKERS = [
   /S1[012][A-Z]/, // S10PrivateInvite / S11SessionSetup / S11bVerify / S12PrivateChat chunks
   /openglass-private/, // dev-tier IndexedDB name must never ship
   /relay\.(invite|accept|send|resume|burn)/, // relay protocol strings
+  /\.private-mode/, // private palette scope (styles/private.css)
+  /og-pattern/, // private mask-pattern tokens
 ];
 
 let bad = [];
@@ -28,7 +30,7 @@ function walk(dir) {
     }
     const hitName = MARKERS.find((m) => m.test(name));
     if (hitName) bad.push(`${p} (filename matches ${hitName})`);
-    if (/\.(js|mjs|map)$/.test(name)) {
+    if (/\.(js|mjs|map|css)$/.test(name)) {
       const text = readFileSync(p, "utf8");
       const hitBody = MARKERS.find((m) => m.test(text));
       if (hitBody) bad.push(`${p} (content matches ${hitBody})`);

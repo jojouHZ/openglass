@@ -86,7 +86,7 @@ async function create() {
       >
         <span
           class="grid size-6 place-items-center rounded-full border"
-          :class="selected.has(c.user.id) ? 'border-ink bg-ink text-bg' : 'border-line text-transparent'"
+          :class="selected.has(c.user.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-line text-transparent'"
           data-testid="member-check"
         >
           <Check class="size-3.5" :stroke-width="2.5" />
@@ -102,7 +102,7 @@ async function create() {
           <div class="text-body text-ink">no contacts yet</div>
           <div class="text-meta text-muted">find people first — groups start from contacts</div>
           <button
-            class="mt-1 h-11 rounded-pill bg-ink px-6 text-msg text-bg"
+            class="mt-1 h-11 rounded-pill bg-primary px-6 text-msg text-primary-foreground"
             @click="router.push({ name: 's6-contact-search' })"
           >
             find contacts

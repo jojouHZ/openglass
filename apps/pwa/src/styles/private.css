@@ -1,0 +1,34 @@
+/* Copyright (C) 2025 OpenGlass contributors */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Private-layer palette (concept-07): violet is reserved for the private
+   layer. This file is imported ONLY by private views, so it lives in the
+   private chunk and never reaches the production bundle (verify:mvp-bundle
+   checks for `.private-mode` / `--og-pattern` in dist). The scope paints its
+   own background — redefining colours over a light page would otherwise
+   make text invisible. Private-on-light follows a light app, private-on-dark
+   a dark app. */
+.private-mode {
+  --og-bg: #1b1540; --og-card: #251d54; --og-fg: #f1edff; --og-mfg: #b9b0e0;
+  --og-muted: #2f2670; --og-border: #41358a;
+  --og-primary: #b79cff; --og-pfg: #1b1540; --og-link: #b79cff;
+  --og-inb: #2f2670; --og-infg: #f1edff; --og-ownb: #6f4fe6; --og-ownfg: #ffffff;
+  --og-okb: #123524; --og-okf: #86efac; --og-pvb: #41358a; --og-pvf: #ece6ff;
+  --og-nb: #3a2f7e; --og-nf: #e0daff; --og-warnb: #3a1d0c; --og-warnf: #fdba74;
+  --og-danger: #fca5a5;
+  --og-pattern: #b79cff; --og-pattern-op: 0.08;
+  background: var(--og-bg);
+  color: var(--og-fg);
+  color-scheme: dark;
+}
+
+.dark .private-mode {
+  --og-bg: #07050f; --og-card: #100c20; --og-fg: #f4f0ff; --og-mfg: #aaa0cf;
+  --og-muted: #1a1433; --og-border: #2c2256;
+  --og-primary: #c4adff; --og-pfg: #07050f; --og-link: #c4adff;
+  --og-inb: #1a1433; --og-infg: #f4f0ff; --og-ownb: #6c47e6; --og-ownfg: #ffffff;
+  --og-okb: #0f2c1d; --og-okf: #86efac; --og-pvb: #2c2256; --og-pvf: #e9e2ff;
+  --og-nb: #241b46; --og-nf: #d9d0ff; --og-warnb: #3a1d0c; --og-warnf: #fdba74;
+  --og-danger: #fca5a5;
+  --og-pattern: #c4adff; --og-pattern-op: 0.09;
+}

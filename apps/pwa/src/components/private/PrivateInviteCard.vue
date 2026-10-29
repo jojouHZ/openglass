@@ -75,7 +75,7 @@ function decline() {
       </div>
     </div>
     <button
-      class="rounded-pill bg-ink px-4 py-1.5 text-meta text-bg"
+      class="rounded-pill bg-primary px-4 py-1.5 text-meta text-primary-foreground"
       data-testid="private-accept"
       @click="accept(); emit('verify', incoming!.sessionId)"
     >

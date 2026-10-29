@@ -13,7 +13,7 @@ const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 <template>
   <DialogRoot :open="open" @update:open="emit('update:open', $event)">
-    <DialogOverlay class="fixed inset-0 z-50 bg-ink/30" />
+    <DialogOverlay class="fixed inset-0 z-50 bg-scrim" />
     <div class="pointer-events-none fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <DialogContent
         v-bind="$attrs"
