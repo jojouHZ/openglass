@@ -66,6 +66,47 @@ describe("S4 chat list", () => {
     expect(w.find('[data-testid="empty"]').exists()).toBe(false);
   });
 
+  it("rows carry avatars: saved = bookmark, group = coloured initial + group badge, direct = tag colour", async () => {
+    const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => expect(w.findAll('[data-testid="chat-item"]')).toHaveLength(3));
+    const rows = w.findAll('[data-testid="chat-item"]');
+    const saved = rows.filter((r) => r.find('[data-testid="saved-avatar"]').exists());
+    const groups = rows.filter((r) => r.find('[data-testid="group-badge"]').exists());
+    expect(saved).toHaveLength(1);
+    expect(groups).toHaveLength(1);
+    const direct = rows.find((r) => r.text().includes("anna"))!;
+    expect(direct.find("[style*='hsl(']").exists()).toBe(true);
+    expect(direct.find('[data-testid="group-badge"]').exists()).toBe(false);
+    // unread count uses the primary colour, not an ad-hoc accent
+    expect(direct.find('[data-testid="unread"]').classes()).toContain("bg-primary");
+    w.unmount();
+  });
+
+  it("searching filters by title, shows a message when nothing matches, and clears", async () => {
+    const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => expect(w.findAll('[data-testid="chat-item"]')).toHaveLength(3));
+    const input = w.find('[data-testid="chat-search"]');
+    await input.setValue("ANN");
+    expect(w.findAll('[data-testid="chat-item"]')).toHaveLength(1);
+    expect(w.find('[data-testid="chat-item"]').text()).toContain("anna");
+    await input.setValue("zzz");
+    expect(w.findAll('[data-testid="chat-item"]')).toHaveLength(0);
+    expect(w.find('[data-testid="chat-search-empty"]').text()).toContain('"zzz"');
+    expect(w.find('[data-testid="empty"]').exists()).toBe(false); // not the "no chats yet" state
+    await input.setValue("");
+    expect(w.findAll('[data-testid="chat-item"]')).toHaveLength(3);
+    w.unmount();
+  });
+
+  it("is a root screen: title left, no folder placeholder, new chat + settings avatar", async () => {
+    const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
+    expect(w.find("h1").text()).toBe("Chats");
+    expect(w.find('[data-testid="new-folder"]').exists()).toBe(false);
+    expect(w.find('[data-testid="new-chat"]').exists()).toBe(true);
+    expect(w.find('[data-testid="avatar-to-settings"]').exists()).toBe(true);
+    w.unmount();
+  });
+
   it("unknown path redirects to the chat list", async () => {
     await router.push("/totally/bogus/path");
     expect(router.currentRoute.value.name).toBe("s4-chat-list");
@@ -83,14 +124,16 @@ describe("S4 chat list", () => {
         new ApiRequestError(500, { code: "server_error", message: "boom" }),
       );
     const w = mount(S4ChatList, { global: { plugins: [router, pinia] } });
-    await flush(300);
     try {
-      expect(w.find('[data-testid="load-error"]').exists()).toBe(true);
+      await vi.waitFor(() => {
+        expect(w.find('[data-testid="load-error"]').exists()).toBe(true);
+      });
       expect(w.find('[data-testid="empty"]').exists()).toBe(false);
       ctx.api.chats.list = orig;
       await w.find('[data-testid="chats-retry"]').trigger("click");
-      await flush(300);
-      expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
+      await vi.waitFor(() => {
+        expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
+      });
     } finally {
       ctx.api.chats.list = orig;
       w.unmount();
@@ -237,6 +280,23 @@ describe("S5 chat view", () => {
       ctx.api.chats.get = orig;
       await router.push({ name: "s4-chat-list" });
     }
+  });
+
+  it("bubbles: incoming has a border, own is primary; groups show sender avatars, directs do not", async () => {
+    await router.push({ name: "s5-chat-view", params: { chatId: DIRECT } });
+    const w = mount(S5ChatView, { global: { plugins: [router, pinia] } });
+    await vi.waitFor(() => expect(w.findAll("[data-mid]").length).toBeGreaterThan(2));
+    const own = w.findAll(".bg-bubble-own");
+    const incoming = w.findAll(".bg-bubble-in");
+    expect(own.length).toBeGreaterThan(0);
+    expect(incoming.length).toBeGreaterThan(0);
+    expect(own[0]!.classes()).toContain("text-own-fg");
+    expect(incoming[0]!.classes()).toEqual(expect.arrayContaining(["border", "text-in-fg"]));
+    // a direct chat needs no per-message avatars
+    expect(w.findAll("[data-mid] [style*='hsl(']")).toHaveLength(0);
+    // day separators are pills
+    expect(w.find('[data-testid="day-label"] span').classes()).toContain("rounded-pill");
+    w.unmount();
   });
 
   it("header title opens group settings (group) or the peer profile (direct)", async () => {

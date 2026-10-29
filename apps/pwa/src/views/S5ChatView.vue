@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { ArrowLeft, MoreHorizontal } from "lucide-vue-next";
 
 import type { LocalMessage } from "@openglass/core";
 import {
@@ -23,6 +24,7 @@ import type { StagedAttachment } from "../components/chat/attachment";
 import { MAX_ATTACHMENT } from "../components/chat/attachment";
 import AttachmentView from "../components/chat/AttachmentView.vue";
 import Composer from "../components/chat/Composer.vue";
+import Avatar from "../components/ui/Avatar.vue";
 import ChatSearch from "../components/chat/ChatSearch.vue";
 import MessageMenu from "../components/chat/MessageMenu.vue";
 import { injectPrivateRemote } from "../privateRemote";
@@ -352,6 +354,10 @@ async function toggleChatPin() {
   }
 }
 
+function senderTag(m: LocalMessage) {
+  return chats.details[chatId.value]?.members?.find((x) => x.user.id === m.senderId)?.user.tag;
+}
+
 function senderName(m: LocalMessage) {
   if (chat.value?.type !== "group" || m.senderId === session.user?.id) return "";
   return (
@@ -452,47 +458,43 @@ watch(
        only the messages layer scrolls (flex child needs min-h-0) -->
   <main v-else class="relative flex h-full flex-col overflow-hidden">
     <!-- header -->
-    <div class="flex items-center gap-3 border-b border-line px-6 pb-3 pt-8">
-      <button class="text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
-        <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
+    <div class="flex items-center gap-3 border-b border-line bg-card px-4 pb-3 pt-8">
+      <button class="grid size-10 place-items-center text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">
+        <ArrowLeft class="size-5" :stroke-width="1.75" />
       </button>
+      <button
+        v-if="chat?.type === 'direct' && peer && peer.id !== session.user?.id"
+        class="shrink-0 rounded-full"
+        aria-label="open profile"
+        data-testid="peer-avatar"
+        @click="router.push({ name: 's7-contact-profile', params: { userId: peer.id } })"
+      >
+        <Avatar :name="title" :tag="peer.tag" class="!size-10" />
+      </button>
+      <button
+        v-else-if="chat?.type === 'group'"
+        class="shrink-0 rounded-full"
+        aria-label="group settings"
+        data-testid="group-avatar"
+        @click="router.push({ name: 's9a-group-manage', params: { chatId } })"
+      >
+        <Avatar :name="title" class="!size-10" />
+      </button>
+      <Avatar v-else :name="title" class="!size-10" />
       <component
         :is="headerTarget ? 'button' : 'div'"
         class="min-w-0 flex-1 text-left"
         @click="headerTarget && router.push(headerTarget)"
       >
-        <div class="truncate text-name text-ink">{{ title }}</div>
-        <div class="text-sub" :class="typing ? 'text-accent' : 'text-muted'">
+        <div class="truncate text-name font-semibold text-ink">{{ title }}</div>
+        <div class="truncate text-sub" :class="typing ? 'text-primary' : 'text-muted'">
           {{ subtitle }}
         </div>
       </component>
       <button
-        v-if="chat?.type === 'direct' && peer && peer.id !== session.user?.id"
-        class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
-        data-testid="peer-avatar"
-        @click="router.push({ name: 's7-contact-profile', params: { userId: peer.id } })"
-      >
-        {{ title.slice(0, 1) }}
-      </button>
-      <button
-        v-else-if="chat?.type === 'group'"
-        class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted"
-        aria-label="group settings"
-        data-testid="group-avatar"
-        @click="router.push({ name: 's9a-group-manage', params: { chatId } })"
-      >
-        {{ title.slice(0, 1) }}
-      </button>
-      <span v-else class="grid size-10 place-items-center rounded-full bg-bubble-in text-name text-muted">
-        {{ title.slice(0, 1) }}
-      </span>
-      <button
         v-if="privateEnabled && peer && peer.id !== session.user?.id"
         class="p-1"
-        :class="privSession ? 'text-accent' : 'text-muted'"
+        :class="privSession ? 'text-primary' : 'text-muted'"
         aria-label="private session"
         data-testid="private-toggle"
         @click="onPrivateToggle"
@@ -502,12 +504,8 @@ watch(
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       </button>
-      <button class="p-1 text-muted" aria-label="chat menu" @click="headMenu = !headMenu">
-        <svg viewBox="0 0 24 24" class="size-4" fill="currentColor">
-          <circle cx="5" cy="12" r="1" />
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="19" cy="12" r="1" />
-        </svg>
+      <button class="grid size-10 place-items-center text-muted" aria-label="chat menu" @click="headMenu = !headMenu">
+        <MoreHorizontal class="size-5" :stroke-width="1.75" />
       </button>
     </div>
 
@@ -637,8 +635,8 @@ watch(
       </div>
 
       <template v-for="(s, si) in series" :key="s[0]!.id">
-        <div v-if="dayLabels[si]" class="py-3 text-center text-sub text-muted">
-          {{ dayLabels[si] }}
+        <div v-if="dayLabels[si]" class="flex justify-center py-3" data-testid="day-label">
+          <span class="rounded-pill bg-soft px-3 py-1 text-sub font-medium text-muted">{{ dayLabels[si] }}</span>
         </div>
         <div class="mb-4 flex flex-col gap-1" :class="s[0]!.senderId === session.user?.id ? 'items-end' : 'items-start'">
           <div
@@ -671,23 +669,25 @@ watch(
             @pointerup="longPressEnd"
             @pointerleave="longPressEnd"
           >
-            <span
-              v-if="s[0]!.senderId !== session.user?.id"
-              class="grid size-7 shrink-0 place-items-center rounded-full bg-bubble-in text-sub text-muted"
+            <Avatar
+              v-if="s[0]!.senderId !== session.user?.id && chat?.type === 'group'"
+              :name="senderName(m) || '?'"
+              :tag="senderTag(m)"
+              class="!size-7"
               :class="mi === s.length - 1 ? 'opacity-100' : 'opacity-0'"
-            >{{ (senderName(m) ?? "?").slice(0, 1) }}</span>
+            />
             <div
               class="rounded-card px-3 py-2 text-msg"
               :class="[
                 m.senderId === session.user?.id
-                  ? 'bg-bubble-own text-own-fg'
-                  : 'bg-bubble-in text-ink',
+                  ? 'bg-bubble-own text-own-fg ' + (mi === s.length - 1 ? 'rounded-br-sm' : '')
+                  : 'border border-line bg-bubble-in text-in-fg ' + (mi === s.length - 1 ? 'rounded-bl-sm' : ''),
                 m.failed ? 'outline outline-1 outline-danger' : '',
                 highlightId === m.id ? 'ring-2 ring-accent' : '',
                 m.pending ? 'opacity-70' : '',
               ]"
             >
-              <div v-if="mi === 0 && senderName(m)" class="text-sender text-accent">
+              <div v-if="mi === 0 && senderName(m) && chat?.type === 'group'" class="text-sender font-semibold text-primary">
                 {{ senderName(m) }}
               </div>
               <div v-if="m.replyToMessageId" class="mb-1 border-l-2 border-accent pl-2 text-sub opacity-80">
