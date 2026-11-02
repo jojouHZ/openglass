@@ -35,7 +35,9 @@ echo "== upload"
 "${RSYNC[@]}" apps/pwa/dist-dev/ "$HOST:$REMOTE/www/dev/"
 rsync -az -e "ssh -i $KEY -o IdentitiesOnly=yes -o BatchMode=yes" \
   deploy/docker-compose.prod.yml "$HOST:$REMOTE/docker-compose.yml"
-rsync -az -e "ssh -i $KEY -o IdentitiesOnly=yes -o BatchMode=yes" \
+# --inplace: the file is bind-mounted into the container, and a rename (rsync's
+# default) would leave Caddy reading the OLD inode after a config change
+rsync -az --inplace -e "ssh -i $KEY -o IdentitiesOnly=yes -o BatchMode=yes" \
   deploy/Caddyfile "$HOST:$REMOTE/Caddyfile"
 
 echo "== start"
@@ -56,6 +58,7 @@ echo "DOMAIN=$DOMAIN" >> .env.new
 mv .env.new .env
 chmod 600 .env
 docker compose up -d --build --remove-orphans
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
 for i in $(seq 1 40); do
   s=$(docker compose ps --format '{{.Service}} {{.Health}}' | grep -c 'healthy' || true)
   [ "$s" -ge 2 ] && break
