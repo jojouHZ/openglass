@@ -3,7 +3,7 @@
 #
 # Two hosts, one backend:
 #   {$DOMAIN}      production PWA build (no private layer)
-#   dev.{$DOMAIN}  internal pwa-dev build (includes the private layer)
+#   dev.{$DOMAIN}  internal pwa-dev build (includes the private layer), also on app.{$DOMAIN}
 # Caddy obtains and renews the TLS certificates by itself (needs DNS-only
 # records pointing at this machine and ports 80/443 open).
 
@@ -52,6 +52,9 @@
 	import spa /srv/app
 }
 
-dev.{$DOMAIN} {
+# the internal build answers on two names: some mobile operators keep a
+# "does not exist" answer for a new name for hours and show an HTTPS error page
+# instead; a name that already resolved (app.) works immediately
+dev.{$DOMAIN}, app.{$DOMAIN} {
 	import spa /srv/dev
 }
