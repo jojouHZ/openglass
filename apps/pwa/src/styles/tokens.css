@@ -156,3 +156,20 @@
   --og-danger: #f87171;
   color-scheme: dark;
 }
+
+/* Mobile text fields must be at least 16px or iOS Safari zooms the whole page
+   on focus (and the layout ends up cropped). Unlayered on purpose: it has to
+   beat the font-size utilities (text-msg …) that live in the utilities layer.
+   Only touch devices — desktop keeps the compact sizes. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* no double-tap-to-zoom delay on controls; pinch zoom stays available */
+html {
+  touch-action: manipulation;
+}

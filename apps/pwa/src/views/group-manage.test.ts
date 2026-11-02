@@ -63,10 +63,30 @@ describe("S9a group management", () => {
     );
   });
 
+  it("tapping a member opens their profile — also your own row; actions are a separate button", async () => {
+    const w = await mountManage();
+    const rows = w.findAll('[data-testid="member-row"]');
+    const dima = rows.find((r) => r.text().includes("dima"))!;
+    await dima.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    expect(router.currentRoute.value.params.userId).toBe(groupPal.id);
+    expect(w.find('[data-testid="member-sheet"]').exists()).toBe(false); // no sheet on a plain tap
+    w.unmount();
+
+    await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
+    const w2 = await mountManage();
+    const me = w2.findAll('[data-testid="member-row"]').find((r) => r.text().includes("you"))!;
+    expect(me.find('[data-testid="member-manage"]').exists()).toBe(false); // nothing to manage on yourself
+    await me.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    w2.unmount();
+    await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
+  });
+
   it("owner opens member sheet; rights toggle patches the member", async () => {
     const w = await mountManage();
     const dimaRow = w.findAll('[data-testid="member-row"]').find((r) => r.text().includes("dima"));
-    await dimaRow!.trigger("click");
+    await dimaRow!.find('[data-testid="member-manage"]').trigger("click");
     const sheet = w.find('[data-testid="member-sheet"]');
     expect(sheet.exists()).toBe(true);
     // grant pinMessages — label moves from tag to a chip list

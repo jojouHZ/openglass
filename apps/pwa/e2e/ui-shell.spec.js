@@ -137,3 +137,39 @@ test("touch targets: every button on the root screens and in a chat is at least 
   }
   await ctx.close();
 });
+
+test("mobile: every text field is >= 16px, so iOS never zooms the page on focus", async ({ browser }) => {
+  const { alice } = seed.users;
+  // touch emulation => (pointer: coarse), the media query the fix hangs on
+  const { ctx, page } = await open(browser, alice, "/chats", { isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+  const fieldSizes = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("input, textarea, select")]
+        .filter((e) => !["checkbox", "radio", "file", "hidden", "range"].includes(e.type))
+        .map((e) => ({ id: e.getAttribute("data-testid") || e.placeholder || e.tagName, px: parseFloat(getComputedStyle(e).fontSize) })),
+    );
+
+  for (const route of ["/chats", "/contacts", `/chats/${seed.chatId}`]) {
+    await page.goto(route);
+    await page.waitForTimeout(600);
+    const sizes = await fieldSizes();
+    expect(sizes.length, `no text field found on ${route}`).toBeGreaterThan(0);
+    expect(sizes.filter((s) => s.px < 16), `small fields on ${route}`).toEqual([]);
+  }
+  await page.goto("/settings");
+  await page.getByTestId("edit-profile").click();
+  expect((await fieldSizes()).filter((s) => s.px < 16)).toEqual([]);
+  await ctx.close();
+
+  // signed out: the e-mail and code fields of the login flow
+  const anon = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const p = await anon.newPage();
+  await p.goto("/invite");
+  await p.waitForTimeout(600);
+  const loginSizes = await p.evaluate(() =>
+    [...document.querySelectorAll("input")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
+  );
+  expect(loginSizes.length).toBeGreaterThan(0);
+  expect(loginSizes.filter((px) => px < 16)).toEqual([]);
+  await anon.close();
+});
