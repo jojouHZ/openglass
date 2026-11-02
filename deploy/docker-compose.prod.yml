@@ -47,6 +47,11 @@ services:
       # written to the server log (`docker compose logs server`). Remove this
       # line once the SMTP sender exists.
       OPENGLASS_DEV_MODE: "1"
+      # DEMO ACCESS (optional, test servers only): a fixed code that signs in
+      # addresses ending in DEMO_EMAIL_SUFFIX (fake mailboxes) — for showing the
+      # app to guests who use an invite code and have no inbox on hand.
+      OPENGLASS_DEMO_OTP: ${DEMO_OTP:-}
+      OPENGLASS_DEMO_EMAIL_SUFFIX: ${DEMO_EMAIL_SUFFIX:-}
     volumes:
       - uploads_data:/data/uploads
     depends_on:

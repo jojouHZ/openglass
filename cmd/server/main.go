@@ -46,6 +46,10 @@ func main() {
 	}
 	log.Print("migrations applied")
 
+	if cfg.DemoOTP != "" {
+		log.Printf("WARNING: demo access is ON — code %s signs in any address ending in %s (test server only)", "******", cfg.DemoEmailSuffix)
+	}
+
 	if err := os.MkdirAll(cfg.UploadsDir, 0o750); err != nil {
 		log.Fatalf("uploads dir: %v", err)
 	}

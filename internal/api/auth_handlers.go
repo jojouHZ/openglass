@@ -141,7 +141,7 @@ func (s *Server) verifyOtp(w http.ResponseWriter, r *http.Request) {
 			"Too many attempts, request a new code", nil)
 		return
 	}
-	if !auth.Verify(body.Code, rec.CodeHash) {
+	if !auth.Verify(body.Code, rec.CodeHash) && !s.cfg.DemoOTPFor(email, body.Code) {
 		left, _ := s.store.DecrementOtpAttempts(r.Context(), email)
 		if left <= 0 {
 			_ = s.store.DeleteOtp(r.Context(), email)

@@ -5,9 +5,11 @@
 package config
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,26 @@ type Config struct {
 
 	// UploadsDir is where attachment blobs are written (metadata in PG).
 	UploadsDir string
+
+	// Demo access (test servers only, requires DevMode): a fixed 6-digit
+	// code that completes the e-mail login ONLY for addresses ending in
+	// DemoEmailSuffix — fake addresses nobody can read mail at — so a demo
+	// guest can sign in with an invite code and no inbox. Real e-mails are
+	// never affected. Both empty = off (the default).
+	DemoOTP         string
+	DemoEmailSuffix string
+}
+
+// DemoOTPFor reports whether code is the demo code AND email is a demo address.
+// Constant-time on the code; the suffix is not secret.
+func (c *Config) DemoOTPFor(email, code string) bool {
+	if c.DemoOTP == "" || c.DemoEmailSuffix == "" || len(code) != len(c.DemoOTP) {
+		return false
+	}
+	if !strings.HasSuffix(strings.ToLower(email), strings.ToLower(c.DemoEmailSuffix)) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(code), []byte(c.DemoOTP)) == 1
 }
 
 // #nosec G101 — local dev default (the compose database), overridden by OPENGLASS_PG_DSN
@@ -68,8 +90,19 @@ func FromEnv() (*Config, error) {
 		// (production path returns an error above)
 		secret = "dev-only-insecure-secret"
 	}
+	demoOTP, demoSuffix := os.Getenv("OPENGLASS_DEMO_OTP"), strings.ToLower(os.Getenv("OPENGLASS_DEMO_EMAIL_SUFFIX"))
+	if demoOTP != "" || demoSuffix != "" {
+		switch {
+		case !dev:
+			return nil, fmt.Errorf("demo access (OPENGLASS_DEMO_OTP) works only with OPENGLASS_DEV_MODE=1 — never on a production server")
+		case len(demoOTP) != 6 || strings.Trim(demoOTP, "0123456789") != "":
+			return nil, fmt.Errorf("OPENGLASS_DEMO_OTP must be exactly 6 digits")
+		case !strings.HasPrefix(demoSuffix, "@") || !strings.Contains(demoSuffix, ".") || len(demoSuffix) < 6:
+			return nil, fmt.Errorf("OPENGLASS_DEMO_EMAIL_SUFFIX is required with the demo code and must look like @demo.example.org")
+		}
+	}
 	return &Config{
-		// :8080 is owned by the TEI embedder in compose — server on :8081
+		// :8080 is owned by the TEI embedder in compose — server on :8081 in compose — server on :8081
 		ListenAddr:        get("OPENGLASS_LISTEN", ":8081"),
 		PgDSN:             get("OPENGLASS_PG_DSN", defaultPgDSN),
 		RedisAddr:         get("OPENGLASS_REDIS_ADDR", "localhost:6379"),
@@ -81,6 +114,8 @@ func FromEnv() (*Config, error) {
 		OtpMaxAttempts:    getInt("OPENGLASS_OTP_MAX_ATTEMPTS", 5),
 		DevMode:           dev,
 		UploadsDir:        get("OPENGLASS_UPLOADS_DIR", "data/uploads"),
+		DemoOTP:           demoOTP,
+		DemoEmailSuffix:   demoSuffix,
 	}, nil
 }
 
