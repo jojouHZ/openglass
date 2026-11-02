@@ -1,0 +1,57 @@
+# Copyright (C) 2025 OpenGlass contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Two hosts, one backend:
+#   {$DOMAIN}      production PWA build (no private layer)
+#   dev.{$DOMAIN}  internal pwa-dev build (includes the private layer)
+# Caddy obtains and renews the TLS certificates by itself (needs DNS-only
+# records pointing at this machine and ports 80/443 open).
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# the SPA, its worker and its own API/WebSocket only; inline *styles* are
+		# needed by Vue's :style bindings, scripts are never inline
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://{host}; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		-Server
+	}
+}
+
+(spa) {
+	import security_headers
+
+	# API + WebSocket (/api/v1/ws, /api/v1/relay) go to the Go server; Caddy
+	# upgrades WebSockets by itself. The server is not reachable any other way.
+	handle /api/* {
+		reverse_proxy server:8081 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+	handle /healthz {
+		reverse_proxy server:8081
+	}
+
+	handle {
+		root * {args[0]}
+		encode zstd gzip
+		# hashed build assets never change; the shell files must always revalidate
+		@assets path /assets/* /icons/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@shell path / /index.html /sw.js /theme-init.js /manifest.webmanifest
+		header @shell Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$DOMAIN} {
+	import spa /srv/app
+}
+
+dev.{$DOMAIN} {
+	import spa /srv/dev
+}
