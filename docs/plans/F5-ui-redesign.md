@@ -174,3 +174,17 @@ Desktop split view is a separate later slice (F6).
   milestone starts.
 - **Testing × PWA**: testids frozen as a contract; any selector change must
   be listed and justified in the milestone commit.
+
+
+## Owner test log (first device test, test server, 2026-11-02)
+Passed: login, messages, group creation, report (verified in the DB via
+`ogadmin`), contact removal; UI "smooth and tidy".
+
+| # | Finding | Status |
+|---|---------|--------|
+| O1 | iOS zooms the page when a text field is focused → whole UI cropped | fixed: 16px fields on touch devices, E2E over every screen (mutation-checked) |
+| O2 | photo upload fails on PC and phone | fixed: uploads volume was root-owned while the server runs unprivileged (500, silent) — image creates it owned by the server user, start-up refuses an unwritable dir, failures logged, volume repaired on the server, verified with a real upload |
+| O3 | tapping a group member does nothing | fixed: a tap opens the profile; owner/moderator actions behind a per-row manage button |
+| O4 | "pretty empty" | expected: features not built yet (private layer, F7/F2) |
+| O5 | demo for the mediator: needs a reusable invite + a code without an inbox | done: master invite (`--uses`) + demo login code limited to fake demo addresses (dev mode only) |
+| O6 | wants the private layer on the server within 1–2 sessions | `dev.openglass.space` serves the current private layer as soon as the DNS record exists; redesign (M6) follows F7 |
