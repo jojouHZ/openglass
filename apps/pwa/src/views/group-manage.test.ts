@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   bindApiClient,
   useChatsStore,
+  useContactsStore,
   useSessionStore,
 } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
@@ -63,15 +64,26 @@ describe("S9a group management", () => {
     );
   });
 
-  it("tapping a member opens their profile — also your own row; actions are a separate button", async () => {
+  it("tapping a member: a contact opens the chat, anyone else (and you) the profile; actions are a separate button", async () => {
     const w = await mountManage();
     const rows = w.findAll('[data-testid="member-row"]');
     const dima = rows.find((r) => r.text().includes("dima"))!;
     await dima.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
-    expect(router.currentRoute.value.params.userId).toBe(groupPal.id);
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s5-chat-view"));
     expect(w.find('[data-testid="member-sheet"]').exists()).toBe(false); // no sheet on a plain tap
     w.unmount();
+
+    // not a contact (any more) -> profile
+    const contacts = useContactsStore(pinia);
+    const saved = contacts.list;
+    contacts.list = contacts.list.filter((c) => c.user.id !== groupPal.id);
+    await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
+    const w0 = await mountManage();
+    await w0.findAll('[data-testid="member-row"]').find((r) => r.text().includes("dima"))!.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    expect(router.currentRoute.value.params.userId).toBe(groupPal.id);
+    contacts.list = saved;
+    w0.unmount();
 
     await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
     const w2 = await mountManage();

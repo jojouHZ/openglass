@@ -188,3 +188,4 @@ Passed: login, messages, group creation, report (verified in the DB via
 | O4 | "pretty empty" | expected: features not built yet (private layer, F7/F2) |
 | O5 | demo for the mediator: needs a reusable invite + a code without an inbox | done: master invite (`--uses`) + demo login code limited to fake demo addresses (dev mode only) |
 | O6 | wants the private layer on the server within 1–2 sessions | `dev.openglass.space` serves the current private layer as soon as the DNS record exists; redesign (M6) follows F7 |
+| O7 | people lists: tap should open the chat, right-click / long-press a menu (Profile, Report …) | done: tap = chat for mutual contacts (profile for anyone else); context menu Message · Profile · Report · Remove contact (Reka menu at the pointer; touch long-press cancelled by scrolling and not followed by a tap); applied to Contacts and group members |

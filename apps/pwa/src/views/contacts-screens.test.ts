@@ -148,12 +148,22 @@ describe("S6 contacts and requests", () => {
     expect(contacts().hasOutgoing(lena.id)).toBe(false);
   });
 
-  it("row tap navigates to S7", async () => {
+  it("tapping a contact opens the chat with them; anyone else opens the profile", async () => {
+    await router.push({ name: "s6-contact-search" });
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
-    await flush();
-    await w.findAll('[data-testid="user-row"]')[0]!.trigger("click");
-    await flush();
-    expect(router.currentRoute.value.name).toBe("s7-contact-profile");
+    await vi.waitFor(() => expect(w.find('[data-testid="contacts-header"]').exists()).toBe(true));
+    // a request row is not a contact: no chat possible yet -> profile
+    await w.find('[data-testid="outgoing-request"], [data-testid="incoming-request"]').trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    await router.push({ name: "s6-contact-search" });
+
+    // a mutual contact -> straight into the conversation
+    const contactRow = w
+      .findAll('[data-testid="user-row"]')
+      .find((r) => !r.attributes("data-testid")?.includes("request") && r.find('[data-testid="user-tag"]').exists() && contacts().isContact(contacts().list[0]!.user.id) && r.text().includes(contacts().list[0]!.user.displayName))!;
+    await contactRow.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s5-chat-view"));
+    w.unmount();
   });
 });
 

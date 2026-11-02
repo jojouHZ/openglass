@@ -8,10 +8,12 @@ import { Search, ShieldCheck, Users } from "lucide-vue-next";
 import type { ContactRequest, User } from "@openglass/core";
 import { api, useContactsStore, useSessionStore } from "@openglass/core";
 
+import { useOpenChat } from "../composables/openChat";
 import UserRow from "../components/UserRow.vue";
 import Chip from "../components/ui/Chip.vue";
 
 const router = useRouter();
+const nav = useOpenChat();
 const contacts = useContactsStore();
 const session = useSessionStore();
 
@@ -116,6 +118,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         requests <Chip variant="warning">{{ contacts.incoming.length }}</Chip>
       </div>
       <UserRow
+        menu
         v-for="r in contacts.incoming"
         :key="`in-${r.user.id}`"
         :user="r.user"
@@ -149,6 +152,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         sent · {{ contacts.outgoing.length }}
       </div>
       <UserRow
+        menu
         v-for="r in q.trim() ? [] : contacts.outgoing"
         :key="`out-${r.user.id}`"
         :user="r.user"
@@ -176,11 +180,12 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         {{ q.trim() ? "contacts" : `all contacts · ${local.length}` }}
       </div>
       <UserRow
+        menu
         v-for="c in local"
         :key="c.user.id"
         :user="c.user"
         :subtitle="c.verifiedAt ? `${c.user.tag} · verified` : c.user.tag"
-        @open="openProfile(c.user)"
+        @open="nav.chat(c.user.id)"
       >
         <ShieldCheck
           v-if="c.verifiedAt"
@@ -198,6 +203,7 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         people on this server
       </div>
       <UserRow
+        menu
         v-for="u in globalFiltered"
         :key="u.id"
         :user="u"
