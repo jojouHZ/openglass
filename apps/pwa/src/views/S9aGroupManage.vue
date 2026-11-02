@@ -18,12 +18,14 @@ import AppInput from "../components/AppInput.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import Sheet from "../components/ui/Sheet.vue";
 import UserRow from "../components/UserRow.vue";
+import { useOpenChat } from "../composables/openChat";
 
 const route = useRoute();
 const router = useRouter();
 const chats = useChatsStore();
 const contacts = useContactsStore();
 const session = useSessionStore();
+const nav = useOpenChat();
 
 const chatId = String(route.params.chatId);
 const chat = computed(() => chats.details[chatId]);
@@ -226,8 +228,9 @@ onMounted(async () => {
         :key="m.user.id"
         :user="m.user"
         :subtitle="(m.user.id === session.user?.id ? 'you' : rightLabel(m)) || undefined"
+        menu
         data-testid="member-row"
-        @open="openProfile(m)"
+        @open="contacts.isContact(m.user.id) && m.user.id !== session.user?.id ? nav.chat(m.user.id) : openProfile(m)"
       >
         <button
           v-if="canManage(m)"

@@ -173,3 +173,41 @@ test("mobile: every text field is >= 16px, so iOS never zooms the page on focus"
   expect(loginSizes.filter((px) => px < 16)).toEqual([]);
   await anon.close();
 });
+
+test("people lists: tap = the chat, right-click = Message · Profile · Report · Remove", async ({ browser }) => {
+  const { alice, bob } = seed.users;
+  const { ctx, page } = await open(browser, alice, "/contacts");
+  const row = page.getByTestId("user-row").filter({ hasText: bob.displayName });
+  await expect(row).toBeVisible();
+
+  // right-click: the menu, with every action a contact offers
+  await row.click({ button: "right" });
+  const menu = page.getByTestId("user-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem")).toHaveText(["Message", "Profile", "Report", "Remove contact"]);
+
+  // Report -> the dialog for that person
+  await page.getByTestId("um-report").click();
+  await expect(page.getByTestId("report-dialog")).toContainText(bob.displayName);
+  await page.getByTestId("report-cancel").click();
+
+  // Profile
+  await row.click({ button: "right" });
+  await page.getByTestId("um-profile").click();
+  await expect(page).toHaveURL(new RegExp(`/contacts/${bob.id}$`));
+
+  // a plain tap goes straight to the conversation
+  await page.goto("/contacts");
+  await page.getByTestId("user-row").filter({ hasText: bob.displayName }).click();
+  await expect(page).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
+  await expect(page.getByTestId("composer-input")).toBeVisible();
+
+  // Escape closes the menu without acting
+  await page.goto("/contacts");
+  await page.getByTestId("user-row").filter({ hasText: bob.displayName }).click({ button: "right" });
+  await expect(page.getByTestId("user-menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("user-menu")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/contacts$/);
+  await ctx.close();
+});
