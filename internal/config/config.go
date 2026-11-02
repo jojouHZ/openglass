@@ -34,6 +34,19 @@ type Config struct {
 // #nosec G101 — local dev default (the compose database), overridden by OPENGLASS_PG_DSN
 const defaultPgDSN = "postgres://openglass:openglass_dev@localhost:5432/openglass"
 
+// CheckWritableDir fails if files cannot be created in dir — run at start-up so
+// a mis-owned uploads volume stops the server immediately instead of failing
+// every attachment upload later.
+func CheckWritableDir(dir string) error {
+	f, err := os.CreateTemp(dir, ".write-probe-*")
+	if err != nil {
+		return fmt.Errorf("directory %q is not writable: %w", dir, err)
+	}
+	name := f.Name()
+	_ = f.Close()
+	return os.Remove(name)
+}
+
 // AdminConfig — what the operator CLI (cmd/ogadmin) needs: the database only.
 type AdminConfig struct {
 	PgDSN string // postgres://…

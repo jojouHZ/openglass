@@ -12,7 +12,11 @@ RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server \
  && CGO_ENABLED=0 go build -o /out/ogadmin ./cmd/ogadmin
 
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
-RUN adduser -D openglass
+RUN adduser -D openglass \
+ # the uploads volume must be writable by the unprivileged server user: a named
+ # volume copies this directory's ownership on first mount (a root-owned one
+ # made every attachment upload fail with a 500)
+ && mkdir -p /data/uploads && chown openglass:openglass /data/uploads
 USER openglass
 COPY --from=build /out/server /usr/local/bin/server
 COPY --from=build /out/ogadmin /usr/local/bin/ogadmin

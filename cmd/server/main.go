@@ -49,6 +49,9 @@ func main() {
 	if err := os.MkdirAll(cfg.UploadsDir, 0o750); err != nil {
 		log.Fatalf("uploads dir: %v", err)
 	}
+	if err := config.CheckWritableDir(cfg.UploadsDir); err != nil {
+		log.Fatalf("uploads dir: %v", err)
+	}
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer func() { _ = rdb.Close() }()

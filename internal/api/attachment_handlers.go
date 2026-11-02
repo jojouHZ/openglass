@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -67,6 +68,7 @@ func (s *Server) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 	// #nosec G304 -- path is UploadsDir + a server-minted uuid, no user input
 	out, err := os.Create(path)
 	if err != nil {
+		log.Printf("[upload] cannot create file in %s: %v", s.cfg.UploadsDir, err)
 		writeErr(w, http.StatusInternalServerError, "internal", "Upload failed", nil)
 		return
 	}
