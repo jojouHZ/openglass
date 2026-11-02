@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { MoreHorizontal } from "lucide-vue-next";
 
 import {
   ApiRequestError,
@@ -67,16 +68,18 @@ async function toggleRight(m: GroupMember, key: (typeof RIGHT_KEYS)[number][0]) 
   }
 }
 
-function onMemberTap(m: GroupMember) {
-  const manageable =
-    m.user.id !== session.user?.id &&
-    (isOwner.value || (canRemove.value && m.role !== "owner"));
-  if (manageable) {
-    sheet.value = m;
-    sheetError.value = "";
-  } else {
-    router.push({ name: "s7-contact-profile", params: { userId: m.user.id } });
-  }
+// tapping a member opens their profile (like every other user row);
+// owner/moderator actions live behind the row's own "⋯" button
+const canManage = (m: GroupMember) =>
+  m.user.id !== session.user?.id && (isOwner.value || (canRemove.value && m.role !== "owner"));
+
+function openProfile(m: GroupMember) {
+  router.push({ name: "s7-contact-profile", params: { userId: m.user.id } });
+}
+
+function openSheet(m: GroupMember) {
+  sheet.value = m;
+  sheetError.value = "";
 }
 
 // ---- destructive confirmations ----
@@ -224,8 +227,18 @@ onMounted(async () => {
         :user="m.user"
         :subtitle="(m.user.id === session.user?.id ? 'you' : rightLabel(m)) || undefined"
         data-testid="member-row"
-        @open="onMemberTap(m)"
-      />
+        @open="openProfile(m)"
+      >
+        <button
+          v-if="canManage(m)"
+          class="grid size-11 place-items-center rounded-full text-muted"
+          :aria-label="`manage ${m.user.displayName}`"
+          data-testid="member-manage"
+          @click="openSheet(m)"
+        >
+          <MoreHorizontal class="size-5" :stroke-width="1.75" />
+        </button>
+      </UserRow>
       <template v-if="chat?.invited?.length">
         <div class="px-6 pb-1 pt-3 text-meta text-muted" data-testid="invited-header">
           invited · {{ chat.invited.length }}
