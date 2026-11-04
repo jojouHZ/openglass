@@ -17,6 +17,8 @@
 const DB_NAME = "openglass-private";
 const STORE = "identity";
 const KEY_ID = "ecdh-identity";
+/** F7: pin store — { peerUserId → pin } scoped per signed-in user. */
+export const PINS_STORE = "pins";
 
 const idb = (): IDBFactory => {
   if (typeof indexedDB === "undefined") {
@@ -27,13 +29,70 @@ const idb = (): IDBFactory => {
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = idb().open(DB_NAME, 1);
+    const req = idb().open(DB_NAME, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE);
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains(PINS_STORE)) db.createObjectStore(PINS_STORE);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
   });
+}
+
+/** Small typed helpers — shared by identity (F7) and pins. */
+export async function idbGet<T>(store: string, key: string): Promise<T | undefined> {
+  const db = await openDb();
+  try {
+    return await new Promise<T | undefined>((resolve, reject) => {
+      const req = db.transaction(store, "readonly").objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result as T | undefined);
+      req.onerror = () => reject(req.error ?? new Error("idb get failed"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function idbPut(store: string, key: string, value: unknown): Promise<void> {
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("idb put failed"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function idbDelete(store: string, key: string): Promise<void> {
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("idb delete failed"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function idbAll<T>(store: string): Promise<T[]> {
+  const db = await openDb();
+  try {
+    return await new Promise<T[]>((resolve, reject) => {
+      const req = db.transaction(store, "readonly").objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result as T[]);
+      req.onerror = () => reject(req.error ?? new Error("idb getAll failed"));
+    });
+  } finally {
+    db.close();
+  }
 }
 
 /** Identity ECDH pair — non-extractable, one per device. */
@@ -79,11 +138,13 @@ export function prepareIdentityStore(): Promise<void> {
   if (typeof indexedDB === "undefined") return Promise.resolve();
   return new Promise((resolve) => {
     let created = false;
-    const req = idb().open(DB_NAME, 1);
+    const req = idb().open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       // fires only when the DB is created — i.e. none existed before
       created = true;
-      req.result.createObjectStore(STORE);
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains(PINS_STORE)) db.createObjectStore(PINS_STORE);
     };
     req.onsuccess = () => {
       req.result.close();
