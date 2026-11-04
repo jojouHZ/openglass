@@ -189,3 +189,135 @@ Passed: login, messages, group creation, report (verified in the DB via
 | O5 | demo for the mediator: needs a reusable invite + a code without an inbox | done: master invite (`--uses`) + demo login code limited to fake demo addresses (dev mode only) |
 | O6 | wants the private layer on the server within 1–2 sessions | `dev.openglass.space` serves the current private layer as soon as the DNS record exists; redesign (M6) follows F7 |
 | O7 | people lists: tap should open the chat, right-click / long-press a menu (Profile, Report …) | done: tap = chat for mutual contacts (profile for anyone else); context menu Message · Profile · Report · Remove contact (Reka menu at the pointer; touch long-press cancelled by scrolling and not followed by a tap); applied to Contacts and group members |
+| O8 | SAS currently displays 12 emoji; owner expects 5. Native emoji differ between desktop and mobile and are difficult to compare | open: audit the current SAS mapping and security strength before changing length; use identical self-hosted visuals and text labels across devices |
+| O9 | after mobile screen lock, desktop tears down the private session but mobile resumes stale messages; Back opens invite creation instead of the public chat; a second session cannot deliver mobile messages to desktop | open, release blocker for private demo: reproduce both initiator/receiver roles; investigate lifecycle, transport and session cleanup before assigning a root cause |
+| O10 | private chat is a separate screen rather than a layer in the same chat window, contrary to concept 07 | open: implement the approved same-window private pane; preserve isolation of private state and explicit public/private send cues |
+
+## Next two work sessions (owner-requested priorities)
+
+This is an execution order, not a delivery-time guarantee. No implementation or
+server deployment is authorized by this planning update. Owner review remains
+required; F7 and the M6 dependency order must be reconciled before expanding scope.
+
+### Session 1 — lifecycle correctness before visual work
+- Frontend Core + PWA: reproduce O9 on mobile and desktop in both roles,
+  including screen lock, background/resume, disconnect and a second invitation.
+- Testing: first add a failing regression for stale state and repeated sessions.
+- Frontend Core + Security: ensure terminal sessions cannot be reused, old
+  messages/keys/listeners cannot contaminate a new session, and sending is blocked
+  until the new session is independently verified. Audit actual cleanup; hiding
+  the pane is not evidence of erasure.
+- PWA: Back and terminal-session navigation return to the existing public chat,
+  not invitation creation; resuming must reconcile the session before allowing sends.
+- Acceptance: bidirectional delivery in a fresh second session, no old private
+  messages visible, and consistent terminal state on both devices. Run Chromium
+  regression plus an owner test on the real phone; simulated visibility events
+  alone do not establish mobile screen-lock correctness.
+
+### Session 2 — verification UX and same-window integration
+- Security + Frontend Core: audit SAS entropy and mapping; five symbols must
+  retain an explicitly reviewed authentication strength rather than merely
+  truncating the existing sequence. Agree an alternative representation with the
+  owner if the five-symbol target is insufficient.
+- Design + PWA: identical self-hosted SAS visuals with stable labels on desktop
+  and mobile, subject to asset license/CSP checks; no platform-native glyph dependency.
+- Product Manager + Orchestrator: reconcile F7/M6 scope with the existing plan.
+  Integrate the approved private pane inside the public chat window only after
+  the lifecycle fix, without exposing crypto/session state to the shell.
+- Testing + Security + Code Review: repeat invite/SAS/message/view-once/burn,
+  lock/resume, Back, rejection, timeout and repeated-session flows; check wrong-layer
+  sends and the MVP bundle guard, then run the full local gate.
+- Owner compares against concept 07 and tests both devices before advancing to
+  `next`. Deploy only after explicit approval, with the exact tested commit recorded.
+
+## Narrowed next slice: P0 — private lifecycle recovery (proposed)
+
+Owner direction: keep commits local; the current VPS is available for testing
+only until the owner cancels it this evening. This is a test opportunity, not a
+reason to skip gates or promise completion today. No push, merge or cancellation
+of infrastructure is included. Implementation awaits owner review of this plan.
+
+### Scope and evidence
+- Fix O9 only. O8 (SAS) and O10 (same-window UI) stay tracked separately.
+- `apps/pwa/src/privateBoot.ts` currently wires authentication and `pagehide`,
+  but has no visibility/resume reconciliation. Screen lock does not reliably
+  imply `pagehide`; this is an investigation lead, not a proven root cause.
+- `S12PrivateChat.vue` uses history-based Back and a non-immediate terminal-state
+  watcher. Audit initial empty snapshots and history entry points as well as
+  subsequent closure notifications.
+- `PrivateRemote` snapshots are explicitly notified and selected by peer;
+  inspect stale subscriptions, session selection and asynchronous callbacks.
+- `store.teardown()` clears volatile state before awaiting IndexedDB cleanup;
+  test overlap with connect/new invitation rather than assuming it is race-free.
+
+### Intended lifecycle policy for this slice
+- Use fail-closed behavior when the document becomes hidden: invalidate the
+  current private session locally and prevent further sends immediately. Screen
+  lock cannot be detected distinctly from tab switching, so this policy also
+  ends sessions on tab/app switches; owner approval of that tradeoff is required.
+- Perform best-effort relay notification/disconnect, never depend on delivery of
+  a final network event while the browser is suspending.
+- On visible/pageshow, finish pending cleanup before allowing a fresh relay
+  connection; never revive the old session or reuse its verification state.
+- An active peer must converge through existing relay disconnect/expiry rules;
+  do not claim simultaneous deletion or physical memory erasure.
+- Preserve the ordinary public chat, authentication and history. Returning from
+  the private screen must target that chat explicitly, not invitation history.
+- Do not introduce F7 persistent identities, new verification semantics, migrations
+  or relay envelope kinds. If investigation requires a protocol change, stop and
+  review scope instead of silently widening this slice.
+
+### Ordered work and role ownership
+1. Orchestrator + Product Manager: approve the above hidden-tab policy and P0
+   scope. No F7/M6 dependency changes are needed for this correctness patch.
+2. Testing + PWA: reproduce the owner's exact sequence on real devices, then
+   write failing lifecycle/navigation tests and a two-client regression.
+3. Frontend Core: trace connection generations, session IDs, queued envelopes,
+   snapshots and teardown/connect overlap. Reject late events from dead sessions
+   and serialize cleanup/reconnection where the reproducer demonstrates a need.
+4. PWA: wire platform lifecycle through the typed remote; make handlers
+   idempotent, clear private UI draft/error state on session replacement, and
+   route terminal/empty private screens and Back to the existing public chat.
+5. Backend: audit disconnect grace/expiry and obsolete-session relay handling;
+   change backend code only if a failing test establishes a server defect.
+6. Security + Testing: review stale-event isolation, cleanup and wrong-session
+   sends. No plaintext, key, OTP or resume-token logging for diagnostics.
+7. DevOps: run the local gate, make a focused local commit, record its SHA,
+   and deploy that clean tested tree only with owner approval. Do not change
+   demo access, wipe data, or cancel the VPS as part of P0.
+8. Documentation: update O9 with evidence and known limits; write the completed
+   phase journal before any later approved knowledge refresh. Owner review gates
+   `next`; role checklists are not represented as independent agent reviews.
+
+### Acceptance matrix
+| Scenario | Required result |
+|----------|-----------------|
+| Phone locks as initiator / receiver | local private state invalidated; peer converges to ended state under relay policy |
+| Phone resumes, including pageshow | no old messages, draft or live send capability; public chat is shown |
+| New invitation from either side | new session ID and normal verification; bidirectional delivery; no old payloads |
+| Teardown repeated / overlaps reconnect | no duplicate clients/listeners; no stale callbacks restoring state |
+| Late old-session envelope or close event | cannot mutate or close the replacement session |
+| Back from setup / verify / chat, including direct entry | deterministic return to the corresponding public chat |
+| Burn / TTL / logout / reload | existing cleanup semantics and public messaging remain correct |
+
+Verification ladder: targeted Vitest regressions first, core/PWA typecheck and
+unit suites, real two-client Chromium E2E, MVP bundle guard, then full `pnpm gate`.
+Real phone screen-lock testing remains mandatory; simulated events are not a
+substitute. If server access ends before owner testing, retain the local commit
+and mark real-device acceptance pending, not passed. No unsafe rush to deploy.
+
+### Minimal continuation queue (not one combined slice)
+1. **P0:** lifecycle recovery above — first and blocking further private demos.
+2. **P1:** SAS audit and consistent rendering (O8); distinguish today's ephemeral
+   session SAS from F7's planned five-symbol device ritual. Approve entropy and
+   representation before implementation; do not truncate blindly.
+3. **F7:** device-pair identity and verification, separately reviewed backend/core
+   and integration increments, retaining the existing dependency before M6.
+4. **M6/F2:** same-window private pane (O10), no unrelated feature additions.
+5. **M7/M8:** finish existing UI scope, regression/security/bundle checks and owner
+   acceptance. Production readiness also requires real OTP delivery and removal
+   of demo/dev access; the private demo is not the release-PWA readiness gate.
+
+The release MVP still excludes private artifacts. F7/M6 are dev-tier work, not a
+reason to silently redefine the production bundle contract. Extra contact
+permissions, vault expansion and desktop features remain outside P0.
