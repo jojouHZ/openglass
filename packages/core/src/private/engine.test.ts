@@ -11,6 +11,7 @@ import {
   encryptEnvelope,
   fromB64,
   generateSessionKeyPair,
+  SAS_SYMBOL_COUNT,
   sasFingerprint,
 } from "./engine";
 
@@ -68,7 +69,12 @@ describe("SAS fingerprint", () => {
     const fa = await sasFingerprint(a.rawPub, b.rawPub);
     const fb = await sasFingerprint(b.rawPub, a.rawPub);
     expect(fa).toEqual(fb);
-    expect(fa).toHaveLength(12);
+    expect(fa.symbols).toHaveLength(6);
+    expect(fa.digits).toMatch(/^\d{6}$/);
+    for (const i of fa.symbols) {
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(i).toBeLessThan(SAS_SYMBOL_COUNT);
+    }
   });
 
   it("a MITM key substitution changes the grid", async () => {

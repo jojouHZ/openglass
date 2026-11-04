@@ -16,7 +16,10 @@ import { usePrivateStore } from "@openglass/core/private/store";
 import { createPrivateRemote } from "@openglass/core/private/remote";
 import type { RelayClient } from "@openglass/core/private/relay";
 
+import { SAS_SYMBOL_COUNT } from "@openglass/core/private/engine";
+
 import { pinia } from "../pinia";
+import { SAS_OBJECTS } from "../private/sasSymbols";
 import { wirePrivateLifecycle } from "../privateBoot";
 import { createAppRouter } from "../router";
 import PrivateInviteCard from "../components/private/PrivateInviteCard.vue";
@@ -103,7 +106,7 @@ function seedSession(over: Partial<import("@openglass/core/private/store").Priva
     ownKeys: null,
     pendingPeerPub: null,
     sessionKey: seededKey,
-    sas: ["😀", "😁", "😂", "🤣", "😃", "😄", "😅", "😆", "😉", "😊", "😋", "😎"],
+    sas: { symbols: [0, 1, 2, 3, 4, 5], digits: "012345" },
     messages: [],
     lastSeq: 0,
     ...over,
@@ -126,8 +129,17 @@ beforeAll(async () => {
 });
 afterAll(() => ctx.server.close());
 
+describe("SAS symbol set", () => {
+  it("matches the core contract: 128 entries, unique one-word labels", () => {
+    expect(SAS_OBJECTS).toHaveLength(SAS_SYMBOL_COUNT);
+    const labels = SAS_OBJECTS.map((o) => o.label);
+    expect(new Set(labels).size).toBe(SAS_SYMBOL_COUNT);
+    for (const l of labels) expect(l).toMatch(/^[a-z]+$/);
+  });
+});
+
 describe("S11b verify", () => {
-  it("renders the 12-emoji SAS grid and marks verified", async () => {
+  it("renders the 6-object + 6-digit SAS and marks verified", async () => {
     seedSession();
     await router.push({ name: "s11b-verify", params: { chatId: directChatId } });
     const w = mount(S11bVerify, { global: globals() });
@@ -135,7 +147,10 @@ describe("S11b verify", () => {
 
     const grid = w.find('[data-testid="sas-grid"]');
     expect(grid.exists()).toBe(true);
-    expect(grid.findAll("span")).toHaveLength(12);
+    // six objects: icon + one-word label each
+    expect(grid.findAll("svg")).toHaveLength(6);
+    expect(grid.findAll("span")).toHaveLength(6);
+    expect(w.find('[data-testid="sas-digits"]').text()).toBe("012345");
 
     await w.find('[data-testid="sas-confirm"]').trigger("click");
     await flushPromises(); // router.replace is async

@@ -23,6 +23,7 @@ import {
   sasFingerprint,
   toB64,
   type Envelope,
+  type SasFingerprint,
   type SessionKeyPair,
 } from "./engine";
 import { prepareIdentityStore, wipeIdentityStore } from "./keys";
@@ -62,7 +63,7 @@ export interface PrivateSession {
   /** peer's key arrived before our established finished — process later */
   pendingPeerPub: string | null;
   sessionKey: CryptoKey | null;
-  sas: string[] | null;
+  sas: SasFingerprint | null;
   messages: PrivateMessage[];
   lastSeq: number;
   /** onEstablished is draining pre-session envelopes — live arrivals

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 <!-- S11b fingerprint verification — pwa-dev only.
-     The emoji grid IS the MITM defense: without comparing it out-of-band
-     the session is confidential only against a passive server. -->
+     The symbol row + digit code IS the MITM defense: without comparing it
+     out-of-band the session is confidential only against a passive server. -->
 
 <script setup lang="ts">
 import { computed } from "vue";
@@ -12,6 +12,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useChatsStore } from "@openglass/core";
 
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
+import { SAS_OBJECTS } from "../../private/sasSymbols";
 import "../../styles/private.css";
 
 const route = useRoute();
@@ -51,13 +52,29 @@ function notMatching() {
       over a call, in person, or any channel you already trust.
     </p>
 
-    <!-- emoji SAS grid -->
-    <div
-      v-if="session?.sas"
-      class="mx-auto mt-10 grid grid-cols-4 gap-3"
-      data-testid="sas-grid"
-    >
-      <span v-for="(e, i) in session.sas" :key="i" class="text-3xl">{{ e }}</span>
+    <!-- SAS: six nameable objects + six digits — identical SVG on both
+         sides; spoken comparison is "cat train orange …" not emoji mime -->
+    <div v-if="session?.sas" class="mx-auto mt-10" data-testid="sas-grid">
+      <div class="grid grid-cols-3 gap-x-8 gap-y-5">
+        <div
+          v-for="(idx, i) in session.sas.symbols"
+          :key="i"
+          class="flex w-16 flex-col items-center gap-1"
+        >
+          <component
+            :is="SAS_OBJECTS[idx].icon"
+            class="size-8 text-ink"
+            :stroke-width="1.75"
+          />
+          <span class="text-micro text-muted">{{ SAS_OBJECTS[idx].label }}</span>
+        </div>
+      </div>
+      <div
+        class="mt-6 text-center font-mono text-2xl tracking-[0.4em] text-ink"
+        data-testid="sas-digits"
+      >
+        {{ session.sas.digits }}
+      </div>
     </div>
     <div v-else class="mt-10 text-center text-meta text-muted" data-testid="sas-waiting">
       exchanging keys…
@@ -65,7 +82,7 @@ function notMatching() {
 
     <p class="mt-8 text-center text-meta text-danger" data-testid="sas-warning">
       without this check the server could sit between you — verified only
-      when the emojis match on both sides
+      when the objects and digits match on both sides
     </p>
 
     <div class="mt-auto flex gap-3 pb-10">

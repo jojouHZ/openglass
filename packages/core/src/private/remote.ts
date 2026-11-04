@@ -17,6 +17,7 @@
 
 import type { Pinia } from "pinia";
 
+import type { SasFingerprint } from "./engine";
 import type { ConnState, PeerUser } from "./relay";
 import {
   usePrivateStore,
@@ -46,8 +47,9 @@ export interface PrivateSessionView {
   sessionId: string;
   peerId: string;
   status: PrivateStatus;
-  /** SAS emoji grid for out-of-band comparison — display strings only. */
-  sas: readonly string[] | null;
+  /** SAS fingerprint for out-of-band comparison — symbol indexes into the
+   *  shell's object set plus a digit code; display data only. */
+  sas: SasFingerprint | null;
   messages: readonly PrivateMessageView[];
   ttlEndsAt: string | null;
   peerOfflineUntil: string | null;
@@ -118,7 +120,9 @@ function toSessionView(
     sessionId: s.id,
     peerId: s.peer.id,
     status: s.status,
-    sas: s.sas ? [...s.sas] : null,
+    sas: s.sas
+      ? { symbols: [...s.sas.symbols], digits: s.sas.digits }
+      : null,
     messages: s.messages.map((m) => ({
       id: m.id,
       fromMe: m.fromMe,
