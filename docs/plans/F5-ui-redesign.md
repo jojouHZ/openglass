@@ -24,10 +24,89 @@ overlays, a11y defaults); stream-chat is a structure reference only.
 - Visual-only: no API/contract/store-semantics change, all `data-testid`s
   stay the contract.
 
-## Slice order (decided)
-`F1 contacts → F4 stubs (main)` → `F5 core (M3–M5)` → `F7 device identity`
-→ `F5-M6 private pane (= F2, in the new design)` → `M7 sweep` → `M8 gate`.
+## Slice order (owner revision: public PWA MVP first)
+`F1/F4 → F5 M3–M5 → U1 public mobile acceptance → U2 public M7 sweep
+→ U3 M8 release-candidate gate → R1 real OTP delivery → R2 deployment readiness`.
+Each slice requires owner review before advancing. U3 is a UI candidate, not
+production readiness; R1/R2 remain necessary for a usable production deployment.
+
+F7 device identity and M6/F2 same-window private UI no longer block the release
+PWA. O8 (SAS), O9 (stale private session after screen lock) and O10 (separate
+private screen) remain open in the post-MVP private/Android workstream. Reproduce
+O9 with Android lifecycle integration and audit the shared core; a browser-only
+root cause has not been established. The proposed hidden-page teardown policy
+was not approved and must not be implemented under the old P0 plan.
+
+The older session/P0 plans below are historical proposals, superseded by this
+revision. F7 → M6 remains the private-workstream dependency, not an MVP gate.
 Desktop split view is a separate later slice (F6).
+
+## Current execution slices
+
+### U1 — public UI acceptance on a real phone (next)
+Goal: use the remaining VPS window for release-PWA interaction testing, not
+private browser lifecycle repair. Scope is the current public UI; no new features,
+crypto, relay, identity or same-window private integration.
+
+1. Orchestrator/Product Manager: freeze the checklist and classify findings as
+   release blockers, public visual polish or deferred private/post-MVP work.
+2. PWA/Testing: compare the public build against concept 07; establish the tested
+   local SHA and check for stale service-worker assets before attributing a bug.
+3. Run relevant public UI tests, typecheck, build and MVP bundle guard before a
+   test deployment. Record checks actually run; never imply the full gate passed
+   from targeted checks alone. DevOps deploys only an approved committed tree.
+4. Owner tests the release build on the phone, with a desktop peer for messaging:
+   - keyboard open/close, input focus without page zoom, safe areas, scroll and
+     composer visibility, portrait/landscape where supported;
+   - Chats/Contacts/Settings tabs, deep screens and deterministic Back behavior;
+   - tap-to-chat, right-click/long-press menus, scrolling cancellation and dialogs;
+   - photo upload/display, text send, reply/edit/retract, archived-chat lockout;
+   - group member navigation/actions and report submission;
+   - light/dark/system themes, readable states and touch targets;
+   - background/resume of PUBLIC chat and reconnect, refresh/update and offline
+     indication. Public browser bugs remain in MVP scope.
+5. Record device, OS, browser, build SHA, reproduction, expected/actual behavior
+   and screenshots for each finding. Repeat the public UI flow in installed PWA
+   mode if available; do not report untested devices/modes as passed.
+6. PWA/Core fix only reproduced public blockers; Backend participates only for
+   confirmed API/storage defects. Add a regression first where practical.
+7. Security checks safe rendering, permissions and exclusion of private UI/code
+   from the production build. Testing reruns affected flows; owner reviews each
+   completed increment. Documentation records evidence in the existing owner log.
+
+Exit: public mobile checklist has explicit results, blockers fixed and retested,
+remaining polish queued for U2, and owner acceptance recorded. VPS cancellation
+is the owner's action. If the window closes early, keep untested cases pending
+and continue locally; do not mark them passed or rush unsafe changes. Before
+cancellation, ask whether test data/uploads need preservation; no deletion or
+backup/export of private data is implicit in this plan.
+
+### U2 — public M7 completion
+Audit S1–S3, S7–S9a, S14/S15 and shared dialogs against concept 07. Implement only
+missing public styling, loading/empty/error states, focus/keyboard/44px target
+and reduced-motion behavior; retain API semantics and testids. Break into small
+screen-family commits; owner reviews each increment. Private frames are deferred,
+not silently reported complete. No features added to fill visual empty space.
+
+### U3 — M8 public release-candidate verification
+Run the full local `pnpm gate`, public real-Chromium E2E, bundle exclusion checks
+and concept comparison. Record real-device coverage and remaining limitations;
+owner approval is required before any separately authorized merge. Update the
+phase journal before a later approved knowledge refresh. No push/merge by default.
+
+### R1 — real OTP delivery
+Separate Backend/Security/DevOps slice: select an owner-approved HTTPS email
+provider, configure secrets without committing values, test delivery and provider
+failure behavior, retain rate limits and ensure codes are not exposed in logs.
+Provider choice, account access and production configuration require owner input.
+This slice is not implied to be implemented by UI acceptance.
+
+### R2 — production deployment readiness
+Verify reproducible deployment, secrets, health, writable uploads, migrations,
+backup/restore procedure and operational limits. Disable demo authentication and
+development OTP logging for the release environment; test registration/login
+using real delivery. Owner approval gates changes to the live environment. This
+can run on a later VPS and must not depend on retaining today's test server.
 
 ## Decisions embedded in the concept
 - **Palette**: four modes — Light, Dark, Private-on-light, Private-on-dark;
@@ -193,7 +272,9 @@ Passed: login, messages, group creation, report (verified in the DB via
 | O9 | after mobile screen lock, desktop tears down the private session but mobile resumes stale messages; Back opens invite creation instead of the public chat; a second session cannot deliver mobile messages to desktop | open, release blocker for private demo: reproduce both initiator/receiver roles; investigate lifecycle, transport and session cleanup before assigning a root cause |
 | O10 | private chat is a separate screen rather than a layer in the same chat window, contrary to concept 07 | open: implement the approved same-window private pane; preserve isolation of private state and explicit public/private send cues |
 
-## Next two work sessions (owner-requested priorities)
+## Historical proposal — next two work sessions (superseded)
+
+Not active: the owner deferred private work in favor of public mobile acceptance.
 
 This is an execution order, not a delivery-time guarantee. No implementation or
 server deployment is authorized by this planning update. Owner review remains
@@ -230,7 +311,10 @@ required; F7 and the M6 dependency order must be reconciled before expanding sco
 - Owner compares against concept 07 and tests both devices before advancing to
   `next`. Deploy only after explicit approval, with the exact tested commit recorded.
 
-## Narrowed next slice: P0 — private lifecycle recovery (proposed)
+## Historical proposal — P0 private lifecycle recovery (deferred)
+
+Not authorized for implementation. O9 remains open for the post-MVP Android
+workstream; the hidden-page policy below is a rejected current-scope proposal.
 
 Owner direction: keep commits local; the current VPS is available for testing
 only until the owner cancels it this evening. This is a test opportunity, not a
