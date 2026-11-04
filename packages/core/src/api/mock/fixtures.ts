@@ -279,9 +279,9 @@ export function buildChats(
 }
 
 export const contacts: Contact[] = [
-  { user: wife, mutual: true, addedAt: iso(-60 * 24 * 7), verifiedAt: null },
-  { user: groupPal, mutual: true, addedAt: iso(-60 * 24 * 6), verifiedAt: null },
-  { user: kostya, mutual: true, addedAt: iso(-60 * 24 * 5), verifiedAt: null },
+  { user: wife, mutual: true, addedAt: iso(-60 * 24 * 7) },
+  { user: groupPal, mutual: true, addedAt: iso(-60 * 24 * 6) },
+  { user: kostya, mutual: true, addedAt: iso(-60 * 24 * 5) },
 ];
 
 /** Pending contact requests: lena was asked by me, incomingOnly/suitor asked me. */

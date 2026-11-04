@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { Search, ShieldCheck, Users } from "lucide-vue-next";
+import { Search, Users } from "lucide-vue-next";
 
 import type { ContactRequest, User } from "@openglass/core";
 import { api, useContactsStore, useSessionStore } from "@openglass/core";
@@ -184,17 +184,9 @@ const cancel = (r: ContactRequest) => run(r.user.id, () => contacts.cancel(r.use
         v-for="c in local"
         :key="c.user.id"
         :user="c.user"
-        :subtitle="c.verifiedAt ? `${c.user.tag} · verified` : c.user.tag"
+        :subtitle="c.user.tag"
         @open="nav.chat(c.user.id)"
-      >
-        <ShieldCheck
-          v-if="c.verifiedAt"
-          class="size-4 text-primary"
-          :stroke-width="1.75"
-          aria-label="verified"
-          data-testid="verified-mark"
-        />
-      </UserRow>
+      />
 
       <div
         v-if="globalFiltered.length"

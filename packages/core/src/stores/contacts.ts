@@ -136,7 +136,7 @@ export const useContactsStore = defineStore("contacts", {
 
     /** A request between me and `user` was accepted (either direction). */
     onContactAccepted(user: User) {
-      this.addContact({ user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null });
+      this.addContact({ user, mutual: true, addedAt: new Date().toISOString() });
       this.incoming = this.incoming.filter((r) => r.user.id !== user.id);
       this.outgoing = this.outgoing.filter((r) => r.user.id !== user.id);
     },

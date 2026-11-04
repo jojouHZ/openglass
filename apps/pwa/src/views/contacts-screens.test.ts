@@ -87,19 +87,6 @@ describe("S6 contacts and requests", () => {
     w.unmount();
   });
 
-  it("a verified contact gets a shield and 'verified' in its subtitle", async () => {
-    await contacts().refresh();
-    const first = contacts().list[0]!;
-    first.verifiedAt = new Date().toISOString();
-    const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
-    await vi.waitFor(() => {
-      expect(w.findAll('[data-testid="verified-mark"]')).toHaveLength(1);
-    });
-    expect(w.text()).toContain(`${first.user.tag} · verified`);
-    first.verifiedAt = null;
-    w.unmount();
-  });
-
   it("queries filter the local roster without duplicating global hits", async () => {
     const w = mount(S6ContactSearch, { global: { plugins: [router, pinia] } });
     await flush();

@@ -29,6 +29,14 @@ type Mem struct {
 
 	repMu   sync.Mutex
 	reports []*Report // F4 — mem_reports.go
+
+	identityKeys map[string]map[string]*identityKeyRow // F7 — mem_identity.go
+}
+
+// identityKeyRow — a published key plus its revoke flag (soft-delete).
+type identityKeyRow struct {
+	k       IdentityKey
+	revoked bool
 }
 
 type invite struct {

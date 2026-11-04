@@ -153,7 +153,7 @@ export interface ApiClient {
       avatarUrl?: string | null;
     }): Promise<{ user: User }>;
     search(q: string): Promise<{ users: User[] }>;
-    get(userId: string): Promise<{ user: User; verifiedAt: string | null; relationship: Relationship }>;
+    get(userId: string): Promise<{ user: User; relationship: Relationship }>;
   };
   contacts: {
     /** Mutual (accepted) contacts only. */

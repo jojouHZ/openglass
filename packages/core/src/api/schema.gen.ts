@@ -200,6 +200,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/me/identity-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This device's published identity keys (F7, dev tier) */
+        get: operations["listMyIdentityKeys"];
+        /** Publish this device's public identity key (F7, dev tier) */
+        put: operations["putIdentityKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/me/identity-keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of this device's identity keys */
+        delete: operations["revokeIdentityKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/identity-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active identity keys of a mutual contact (F7, dev tier)
+         * @description Mutual contacts only — strangers get 404 so the server never leaks whether keys exist.
+         */
+        get: operations["listIdentityKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{userId}": {
         parameters: {
             query?: never;
@@ -740,6 +795,14 @@ export interface components {
             lastSeenAt: string;
             current: boolean;
         };
+        IdentityKey: {
+            keyId: string;
+            /** @description base64 SPKI — public key only */
+            publicKey: string;
+            label?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         Contact: {
             user: components["schemas"]["User"];
             /** @description Always true — contacts exist only as accepted, mutual pairs (kept for compatibility) */
@@ -749,13 +812,6 @@ export interface components {
              * @description When the request was accepted
              */
             addedAt: string;
-            /**
-             * Format: date-time
-             * @description Last identity verification of this contact (US-2.5/2.6).
-             *     Written by the private layer; always null until the private
-             *     module ships. Drives the optional freshness reminder.
-             */
-            verifiedAt?: string | null;
         };
         Chat: {
             /** Format: uuid */
@@ -907,6 +963,15 @@ export interface components {
         };
         /** @description Authenticated but not allowed */
         Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description State conflict — e.g. keyId reused for a different key */
+        Conflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1376,6 +1441,112 @@ export interface operations {
             400: components["responses"]["ValidationFailed"];
         };
     };
+    listMyIdentityKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        keys: components["schemas"]["IdentityKey"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    putIdentityKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    keyId: string;
+                    /** @description base64 SPKI public key — the device writes it, the server stores it untrusted */
+                    publicKey: string;
+                    /** @description free-form device hint shown by peers (e.g. "phone") */
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Published (re-publish of the same key is idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key: components["schemas"]["IdentityKey"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeIdentityKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listIdentityKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        keys: components["schemas"]["IdentityKey"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getUser: {
         parameters: {
             query?: never;
@@ -1395,13 +1566,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         user: components["schemas"]["User"];
-                        /**
-                         * Format: date-time
-                         * @description Last identity verification of this contact (US-2.5
-                         *     "verified" mark on the profile card). Always null
-                         *     until the private module ships.
-                         */
-                        verifiedAt?: string | null;
                         /**
                          * @description none — strangers; contact_incoming — they sent you a
                          *     contact request that is still pending (drives the
