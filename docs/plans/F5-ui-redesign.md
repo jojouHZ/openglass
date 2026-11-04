@@ -24,22 +24,26 @@ overlays, a11y defaults); stream-chat is a structure reference only.
 - Visual-only: no API/contract/store-semantics change, all `data-testid`s
   stay the contract.
 
-## Slice order (owner revision: public PWA MVP first)
-`F1/F4 → F5 M3–M5 → U1 public mobile acceptance → U2 public M7 sweep
-→ U3 M8 release-candidate gate → R1 real OTP delivery → R2 deployment readiness`.
-Each slice requires owner review before advancing. U3 is a UI candidate, not
-production readiness; R1/R2 remain necessary for a usable production deployment.
+## Slice order (owner correction: private core and UX remain pre-MVP)
+`F1/F4 → F5 M3–M5 → U1 mobile acceptance → V1 SAS design/O8
+→ V2 F7 device verification → V3 M6/F2 same-window private UI/O10
+→ U2 remaining M7 sweep → U3 M8 combined acceptance`.
+R1 real OTP delivery and R2 deployment readiness remain required for production
+operation and can be planned independently of private UI implementation.
+Each slice requires owner review before advancing.
 
-F7 device identity and M6/F2 same-window private UI no longer block the release
-PWA. O8 (SAS), O9 (stale private session after screen lock) and O10 (separate
-private screen) remain open in the post-MVP private/Android workstream. Reproduce
-O9 with Android lifecycle integration and audit the shared core; a browser-only
-root cause has not been established. The proposed hidden-page teardown policy
-was not approved and must not be implemented under the old P0 plan.
+O8, F7 and O10 are explicitly NOT post-MVP. They are implemented and tested in
+the shared private core and dev frontend; the release PWA still excludes private
+artifacts. Do not confuse release-bundle contents with the project's MVP scope.
+Only private browser lifecycle work and platform-specific local-storage features
+are deferred here. Public PWA functionality and its existing storage remain in
+scope. O9 stays open for Android lifecycle/core investigation; a browser-only root
+cause is not established. Shared-core isolation or authentication defects found
+later must be triaged on their merits, not automatically deferred as browser bugs.
+The hidden-page teardown policy was not approved and must not be implemented.
 
-The older session/P0 plans below are historical proposals, superseded by this
-revision. F7 → M6 remains the private-workstream dependency, not an MVP gate.
-Desktop split view is a separate later slice (F6).
+The historical session/P0 plans below are superseded. F7 → M6 remains required.
+Desktop split view stays a separate later slice (F6).
 
 ## Current execution slices
 
@@ -81,16 +85,56 @@ and continue locally; do not mark them passed or rush unsafe changes. Before
 cancellation, ask whether test data/uploads need preservation; no deletion or
 backup/export of private data is implicit in this plan.
 
+### V1 — O8: five-symbol verification design and consistent visuals
+Security/Core audit the current per-session SAS and the planned F7 device-pair
+fingerprint separately. Specify canonical input, domain separation, symbol-set
+size, entropy and comparison/rejection flow before changing output length.
+Five symbols are the owner target, not permission to truncate an existing digest
+without review. If security strength is insufficient, present the tradeoff to
+the owner before implementation. PWA renders identical locally hosted licensed
+assets and stable labels across devices. Testing supplies deterministic vectors,
+pair-order tests and desktop/mobile rendering checks. Avoid an interim session-SAS
+rewrite that would immediately be discarded by F7; reusable mapping/rendering
+belongs here and F7 integration in V2.
+
+### V2 — F7: device-pair verification, without a browser-storage expansion
+Backend/Core/Security implement the F7 identity-directory and signed-handshake
+contract in reviewable increments: public key publication/access/revocation,
+identity and pin logic, then verification/integration tests. Verification is per
+device pair, not an account-level badge; unknown/changed keys block private sends.
+The server must not receive the local pin graph; keys stay behind PrivateRemote.
+
+Retain the existing F7 specification as the architecture reference, but review
+its storage-dependent parts before implementation. Define a storage adapter and
+the minimum dev-test identity/pin lifecycle explicitly; this planning update does
+not authorize replacing IndexedDB with an insecure store or silently switching
+to volatile identity. Browser persistence, vault/unlock, recovery and native
+keystore integrations are deferred; cryptographic correctness and cross-user
+isolation are not. The dev implementation must honestly expose whether reload
+requires re-verification. Any change to F7's persistence/sign-out contract needs
+owner approval before code. Test with an isolated adapter while that decision is
+pending; do not mark integrated F7 complete from adapter-only tests.
+
+### V3 — O10 / M6 / F2: same-window private mode
+After V2, embed the private pane in S5 as concept 07 specifies: verification
+entry, settings sheet, invite/waiting/ended states, explicit layer control,
+private composer, view-once and burn. Preserve public history and drafts without
+wrong-layer sends; snapshots only cross the host boundary. No browser-background
+repair or persistent-storage feature is added here. Test invite/verification,
+bidirectional delivery, rejection, TTL, burn and layer transitions in Chromium;
+check phone layout when available. Keep O9 documented as an unresolved dev-host
+limitation, not a passing lifecycle test or a zero-trace guarantee.
+
 ### U2 — public M7 completion
 Audit S1–S3, S7–S9a, S14/S15 and shared dialogs against concept 07. Implement only
 missing public styling, loading/empty/error states, focus/keyboard/44px target
 and reduced-motion behavior; retain API semantics and testids. Break into small
-screen-family commits; owner reviews each increment. Private frames are deferred,
-not silently reported complete. No features added to fill visual empty space.
+screen-family commits; owner reviews each increment. Private frames are covered
+by V3, not deferred. No features added to fill visual empty space.
 
-### U3 — M8 public release-candidate verification
-Run the full local `pnpm gate`, public real-Chromium E2E, bundle exclusion checks
-and concept comparison. Record real-device coverage and remaining limitations;
+### U3 — M8 combined acceptance
+Run the full local `pnpm gate`, public and dev-private real-Chromium E2E,
+release-bundle exclusion checks and public/private concept comparison. Record real-device coverage and remaining limitations;
 owner approval is required before any separately authorized merge. Update the
 phase journal before a later approved knowledge refresh. No push/merge by default.
 
