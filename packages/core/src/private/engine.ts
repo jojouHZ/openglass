@@ -90,6 +90,11 @@ export interface EncryptedEnvelope {
 export interface KeyEnvelope {
   t: "key";
   k: string;
+  /** handshake v2 (F7): `i` = sender's identity pub (b64 SPKI), `s` =
+   *  ECDSA signature over the raw `k` bytes. Unsigned envelopes are
+   *  rejected — the pinned-pair check is the only trust path. */
+  s?: string;
+  i?: string;
 }
 
 export type Envelope = EncryptedEnvelope | KeyEnvelope;

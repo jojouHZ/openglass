@@ -59,7 +59,7 @@ async function bootstrap() {
     // the contract; the store instance never crosses the MFE boundary
     const remote = createPrivateRemoteFor(pinia);
     app.provide(PRIVATE_REMOTE_KEY, remote);
-    remote.boot("/api/v1/relay", () => session.accessToken);
+    remote.boot("/api/v1/relay", () => session.accessToken, session.user?.id ?? "");
     wirePrivateLifecycle(remote, session);
   }
 

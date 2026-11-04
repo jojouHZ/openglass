@@ -68,6 +68,8 @@ function seeded(store: ReturnType<typeof usePrivateStore>, over: Partial<Private
     resumeToken: null,
     ownKeys: null,
     pendingPeerPub: null,
+    pendingPeerSig: null,
+    pendingPeerIdent: null,
     sessionKey: null,
     sas: null,
     messages: [],
@@ -179,7 +181,7 @@ describe("PrivateRemote — host boundary", () => {
     expect(seen.length).toBe(n);
   });
 
-  it("watchInvites reports incoming and outgoing; cancelInvite clears ours", () => {
+  it("watchInvites reports incoming and outgoing; cancelInvite clears ours", async () => {
     const { store, relay, remote } = setup();
     const seen: { incoming: number; outgoing: string[] }[] = [];
     remote.watchInvites((v) =>
@@ -187,7 +189,15 @@ describe("PrivateRemote — host boundary", () => {
     );
     expect(seen.at(-1)).toEqual({ incoming: 0, outgoing: [] });
 
+    // handshake v2: invites are pin-gated — seed a pin for the peer
+    store.pins.set(PEER.id, {
+      peerUserId: PEER.id,
+      keyId: "k",
+      publicKey: "pk",
+      verifiedAt: new Date().toISOString(),
+    });
     remote.startInvite(PEER, { ttlSeconds: 60 });
+    await new Promise((r) => setTimeout(r, 10)); // pin-gate is async
     expect(seen.at(-1)!.outgoing).toEqual([PEER.id]);
     expect(relay.sent.at(-1)!.type).toBe("relay.invite");
 
