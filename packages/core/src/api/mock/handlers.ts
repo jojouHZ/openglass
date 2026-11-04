@@ -235,7 +235,7 @@ export function createHandlers(state: MockState) {
       await delay(LATENCY_MS);
       const user = state.findUser(String(params.userId));
       if (!user) return err(404, "not_found", "User not found");
-      return ok({ user, verifiedAt: null, relationship: state.relationship(user.id) });
+      return ok({ user, relationship: state.relationship(user.id) });
     }),
 
     // ---------- contacts ----------
@@ -264,7 +264,7 @@ export function createHandlers(state: MockState) {
         // they already asked me — collapse into a mutual contact
         const i = state.incomingRequests.findIndex((x) => x.user.id === userId);
         state.incomingRequests.splice(i, 1);
-        const contact: Contact = { user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null };
+        const contact: Contact = { user, mutual: true, addedAt: new Date().toISOString() };
         state.contacts.push(contact);
         return ok({ relationship: "contact_mutual", contact }, 201);
       }
@@ -287,7 +287,7 @@ export function createHandlers(state: MockState) {
       const i = state.incomingRequests.findIndex((r) => r.user.id === params.userId);
       if (i === -1) return err(404, "not_found", "Request not found");
       const [req] = state.incomingRequests.splice(i, 1);
-      const contact: Contact = { user: req!.user, mutual: true, addedAt: new Date().toISOString(), verifiedAt: null };
+      const contact: Contact = { user: req!.user, mutual: true, addedAt: new Date().toISOString() };
       state.contacts.push(contact);
       return ok({ contact });
     }),

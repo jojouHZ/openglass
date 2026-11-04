@@ -115,6 +115,12 @@ func (s *Server) Handler(wsHandler http.HandlerFunc) http.Handler {
 	v1.HandleFunc("GET /users/search", s.requireAuth(s.searchUsers))
 	v1.HandleFunc("GET /users/{userId}", s.requireAuth(s.getUser))
 
+	// identity-key directory (F7) — public keys only; GET is mutual-only
+	v1.HandleFunc("PUT /users/me/identity-keys", s.requireAuth(s.putIdentityKey))
+	v1.HandleFunc("GET /users/me/identity-keys", s.requireAuth(s.listMyIdentityKeys))
+	v1.HandleFunc("GET /users/{userId}/identity-keys", s.requireAuth(s.listIdentityKeys))
+	v1.HandleFunc("DELETE /users/me/identity-keys/{keyId}", s.requireAuth(s.revokeIdentityKey))
+
 	// ws — upgrade + first-frame auth inside
 	v1.HandleFunc("GET /ws", wsHandler)
 

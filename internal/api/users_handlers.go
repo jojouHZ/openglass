@@ -80,10 +80,8 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		rel = "none"
 	}
-	// verifiedAt: always null until the private module ships (contract)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":         userJSON(u),
-		"verifiedAt":   nil,
 		"relationship": rel,
 	})
 }

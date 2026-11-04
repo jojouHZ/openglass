@@ -93,7 +93,6 @@ export class HttpApiClient implements ApiClient {
     get: (userId: string) =>
       this.t.request<{
         user: import("../client").User;
-        verifiedAt: string | null;
         relationship: import("../client").Relationship;
       }>({ method: "GET", path: `/users/${userId}` }),
   };

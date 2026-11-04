@@ -81,15 +81,31 @@ type AuthStore interface {
 	// SessionActive — false when revoked or absent (middleware gate).
 	SessionActive(ctx context.Context, sessionID string) (bool, error)
 	ListSessions(ctx context.Context, userID, currentID string) ([]Session, error)
+
+	// identity-key directory (F7) — public keys only; ErrConflict on a
+	// re-published key_id with a DIFFERENT public key (re-publish of the
+	// same key is idempotent), ErrNotFound on revoke of an unknown key.
+	PutIdentityKey(ctx context.Context, userID, keyID, publicKey, label string) (*IdentityKey, error)
+	// ListIdentityKeys — active (non-revoked) keys of one user.
+	ListIdentityKeys(ctx context.Context, userID string) ([]IdentityKey, error)
+	RevokeIdentityKey(ctx context.Context, userID, keyID string) error
 }
 
 // ---- Messaging domain (phase B) ----
 
 type Contact struct {
-	User       User
-	Mutual     bool
-	AddedAt    time.Time
-	VerifiedAt *time.Time // private layer writes; always nil for now
+	User    User
+	Mutual  bool
+	AddedAt time.Time
+}
+
+// IdentityKey — one device's PUBLIC identity key, published to the
+// directory (F7). The server never learns who pinned whom.
+type IdentityKey struct {
+	KeyID     string
+	PublicKey string // base64 SPKI
+	Label     string // free-form device hint shown by peers, e.g. "phone"
+	CreatedAt time.Time
 }
 
 // ContactRequest — a pending request, seen from either side.
