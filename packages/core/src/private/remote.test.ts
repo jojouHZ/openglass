@@ -113,7 +113,7 @@ describe("PrivateRemote — host boundary", () => {
     );
     seeded(store, {
       sessionKey: key,
-      sas: ["😀", "😁"],
+      sas: { symbols: [0, 5, 42, 127, 3, 64], digits: "019283" },
       resumeToken: "secret-resume",
       pendingPeerPub: "b64pub",
       messages: [{ id: "m1", fromMe: false, text: "hi", ts: 1, viewOnce: true }],

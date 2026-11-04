@@ -129,24 +129,34 @@ export async function decryptEnvelope(
   return JSON.parse(new TextDecoder().decode(pt)) as MsgPayload;
 }
 
-/** 64-emoji alphabet for the SAS grid — stable across clients. */
-export const SAS_EMOJI = [
-  "😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😋","😎","😍","😘","🥰","😗",
-  "😙","😚","🙂","🤗","🤩","🤔","🤨","😐","😑","😶","🙄","😏","😣","😥","😮","🤐",
-  "😯","😪","😫","🥱","😴","😌","😛","😜","😝","🤤","😒","😓","😔","😕","🙃","🤑",
-  "😲","🙁","😖","😞","😟","😤","😢","😭","😦","😧","😨","😩","🤯","😬","😰","😱",
-] as const;
+/** Object set size — indexes into a shell-owned list of nameable items
+ *  (animals, food, objects) rendered identically on every platform.
+ *  The core emits only indexes; the shell maps them to its own icons. */
+export const SAS_SYMBOL_COUNT = 128;
+export const SAS_SYMBOL_LEN = 6;
+export const SAS_DIGIT_LEN = 6;
 
 /**
  * SAS fingerprint — the ONLY MITM defense (threat model): both parties
- * compare the emoji grid out-of-band. Derived from BOTH session public
- * keys in canonical byte order, so both sides compute identical output
- * and a relay-substituted key produces a different grid.
+ * compare the symbol row + digit code out-of-band. Derived from BOTH
+ * session public keys in canonical byte order, so both sides compute
+ * identical output and a relay-substituted key produces a different one.
+ *
+ * Symbols are spoken over a voice channel ("giraffe train orange…") —
+ * one-word objects, not faces; digits are the fallback channel.
+ * 6 symbols × log2(128) + 6 digits ≈ 62 bits of comparison entropy.
  */
+export interface SasFingerprint {
+  /** indexes into the shell's object set — length SAS_SYMBOL_LEN */
+  symbols: number[];
+  /** SAS_DIGIT_LEN decimal digits */
+  digits: string;
+}
+
 export async function sasFingerprint(
   ownRawPub: string,
   peerRawPub: string,
-): Promise<string[]> {
+): Promise<SasFingerprint> {
   const a = fromB64(ownRawPub);
   const b = fromB64(peerRawPub);
   // canonical order — both sides must hash the same byte sequence
@@ -155,9 +165,15 @@ export async function sasFingerprint(
   cat.set(first);
   cat.set(second, first.length);
   const digest = new Uint8Array(await subtle().digest("SHA-256", cat as BufferSource));
-  const grid: string[] = [];
-  for (let i = 0; i < 12; i++) grid.push(SAS_EMOJI[digest[i] % SAS_EMOJI.length]);
-  return grid;
+  const symbols: number[] = [];
+  for (let i = 0; i < SAS_SYMBOL_LEN; i++) {
+    symbols.push(digest[i] % SAS_SYMBOL_COUNT);
+  }
+  let digits = "";
+  for (let i = SAS_SYMBOL_LEN; i < SAS_SYMBOL_LEN + SAS_DIGIT_LEN; i++) {
+    digits += String(digest[i] % 10);
+  }
+  return { symbols, digits };
 }
 
 function compareBytes(a: Uint8Array, b: Uint8Array): number {
