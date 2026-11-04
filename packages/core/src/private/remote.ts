@@ -78,7 +78,11 @@ export interface PrivateRemote {
   // lifecycle — the host owns platform lifecycle (pagehide, app pause,
   // logout) and maps it to these commands; the core never touches
   // window/document itself, so every shell can drive the same contract.
-  boot(relayUrl: string, getAccessToken: () => string | null): void;
+  boot(
+    relayUrl: string,
+    getAccessToken: () => string | null,
+    meUserId?: string,
+  ): void;
   connect(): void;
   /** zero-trace: wipe all volatile state, disconnect, delete the
    *  IndexedDB identity store. Fire-and-forget on pagehide. */
@@ -174,8 +178,8 @@ export function createPrivateRemote(
   store.onChange(emit);
 
   return {
-    boot(relayUrl, getAccessToken) {
-      store.boot(relayUrl, getAccessToken);
+    boot(relayUrl, getAccessToken, meUserId) {
+      store.boot(relayUrl, getAccessToken, undefined, meUserId);
     },
     connect() {
       store.connect();

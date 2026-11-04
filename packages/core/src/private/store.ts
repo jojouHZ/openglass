@@ -27,6 +27,13 @@ import {
   type SessionKeyPair,
 } from "./engine";
 import { prepareIdentityStore, wipeIdentityStore } from "./keys";
+import {
+  getOrCreateDeviceIdentity,
+  signWithIdentity,
+  verifyIdentitySignature,
+  type DeviceIdentity,
+} from "./identity";
+import { getPin, listPins, type DevicePin } from "./pins";
 import { RelayClient, type ConnState, type PeerUser } from "./relay";
 
 export type PrivateStatus =
@@ -62,6 +69,8 @@ export interface PrivateSession {
   ownKeys: SessionKeyPair | null;
   /** peer's key arrived before our established finished — process later */
   pendingPeerPub: string | null;
+  pendingPeerSig: string | null;
+  pendingPeerIdent: string | null;
   sessionKey: CryptoKey | null;
   sas: SasFingerprint | null;
   messages: PrivateMessage[];
@@ -100,6 +109,13 @@ export const usePrivateStore = defineStore("private", {
     reconnectDelay: 1000,
     relayUrl: "",
     getAccessToken: null as null | (() => string | null),
+    /** F7 — signed-in user id + this device's ECDSA identity (loaded
+     *  at boot); pins are cached for synchronous invite gating. */
+    meUserId: "",
+    identity: null as DeviceIdentity | null,
+    pins: new Map<string, DevicePin>(), // peerUserId → pin
+    /** resolves once identity + pin cache are loaded — gates await it */
+    ready: null as Promise<void> | null,
     /** remote facade listeners — callbacks only, no private data; the
      *  imperative tick keeps host↔remote updates independent of Vue's
      *  deep reactivity across the module boundary */
@@ -155,6 +171,7 @@ export const usePrivateStore = defineStore("private", {
       relayUrl: string,
       getAccessToken: () => string | null,
       client?: RelayClient,
+      meUserId = "",
     ): void {
       if (this.client) return;
       // a surviving identity DB means the last session died dirty —
@@ -163,6 +180,21 @@ export const usePrivateStore = defineStore("private", {
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
       this.client = client ?? new RelayClient(relayUrl);
+      this.meUserId = meUserId;
+      // identity + pin cache — gates must not see a half-loaded store:
+      // an invite fired before they resolve would wrongly fail the pin
+      // check, so pin-gated paths await this.ready first.
+      this.ready = (async () => {
+        try {
+          if (meUserId) {
+            this.identity = await getOrCreateDeviceIdentity(meUserId);
+            const pins = await listPins(meUserId);
+            this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
+          }
+        } finally {
+          this.notify();
+        }
+      })();
       const c = this.client;
 
       c.on("relay.invite", (ev) => {
@@ -177,6 +209,8 @@ export const usePrivateStore = defineStore("private", {
           resumeToken: null,
           ownKeys: null,
           pendingPeerPub: null,
+          pendingPeerSig: null,
+          pendingPeerIdent: null,
           sessionKey: null,
           sas: null,
           messages: [],
@@ -205,6 +239,8 @@ export const usePrivateStore = defineStore("private", {
           resumeToken: null,
           ownKeys: null,
           pendingPeerPub: null,
+          pendingPeerSig: null,
+          pendingPeerIdent: null,
           sessionKey: null,
           sas: null,
           messages: [],
@@ -312,23 +348,38 @@ export const usePrivateStore = defineStore("private", {
     /** Inviter flow — S10. The session appears on relay.established;
      *  our own flags travel via pendingInvites (the contract doesn't
      *  echo them back to the inviter). */
+    /** F7 gate — a private session may be offered only to a peer whose
+     *  device we have pinned out-of-band. Unpinned → the call is a
+     *  no-op; the host shows the lock instead (never a silent wire send). */
+    async pinned(peerId: string): Promise<boolean> {
+      await this.ready;
+      return this.pins.has(peerId);
+    },
+
     startInvite(
       peer: PeerUser,
       opts: { ttlSeconds?: number; burnOnRead?: boolean; strict?: boolean } = {},
     ): void {
-      // server invite TTL is 60 s — if relay.invited never arrives the
-      // invite was rejected and this marker must die with it
-      this.pendingInvites.set(peer.id, {
-        burnOnRead: opts.burnOnRead ?? false,
-        strict: opts.strict ?? false,
-        expiresAt: Date.now() + 70_000,
-      });
-      this.client?.invite(peer.id, opts);
-      this.notify();
+      void (async () => {
+        if (!(await this.pinned(peer.id))) return;
+        // server invite TTL is 60 s — if relay.invited never arrives the
+        // invite was rejected and this marker must die with it
+        this.pendingInvites.set(peer.id, {
+          burnOnRead: opts.burnOnRead ?? false,
+          strict: opts.strict ?? false,
+          expiresAt: Date.now() + 70_000,
+        });
+        this.client?.invite(peer.id, opts);
+        this.notify();
+      })();
     },
 
     accept(sessionId: string): void {
-      this.client?.accept(sessionId);
+      void (async () => {
+        const s = this.sessions.get(sessionId);
+        if (!s || !(await this.pinned(s.peer.id))) return;
+        this.client?.accept(sessionId);
+      })();
     },
     decline(sessionId: string): void {
       this.client?.decline(sessionId);
@@ -357,6 +408,8 @@ export const usePrivateStore = defineStore("private", {
         resumeToken: null,
         ownKeys: null,
         pendingPeerPub: null,
+        pendingPeerSig: null,
+        pendingPeerIdent: null,
         sessionKey: null,
         sas: null,
         messages: [],
@@ -377,7 +430,15 @@ export const usePrivateStore = defineStore("private", {
         if (!s.ownKeys) {
           const own = await generateSessionKeyPair();
           s.ownKeys = own;
-          this.client?.sendEnvelope(d.sessionId, encodeEnv({ t: "key", k: own.rawPub }));
+          await this.ready;
+          // handshake v2 — sign the ephemeral pub with this device's
+          // identity; the peer verifies it against their pin of us
+          const env: Envelope = { t: "key", k: own.rawPub };
+          if (this.identity) {
+            env.i = this.identity.pubB64;
+            env.s = await signWithIdentity(this.identity, fromB64(own.rawPub));
+          }
+          this.client?.sendEnvelope(d.sessionId, encodeEnv(env));
         }
         // envelopes may have arrived before the session existed locally —
         // drain in wire order (key envelope first, then msgs); arrivals
@@ -396,23 +457,46 @@ export const usePrivateStore = defineStore("private", {
       }
       // peer's key may have arrived while our pair was generating
       if (s.pendingPeerPub) {
-        await this.onPeerKey(d.sessionId, s.pendingPeerPub);
+        await this.onPeerKey(d.sessionId, s.pendingPeerPub, s.pendingPeerSig ?? undefined, s.pendingPeerIdent ?? undefined);
       }
       this.notify();
       // reconnect path — drain anything buffered for us
       this.client?.resume(d.sessionId, d.resumeToken);
     },
 
-    async onPeerKey(sessionId: string, peerRawPub: string): Promise<void> {
+    /** Handshake v2 — the peer's ephemeral key arrives signed by THEIR
+     *  device identity. Pinned pair: pin.publicKey === claimed identity
+     *  AND the signature verifies → session is `verified` by
+     *  construction (the ritual already happened, per device pair).
+     *  Anything else — unsigned, forged, unpinned, key-changed — closes
+     *  the session; there is no unverified state left to abuse. */
+    async onPeerKey(
+      sessionId: string,
+      peerRawPub: string,
+      peerSig?: string,
+      peerIdent?: string,
+    ): Promise<void> {
       const s = this.sessions.get(sessionId);
       if (!s?.ownKeys) return;
+      s.pendingPeerPub = null;
+      s.pendingPeerSig = null;
+      s.pendingPeerIdent = null;
+      const pin = this.pins.get(s.peer.id) ?? (await getPin(this.meUserId, s.peer.id));
+      const ok =
+        !!pin &&
+        !!peerIdent &&
+        pin.publicKey === peerIdent &&
+        !!peerSig &&
+        (await verifyIdentitySignature(peerIdent, fromB64(peerRawPub), peerSig));
+      if (!ok) {
+        s.status = "closed";
+        this.wipeSessionSecrets(s);
+        this.notify();
+        return;
+      }
       s.sessionKey = await deriveSessionKey(s.ownKeys, peerRawPub);
       s.sas = await sasFingerprint(s.ownKeys.rawPub, peerRawPub);
-      s.pendingPeerPub = null;
-      // any new key material invalidates the old SAS — a re-keyed or
-      // re-established session MUST be re-verified, a "verified" flag
-      // can never survive a key change
-      if (s.status !== "closed") s.status = "unverified";
+      if (s.status !== "closed") s.status = "verified";
       this.notify();
     },
 
@@ -448,9 +532,11 @@ export const usePrivateStore = defineStore("private", {
       if (env.t === "key") {
         if (!s.ownKeys) {
           s.pendingPeerPub = env.k;
+          s.pendingPeerSig = env.s ?? null;
+          s.pendingPeerIdent = env.i ?? null;
           return;
         }
-        await this.onPeerKey(sessionId, env.k);
+        await this.onPeerKey(sessionId, env.k, env.s, env.i);
         return;
       }
       if (env.t === "msg" && s.sessionKey) {
@@ -563,6 +649,8 @@ export const usePrivateStore = defineStore("private", {
     wipeSessionSecrets(s: PrivateSession): void {
       s.ownKeys = null;
       s.pendingPeerPub = null;
+      s.pendingPeerSig = null;
+      s.pendingPeerIdent = null;
       s.sessionKey = null;
       s.sas = null;
       s.messages = [];
@@ -595,6 +683,10 @@ export const usePrivateStore = defineStore("private", {
       this.sessions.clear();
       this.pendingEnvelopes.clear();
       this.pendingInvites.clear();
+      this.identity = null;
+      this.pins.clear();
+      this.meUserId = "";
+      this.ready = null;
       this.relayState = "offline";
       this.notify();
       await wipeIdentityStore();

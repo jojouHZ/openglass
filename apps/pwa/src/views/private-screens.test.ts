@@ -105,6 +105,8 @@ function seedSession(over: Partial<import("@openglass/core/private/store").Priva
     resumeToken: "rt",
     ownKeys: null,
     pendingPeerPub: null,
+    pendingPeerSig: null,
+    pendingPeerIdent: null,
     sessionKey: seededKey,
     sas: { symbols: [0, 1, 2, 3, 4, 5], digits: "012345" },
     messages: [],
@@ -126,6 +128,13 @@ beforeAll(async () => {
   );
   await chats().refreshChats();
   priv().boot("/api/v1/relay", () => "tok", relay);
+  // handshake v2: invites/accepts are pin-gated — seed a pin for wife
+  priv().pins.set(wife.id, {
+    peerUserId: wife.id,
+    keyId: "k",
+    publicKey: "pk",
+    verifiedAt: new Date().toISOString(),
+  });
 });
 afterAll(() => ctx.server.close());
 
@@ -243,6 +252,7 @@ describe("S11 session setup", () => {
     await w.find('[data-testid="ttl-300"]').trigger("click");
     await w.find('[data-testid="opt-strict"]').trigger("click");
     await w.find('[data-testid="start-private"]').trigger("click");
+    await flushPromises(); // invite is pin-gated — async now
 
     // burn-on-read moved to the per-message composer toggle — the
     // session invite no longer carries it from the UI
@@ -278,6 +288,7 @@ describe("S10 private invite", () => {
     expect(w.find('[data-testid="invite-incoming"]').exists()).toBe(true);
 
     await w.find('[data-testid="invite-accept"]').trigger("click");
+    await flushPromises(); // accept is pin-gated — async now
     expect(relay.accept).toHaveBeenCalledWith("ps-in3");
   });
 
@@ -306,6 +317,7 @@ describe("PrivateInviteCard", () => {
     await w.vm.$nextTick();
     expect(w.find('[data-testid="private-invite-card"]').exists()).toBe(true);
     await w.find('[data-testid="private-accept"]').trigger("click");
+    await flushPromises(); // accept is pin-gated — async now
     expect(relay.accept).toHaveBeenCalledWith("ps-in");
     expect(w.emitted("verify")?.[0]).toEqual(["ps-in"]);
   });

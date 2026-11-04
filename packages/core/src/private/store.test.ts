@@ -1,6 +1,7 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import "fake-indexeddb/auto";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
 
@@ -104,20 +105,38 @@ function flush(ms = 50): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Two independent party stores — one pinia per "device". */
-function twoParties(): {
+/** Two independent party stores — one pinia per "device". Boots with
+ *  identity + cross-pins (handshake v2): sa pins B's identity key and
+ *  vice versa, so signed envelopes verify and the pair is "verified"
+ *  by construction — no manual SAS step. */
+async function twoParties(): Promise<{
   sa: ReturnType<typeof usePrivateStore>;
   sb: ReturnType<typeof usePrivateStore>;
   ra: FakeRelay;
   rb: FakeRelay;
-} {
+}> {
   const { a: ra, b: rb } = makePair();
   setActivePinia(createPinia());
   const sa = usePrivateStore();
-  sa.boot("/relay", () => "tok", ra);
+  sa.boot("/relay", () => "tok", ra, USER_A.id);
   setActivePinia(createPinia());
   const sb = usePrivateStore();
-  sb.boot("/relay", () => "tok", rb);
+  sb.boot("/relay", () => "tok", rb, USER_B.id);
+  await sa.ready;
+  await sb.ready;
+  const pin = (peer: ReturnType<typeof usePrivateStore>) =>
+    peer.identity
+      ? {
+          peerUserId: peer.meUserId,
+          keyId: peer.identity.keyId,
+          publicKey: peer.identity.pubB64,
+          verifiedAt: new Date().toISOString(),
+        }
+      : null;
+  const pA = pin(sa)!;
+  const pB = pin(sb)!;
+  sa.pins.set(USER_B.id, { ...pB, peerUserId: USER_B.id });
+  sb.pins.set(USER_A.id, { ...pA, peerUserId: USER_A.id });
   return { sa, sb, ra, rb };
 }
 
@@ -135,7 +154,7 @@ function established(
 
 describe("private store — session lifecycle", () => {
   it("invite → established → key exchange → unverified → encrypted send", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
 
     // b gets an invite
     rb.emit({
@@ -144,19 +163,21 @@ describe("private store — session lifecycle", () => {
     });
     expect(sb.sessions.get("s1")?.status).toBe("incoming");
     sb.accept("s1");
+    await flush(); // accept is pin-gated — async now
     expect(rb.sent.some((f) => f.type === "relay.accept")).toBe(true);
 
-    // both sides get established → both send key envelopes
+    // both sides get established → both send signed key envelopes;
+    // pinned pair verifies by construction — no manual SAS step
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
 
     const a = sa.sessions.get("s1")!;
     const b = sb.sessions.get("s1")!;
-    expect(a.status).toBe("unverified");
-    expect(b.status).toBe("unverified");
+    expect(a.status).toBe("verified");
+    expect(b.status).toBe("verified");
     expect(a.sas).not.toBeNull();
-    // both sides see the same emoji grid
+    // both sides derive the same session fingerprint
     expect(a.sas).toEqual(b.sas);
 
     // encrypted send — delivered + decrypted on the other side
@@ -165,13 +186,10 @@ describe("private store — session lifecycle", () => {
     expect(b.messages).toHaveLength(1);
     expect(b.messages[0].text).toBe("ghp_secret_token");
     expect(b.messages[0].fromMe).toBe(false);
-
-    sa.markVerified("s1");
-    expect(sa.sessions.get("s1")!.status).toBe("verified");
   });
 
   it("burn wipes secrets but keeps the closed session entry", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
 
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
@@ -194,7 +212,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("peer-offline sets a deadline; peer-online clears it", async () => {
-    const { sa, ra } = twoParties();
+    const { sa, ra } = await twoParties();
     established(ra, "s1", USER_B);
     await flush();
     ra.emit({
@@ -207,7 +225,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("teardown wipes every session, disconnects and clears the map", async () => {
-    const { sa, ra } = twoParties();
+    const { sa, ra } = await twoParties();
     established(ra, "s1", USER_B);
     established(ra, "s2", USER_A);
     await flush();
@@ -218,7 +236,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("undecryptable envelopes are dropped silently", async () => {
-    const { sb, ra, rb } = twoParties();
+    const { sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
@@ -233,13 +251,12 @@ describe("private store — session lifecycle", () => {
   });
 
   it("re-emitted established (reconnect) keeps keys and verification", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
     await sa.send("s1", "before");
     await flush();
-    sa.markVerified("s1");
     const keyBefore = sa.sessions.get("s1")!.sessionKey;
     const sasBefore = sa.sessions.get("s1")!.sas;
 
@@ -256,16 +273,15 @@ describe("private store — session lifecycle", () => {
     expect(sb.sessions.get("s1")!.messages.map((m) => m.text)).toContain("after");
   });
 
-  it("a new peer key envelope downgrades verified → unverified", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+  it("handshake v2: an unsigned or forged peer key envelope closes the session", async () => {
+    const { sa, sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
-    sa.markVerified("s1");
-    sb.markVerified("s1");
     expect(sb.sessions.get("s1")!.status).toBe("verified");
 
-    // peer reloaded / re-keyed: fresh key envelope arrives
+    // adversarial relay: substitutes a fresh ephemeral key, unsigned —
+    // must NOT silently establish (the old downgrade path is gone)
     const { generateSessionKeyPair } = await import("./engine");
     const fresh = await generateSessionKeyPair();
     const keyEnv = btoa(
@@ -275,12 +291,37 @@ describe("private store — session lifecycle", () => {
     );
     rb.emit({ type: "relay.msg", data: { sessionId: "s1", msgSeq: 7, blob: keyEnv } });
     await flush();
-    expect(sb.sessions.get("s1")!.status).toBe("unverified");
-    expect(sb.sessions.get("s1")!.sas).not.toEqual(sa.sessions.get("s1")!.sas);
+    expect(sb.sessions.get("s1")!.status).toBe("closed");
+    expect(sb.sessions.get("s1")!.sessionKey).toBeNull();
+    expect(sb.sessions.get("s1")!.sas).toBeNull();
+  });
+
+  it("handshake v2: a key signed by the WRONG identity closes the session", async () => {
+    const { sa, sb, ra, rb } = await twoParties();
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+
+    // forged envelope: valid signature but under a DIFFERENT identity
+    // than the pinned one → pin mismatch → closed
+    const { getOrCreateDeviceIdentity, signWithIdentity } = await import("./identity");
+    const evil = await getOrCreateDeviceIdentity("mallory");
+    const { generateSessionKeyPair } = await import("./engine");
+    const fresh = await generateSessionKeyPair();
+    const { fromB64 } = await import("./engine");
+    const sig = await signWithIdentity(evil, fromB64(fresh.rawPub));
+    const keyEnv = btoa(
+      new TextEncoder()
+        .encode(JSON.stringify({ t: "key", k: fresh.rawPub, s: sig, i: evil.pubB64 }))
+        .reduce((s, c) => s + String.fromCharCode(c), ""),
+    );
+    rb.emit({ type: "relay.msg", data: { sessionId: "s1", msgSeq: 7, blob: keyEnv } });
+    await flush();
+    expect(sb.sessions.get("s1")!.status).toBe("closed");
   });
 
   it("a malformed (non-base64/JSON) blob is dropped, not thrown", async () => {
-    const { sb, ra, rb } = twoParties();
+    const { sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
@@ -292,8 +333,9 @@ describe("private store — session lifecycle", () => {
   });
 
   it("relay.invited acks the invite; declined/expired correlate by sessionId", async () => {
-    const { sa, ra } = twoParties();
+    const { sa, ra } = await twoParties();
     sa.startInvite(USER_B, { burnOnRead: true, ttlSeconds: 300 });
+    await flush(); // invite is pin-gated — async now
     expect(sa.outgoingInvites).toContain("ub"); // pre-ack pending marker
 
     // server ack — the session gets a real id and echo'd flags
@@ -312,8 +354,8 @@ describe("private store — session lifecycle", () => {
     expect(sa.outgoingInvites).not.toContain("ub");
   });
 
-  it("expired pendingInvites are filtered from outgoingInvites", () => {
-    const { sa } = twoParties();
+  it("expired pendingInvites are filtered from outgoingInvites", async () => {
+    const { sa } = await twoParties();
     sa.pendingInvites.set("ub", {
       burnOnRead: false,
       strict: false,
@@ -323,7 +365,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("connect self-heals after teardown (logout→login in the same page)", async () => {
-    const { sa } = twoParties();
+    const { sa } = await twoParties();
     await sa.teardown();
     expect(sa.client).toBeNull();
     sa.connect(); // must rebuild + re-wire the client, not no-op
@@ -331,7 +373,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("view-once: display receipts burn the sender's copy, exit purges ours", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
@@ -358,7 +400,7 @@ describe("private store — session lifecycle", () => {
   });
 
   it("replayed msgSeq is deduplicated (resume buffer flush)", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
     established(ra, "s1", USER_B);
     established(rb, "s1", USER_A);
     await flush();
@@ -376,8 +418,9 @@ describe("private store — session lifecycle", () => {
   });
 
   it("inviter's own flags survive via pendingInvites; outgoingInvites tracks", async () => {
-    const { sa, sb, ra, rb } = twoParties();
+    const { sa, sb, ra, rb } = await twoParties();
     sa.startInvite(USER_B, { burnOnRead: true, strict: true, ttlSeconds: 300 });
+    await flush(); // invite is pin-gated — async now
     expect(sa.outgoingInvites).toContain("ub");
     expect(ra.sent[0]).toMatchObject({
       type: "relay.invite",
@@ -411,6 +454,8 @@ describe("private session — type surface", () => {
       resumeToken: null,
       ownKeys: null,
       pendingPeerPub: null,
+      pendingPeerSig: null,
+      pendingPeerIdent: null,
       sessionKey: null,
       sas: null,
       messages: [],
