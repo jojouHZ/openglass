@@ -115,6 +115,31 @@ Transport tests cover PUT, both GET routes, DELETE/204, current bearer
 token injection, path encoding, payload whitelisting and error propagation.
 These are mocked HTTP tests, not evidence of browser ritual completion.
 
+### V2d.1b — device-specific directory identifiers
+
+Directory key IDs are the lowercase 64-character SHA-256 digest of the
+public SPKI bytes, not the signed-in user's ID. Different device keys
+for the same account therefore no longer collide at the directory's
+`(user_id, key_id)` uniqueness boundary. This identifier is not evidence
+of verification; trust still requires the local device-pair ritual.
+
+The local IndexedDB address stays `ecdsa-p256-<userId>` so existing
+non-extractable keys are reused without migration or export. A newly
+generated identity after a local wipe receives a different directory ID;
+loading the same stored identity preserves the ID. Existing directory
+entries under the old account-derived ID, if any, are not revoked by this
+change and must be handled by subsequent publication/revocation work.
+
+Regression tests cover digest format, stable reload, replacement identity,
+non-extractability and reuse of a pre-existing account-addressed key.
+The replacement test uses a local DB wipe; it is not a real multi-device
+browser E2E test.
+
+Validation for this increment: core 105/105 tests, core and PWA typechecks,
+and `git diff --check` passed. Full gate, Chromium E2E and real-device
+acceptance were not run for this identifier-only increment. Owner review
+is pending; publication and verification are not complete.
+
 ### Remaining before F7 acceptance
 
 - V2d.2: publish the identity from private core and add verification

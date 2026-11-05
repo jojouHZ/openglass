@@ -6,7 +6,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 
-import { wipeIdentityStore } from "./keys";
+import { idbPut, wipeIdentityStore } from "./keys";
 import {
   getOrCreateDeviceIdentity,
   identityFingerprint,
@@ -35,6 +35,40 @@ describe("device identity (F7)", () => {
     expect(await verifyIdentitySignature(a1.pubB64, msg, sig)).toBe(true);
     // forged signature under a different key must fail
     expect(await verifyIdentitySignature(b.pubB64, msg, sig)).toBe(false);
+  });
+
+  it("uses a stable public-key digest as directory id, not the account id", async () => {
+    await wipeIdentityStore();
+    const first = await getOrCreateDeviceIdentity("same-account");
+    const loaded = await getOrCreateDeviceIdentity("same-account");
+    expect(loaded.keyId).toBe(first.keyId);
+    const spki = await crypto.subtle.exportKey("spki", first.pair.publicKey);
+    const digest = await crypto.subtle.digest("SHA-256", spki);
+    const expected = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+    expect(first.keyId).toBe(expected);
+    expect(first.keyId).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.pair.privateKey.extractable).toBe(false);
+    await expect(crypto.subtle.exportKey("pkcs8", first.pair.privateKey)).rejects.toThrow();
+    await wipeIdentityStore();
+    const replacement = await getOrCreateDeviceIdentity("same-account");
+    expect(replacement.pubB64).not.toBe(first.pubB64);
+    expect(replacement.keyId).not.toBe(first.keyId);
+  });
+
+  it("reuses keys already stored under the legacy account-scoped address", async () => {
+    await wipeIdentityStore();
+    const pair = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"],
+    );
+    await idbPut("identity", "ecdsa-p256-existing-user", pair);
+    const loaded = await getOrCreateDeviceIdentity("existing-user");
+    const data = new TextEncoder().encode("existing-key-proof");
+    const signature = await signWithIdentity(loaded, data);
+    const raw = await crypto.subtle.exportKey("spki", pair.publicKey);
+    const { toB64 } = await import("./engine");
+    expect(loaded.pubB64).toBe(toB64(raw));
+    expect(await verifyIdentitySignature(toB64(raw), data, signature)).toBe(true);
+    expect(loaded.keyId).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("identity fingerprint is symmetric across both sides", async () => {

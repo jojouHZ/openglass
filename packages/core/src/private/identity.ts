@@ -36,18 +36,18 @@ export async function getOrCreateDeviceIdentity(
 ): Promise<DeviceIdentity> {
   const id = keyIdFor(userId);
   const existing = await idbGet<CryptoKeyPair>(ID_STORE, id);
-  if (existing) {
-    const raw = await subtle().exportKey("spki", existing.publicKey);
-    return { pair: existing, pubB64: toB64(raw), keyId: id };
-  }
-  const pair = await subtle().generateKey(
+  const pair = existing ?? await subtle().generateKey(
     { name: "ECDSA", namedCurve: "P-256" },
     false, // non-extractable private key
     ["sign", "verify"],
   );
-  await idbPut(ID_STORE, id, pair);
+  if (!existing) await idbPut(ID_STORE, id, pair);
   const raw = await subtle().exportKey("spki", pair.publicKey);
-  return { pair, pubB64: toB64(raw), keyId: id };
+  const digest = await subtle().digest("SHA-256", raw);
+  const keyId = Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+  return { pair, pubB64: toB64(raw), keyId };
 }
 
 /** Sign arbitrary bytes with the device identity key → base64 signature. */
