@@ -12,21 +12,22 @@ import { watch } from "vue";
 import type { PrivateRemote } from "@openglass/core/private/remote";
 
 type SessionLike = { authed: boolean };
-type PrivateLike = Pick<PrivateRemote, "connect" | "teardown">;
+type PrivateLike = Pick<PrivateRemote, "connect" | "stop" | "teardown">;
 
-/** Connect the relay while authed; wipe all private state on logout and
- *  on pagehide (the browser kills the tab — fire-and-forget teardown). */
+/** Connect the relay while authed; forget device trust on actual logout.
+ *  Pagehide stops volatile state without deleting identity and pins. */
 export function wirePrivateLifecycle(
   priv: PrivateLike,
   session: SessionLike,
 ): void {
   watch(
     () => session.authed,
-    (authed) => {
+    (authed, wasAuthed) => {
       if (authed) priv.connect();
-      else void priv.teardown();
+      else if (wasAuthed) void priv.teardown();
+      else priv.stop();
     },
     { immediate: true },
   );
-  addEventListener("pagehide", () => void priv.teardown());
+  addEventListener("pagehide", () => priv.stop());
 }

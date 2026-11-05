@@ -1,5 +1,23 @@
 # Slice F8 — Device Vault & Lock
 
+## Current owner direction — supersedes the release-MVP scope below
+
+App re-entry authentication after screen lock/background is deferred to
+post-MVP Android/platform work, together with O9 lifecycle investigation.
+The intended unlock options include face/fingerprint, passcode or an
+authenticator; exact platform mechanisms are not selected yet. Sleep or
+screen lock alone should not erase sessions in that future model.
+Secure retention of sessions requires a separate native-storage and
+threat-model design; this is not permission to persist browser private
+messages or raw session keys now.
+
+For current F7, persistence option A applies: identity and local pins
+survive ordinary restarts; private sessions remain volatile; sign-out
+and forget-device wipe identity and pins. No vault, app-lock feature or
+new background/resume policy is implemented as part of that decision.
+The older PWA-MVP and desktop-first proposals below are historical and
+must not be used as active MVP acceptance requirements.
+
 Owner decisions: the lock is **optional** (prompted at first login, never
 forced); it applies to the **release PWA as well**, not just the dev
 PWA; first sign-in on any device is always email + OTP; the most

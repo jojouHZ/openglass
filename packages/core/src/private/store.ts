@@ -26,7 +26,7 @@ import {
   type SasFingerprint,
   type SessionKeyPair,
 } from "./engine";
-import { prepareIdentityStore, wipeIdentityStore } from "./keys";
+import { prepareDeviceStore, wipeIdentityStore } from "./keys";
 import {
   getOrCreateDeviceIdentity,
   signWithIdentity,
@@ -116,6 +116,8 @@ export const usePrivateStore = defineStore("private", {
     pins: new Map<string, DevicePin>(), // peerUserId → pin
     /** resolves once identity + pin cache are loaded — gates await it */
     ready: null as Promise<void> | null,
+    storageWork: null as Promise<void> | null,
+    generation: 0,
     /** remote facade listeners — callbacks only, no private data; the
      *  imperative tick keeps host↔remote updates independent of Vue's
      *  deep reactivity across the module boundary */
@@ -174,9 +176,10 @@ export const usePrivateStore = defineStore("private", {
       meUserId = "",
     ): void {
       if (this.client) return;
-      // a surviving identity DB means the last session died dirty —
-      // wipe before any identity work (fire-and-forget, never blocks)
-      void prepareIdentityStore();
+      // Identity and pins survive ordinary restarts; serialize storage
+      // work so a previous logout finishes before loading this identity.
+      const generation = ++this.generation;
+      const previousWork = this.storageWork;
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
       this.client = client ?? new RelayClient(relayUrl);
@@ -186,15 +189,20 @@ export const usePrivateStore = defineStore("private", {
       // check, so pin-gated paths await this.ready first.
       this.ready = (async () => {
         try {
-          if (meUserId) {
-            this.identity = await getOrCreateDeviceIdentity(meUserId);
-            const pins = await listPins(meUserId);
-            this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
-          }
+          await previousWork;
+          if (generation !== this.generation || !meUserId) return;
+          await prepareDeviceStore();
+          const identity = await getOrCreateDeviceIdentity(meUserId);
+          const pins = await listPins(meUserId);
+          if (generation !== this.generation) return;
+          this.identity = identity;
+          this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
         } finally {
           this.notify();
         }
       })();
+      this.storageWork = this.ready;
+      void this.ready.catch(() => undefined);
       const c = this.client;
 
       c.on("relay.invite", (ev) => {
@@ -666,11 +674,12 @@ export const usePrivateStore = defineStore("private", {
     },
 
     /**
-     * Full zero-trace teardown — burn/beforeunload/module-unload path:
-     * all sessions wiped, relay disconnected, IndexedDB deleted.
-     * After this call the private module leaves no trace on the device.
+     * Stop the module: wipe volatile sessions and disconnect the relay.
+     * Persistent identity and pins remain until destructive teardown.
+     * Pending initialization cannot repopulate the stopped module.
      */
-    async teardown(): Promise<void> {
+    stop(): void {
+      this.generation++;
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -689,7 +698,17 @@ export const usePrivateStore = defineStore("private", {
       this.ready = null;
       this.relayState = "offline";
       this.notify();
-      await wipeIdentityStore();
+    },
+
+    teardown(): Promise<void> {
+      this.stop();
+      const previousWork = this.storageWork;
+      const cleanup = (async () => {
+        await previousWork?.catch(() => undefined);
+        await wipeIdentityStore();
+      })();
+      this.storageWork = cleanup;
+      return cleanup;
     },
   },
 });

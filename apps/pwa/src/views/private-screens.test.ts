@@ -7,6 +7,7 @@
 
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
+import { effectScope, nextTick, reactive } from "vue";
 import { afterAll, afterEach, beforeAll, vi, describe, expect, it } from "vitest";
 
 import { bindApiClient, useChatsStore, useSessionStore } from "@openglass/core";
@@ -352,17 +353,33 @@ describe("PrivateInviteCard", () => {
 });
 
 describe("private lifecycle wiring", () => {
-  it("pagehide tears the module down; logout does too", async () => {
+  it("pagehide stops volatile state; actual logout forgets the device", async () => {
     const calls: string[] = [];
     const fake = {
       connect: () => calls.push("connect"),
+      stop: () => calls.push("stop"),
       teardown: () => (calls.push("teardown"), Promise.resolve()),
     };
-    wirePrivateLifecycle(fake, session());
+    const auth = reactive({ authed: true });
+    const scope = effectScope();
+    scope.run(() => wirePrivateLifecycle(fake, auth));
     // authed already → connect fires immediately
     expect(calls).toEqual(["connect"]);
 
     dispatchEvent(new Event("pagehide"));
-    expect(calls).toContain("teardown");
+    expect(calls).toEqual(["connect", "stop"]);
+    auth.authed = false;
+    await nextTick();
+    expect(calls).toEqual(["connect", "stop", "teardown"]);
+    scope.stop();
+  });
+
+  it("an unauthenticated initial mount does not delete persisted trust", () => {
+    const fake = { connect: vi.fn(), stop: vi.fn(), teardown: vi.fn() };
+    const scope = effectScope();
+    scope.run(() => wirePrivateLifecycle(fake, reactive({ authed: false })));
+    expect(fake.stop).toHaveBeenCalledOnce();
+    expect(fake.teardown).not.toHaveBeenCalled();
+    scope.stop();
   });
 });

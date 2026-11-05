@@ -59,6 +59,21 @@ describe("keys — IndexedDB roundtrip (fake-indexeddb)", () => {
     expect(aRaw).not.toEqual(bRaw); // zero-trace: wiped, regenerated
   });
 
+  it("does not report success when another connection blocks identity deletion", async () => {
+    await getOrCreateIdentity();
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("openglass-private", 2);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await expect(wipeIdentityStore()).rejects.toThrow(/blocked/);
+    } finally {
+      db.close();
+    }
+    await wipeIdentityStore();
+  });
+
   it("prepareIdentityStore wipes a leftover DB (dirty shutdown)", async () => {
     // an existing DB at boot means the previous session never tore down
     const a = await getOrCreateIdentity();
