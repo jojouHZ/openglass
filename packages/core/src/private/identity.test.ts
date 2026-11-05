@@ -49,6 +49,19 @@ describe("device identity (F7)", () => {
 });
 
 describe("pins (F7)", () => {
+  it("lists only the owner's pins, including separate pins for the same peer", async () => {
+    await wipeIdentityStore();
+    const pin = { peerUserId: "peer", keyId: "a-key", publicKey: "a-pub", verifiedAt: "2026-11-05T00:00:00Z" };
+    await savePin("alice", pin);
+    await savePin("bob", { ...pin, keyId: "b-key", publicKey: "b-pub" });
+    expect(await listPins("alice")).toEqual([pin]);
+    expect(await listPins("bob")).toEqual([{ ...pin, keyId: "b-key", publicKey: "b-pub" }]);
+    expect(await listPins("al")).toEqual([]);
+    expect(await listPins("carol")).toEqual([]);
+    await deletePin("alice", "peer");
+    expect(await listPins("alice")).toEqual([]);
+    expect(await getPin("bob", "peer")).toEqual({ ...pin, keyId: "b-key", publicKey: "b-pub" });
+  });
   it("saves, lists and deletes pins; state tracks key changes", async () => {
     await wipeIdentityStore();
     const me = "me", peer = "peer";
