@@ -153,6 +153,53 @@ function established(
 }
 
 describe("private store — session lifecycle", () => {
+  it("stop clears volatile state but reboot retains identity and the owner's pins", async () => {
+    const { sa, ra } = await twoParties();
+    const { savePin } = await import("./pins");
+    const identity = sa.identity!;
+    const pin = { ...sa.pins.get(USER_B.id)! };
+    await savePin(USER_A.id, pin);
+    established(ra, "persist-test", USER_B);
+    await flush();
+    sa.stop();
+    expect(sa.sessions.size).toBe(0);
+    expect(sa.identity).toBeNull();
+    expect(sa.pins.size).toBe(0);
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), USER_A.id);
+    await sa.ready;
+    expect(sa.identity?.pubB64).toBe(identity.pubB64);
+    expect(sa.pins.get(USER_B.id)).toEqual(pin);
+    expect(sa.sessions.size).toBe(0);
+    await sa.teardown();
+    const { getPin } = await import("./pins");
+    expect(await getPin(USER_A.id, USER_B.id)).toBeUndefined();
+  });
+
+  it("boot of another user waits for logout cleanup", async () => {
+    const { sa } = await twoParties();
+    const previousIdentity = sa.identity!.pubB64;
+    const cleanup = sa.teardown();
+    sa.boot("/relay", () => "next-token", new FakeRelay("/relay"), "next-user");
+    await cleanup;
+    await sa.ready;
+    expect(sa.meUserId).toBe("next-user");
+    expect(sa.identity?.pubB64).toBeTruthy();
+    expect(sa.identity?.pubB64).not.toBe(previousIdentity);
+    expect(sa.pins.size).toBe(0);
+    await sa.teardown();
+  });
+
+  it("logout waits for initialization and prevents late state resurrection", async () => {
+    setActivePinia(createPinia());
+    const store = usePrivateStore();
+    store.boot("/relay", () => "tok", new FakeRelay("/relay"), "logout-user");
+    await store.teardown();
+    expect(store.identity).toBeNull();
+    expect(store.pins.size).toBe(0);
+    expect(store.meUserId).toBe("");
+    expect((await indexedDB.databases()).some((db) => db.name === "openglass-private")).toBe(false);
+  });
+
   it("invite → established → key exchange → unverified → encrypted send", async () => {
     const { sa, sb, ra, rb } = await twoParties();
 

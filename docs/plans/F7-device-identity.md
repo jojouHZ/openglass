@@ -63,10 +63,11 @@ sync).
 
 ### Zero-trace rules (changed)
 Session data stays zero-trace as before; the identity DB is the *one*
-persistent store (see `docs/api/relay-events.md`). The old assertion
-"no `openglass-private` IndexedDB after teardown" is replaced by "the
-database contains only identity + pins, no message or session material".
-The dirty-boot sweep wipes session material but keeps identity.
+persistent store (see `docs/api/relay-events.md`). The old module-stop assertion
+"no `openglass-private` IndexedDB" is replaced by "the database contains
+only identity + pins, no message or session material". Ordinary boot
+preserves these persistent stores. Explicit sign-out/forget-device
+teardown still deletes the entire database.
 
 ### Sign-out / switch user (owner-confirmed)
 Until the F8 vault exists, identity and pins are scoped per user and
@@ -99,6 +100,29 @@ Owner-confirmed baseline: identity and pins are destroyed on sign-out;
 the comparison format is six deterministic objects plus six digits.
 The verification ritual UI belongs inside the existing chat in V3, not
 in a new standalone screen.
+
+### Owner decision A — persistence boundary
+
+Identity and local pins survive ordinary reload, app close and unclean
+restart. Private messages, ephemeral/session keys, resume tokens and
+pending session state remain RAM-only and are not restored on restart.
+Ending a session or stopping the module must not mean forgetting the
+device. Sign-out and explicit forget/revoke-this-device destroy local
+identity and pins; a different user must not inherit them.
+
+Startup must await persistent-store preparation before loading identity
+and pins. Stale initialization must not repopulate RAM after stop/logout,
+and a subsequent boot must wait for any in-progress destructive cleanup.
+Before the encrypted vault exists, persistent pins are an unencrypted
+local verification graph, not a promise of no device traces.
+
+Screen-lock/background/resume policy and O9 remain post-MVP Android work.
+The owner's intended platform model adds app re-entry authentication
+(face/fingerprint, passcode or authenticator; mechanisms to be designed)
+and does not treat sleep/screen lock alone as a session-erasure trigger.
+This is not authorization to persist private message history or raw
+session keys in the current browser build. Native secure storage, session
+retention limits and unlock semantics require a later security design.
 
 ### V2d.1 — directory transport
 
@@ -140,12 +164,41 @@ and `git diff --check` passed. Full gate, Chromium E2E and real-device
 acceptance were not run for this identifier-only increment. Owner review
 is pending; publication and verification are not complete.
 
+### Persistence option A — implementation increment
+
+The private store now uses non-destructive store preparation and waits
+for storage work before loading identity/pins. A generation check prevents
+late initialization from restoring stopped RAM state. `stop()` clears
+volatile state and disconnects without deleting device trust; destructive
+`teardown()` waits for initialization before deleting the DB. Subsequent
+boot waits for cleanup. Blocked DB deletion rejects instead of reporting
+success. The legacy destructive preparation helper is no longer used by
+private store boot.
+
+PWA pagehide calls `stop()`. An authenticated-to-unauthenticated transition
+calls destructive teardown; an initially unauthenticated mount does not
+delete persisted trust. No new visibility, screen-lock or resume handlers
+are introduced. Core tests cover stop/reboot persistence, logout cleanup,
+late-boot invalidation and cleanup overlapping another user's boot; PWA
+tests cover pagehide versus logout. These do not establish real-phone
+screen-lock correctness.
+
+Increment evidence: core 109/109 and PWA 205/205 tests passed; core/PWA
+typechecks, build, MVP bundle guard and diff check passed. The blocked
+IndexedDB deletion test first reproduced a false-success result, then
+passed after the fix. PWA output included teardown-time AbortError and
+mock-network diagnostics despite a successful test exit. Full gate,
+Chromium E2E and owner real-device checks remain pending. Owner review is
+required before advancing; no push, merge or deploy is included.
+
 ### Remaining before F7 acceptance
 
 - V2d.2: publish the identity from private core and add verification
   commands and UI-safe subscriptions to `PrivateRemote`.
-- Reconcile boot/account-switch initialization and persistent identity
-  loading with the F7 model; the existing boot sweep still deletes the DB.
+- Complete authenticated bootstrap so login/re-login supplies the current
+  user ID, and surface/retry storage-cleanup failures without falsely
+  claiming that device trust was erased. The shell still initializes
+  boot with the user present at module creation.
 - Complete device selection, pin/key-change handling and the ritual
   confirmation flow without exposing identity keys to the shell.
 - V2e/V3: real Chromium ritual/pin/reload/sign-out coverage, in-chat UI,

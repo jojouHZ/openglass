@@ -156,6 +156,11 @@ export function prepareIdentityStore(): Promise<void> {
   });
 }
 
+export async function prepareDeviceStore(): Promise<void> {
+  const db = await openDb();
+  db.close();
+}
+
 /**
  * Zero-trace teardown — deletes the WHOLE database, not just the key row:
  * no leftover stores or allocated-but-empty schema folders.
@@ -166,6 +171,6 @@ export function wipeIdentityStore(): Promise<void> {
     const req = idb().deleteDatabase(DB_NAME);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error ?? new Error("idb delete failed"));
-    req.onblocked = () => resolve(); // conn closing elsewhere — proceed anyway
+    req.onblocked = () => reject(new Error("identity store deletion blocked")); // deletion is not confirmed
   });
 }

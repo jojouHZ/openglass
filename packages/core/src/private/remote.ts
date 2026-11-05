@@ -84,8 +84,9 @@ export interface PrivateRemote {
     meUserId?: string,
   ): void;
   connect(): void;
-  /** zero-trace: wipe all volatile state, disconnect, delete the
-   *  IndexedDB identity store. Fire-and-forget on pagehide. */
+  stop(): void;
+  /** Forget device trust: wipe volatile state, disconnect and delete
+   *  the IndexedDB identity store. Ordinary pagehide uses stop instead. */
   teardown(): Promise<void>;
 
   /** Subscribe to the session view for a peer — immediate snapshot plus
@@ -183,6 +184,9 @@ export function createPrivateRemote(
     },
     connect() {
       store.connect();
+    },
+    stop() {
+      store.stop();
     },
     teardown() {
       return store.teardown();
