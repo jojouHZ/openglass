@@ -82,11 +82,11 @@ export async function idbDelete(store: string, key: string): Promise<void> {
   }
 }
 
-export async function idbAll<T>(store: string): Promise<T[]> {
+export async function idbAll<T>(store: string, query?: IDBKeyRange): Promise<T[]> {
   const db = await openDb();
   try {
     return await new Promise<T[]>((resolve, reject) => {
-      const req = db.transaction(store, "readonly").objectStore(store).getAll();
+      const req = db.transaction(store, "readonly").objectStore(store).getAll(query);
       req.onsuccess = () => resolve(req.result as T[]);
       req.onerror = () => reject(req.error ?? new Error("idb getAll failed"));
     });

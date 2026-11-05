@@ -33,8 +33,10 @@ export type VerificationState =
 
 /** All pins of the signed-in user. */
 export async function listPins(meUserId: string): Promise<DevicePin[]> {
-  const all = await idbAll<DevicePin>(PINS_STORE);
-  return all.filter((p) => p.peerUserId !== meUserId);
+  return idbAll<DevicePin>(
+    PINS_STORE,
+    IDBKeyRange.bound(`${meUserId}:`, `${meUserId};`, false, true),
+  );
 }
 
 export async function getPin(
