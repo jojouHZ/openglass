@@ -93,6 +93,40 @@ keeps the simple rule below.
   second user on the same browser sees no pins.
 - Backend contract tests for the directory (mutual-only read, revoke).
 
+## V2d incremental delivery
+
+Owner-confirmed baseline: identity and pins are destroyed on sign-out;
+the comparison format is six deterministic objects plus six digits.
+The verification ritual UI belongs inside the existing chat in V3, not
+in a new standalone screen.
+
+### V2d.1 — directory transport
+
+The private module owns `directory.ts`, a typed client for publishing,
+listing and revoking public identity keys. Request types come from the
+generated OpenAPI schema and HTTP handling reuses `HttpTransport`.
+Publishing explicitly selects keyId, publicKey and label; extra runtime
+properties (including private keys or verification timestamps) are not
+serialized. Peer and key identifiers are encoded as individual URL path
+segments. Directory failures propagate; a directory response never
+creates a local pin or a verified state.
+
+Transport tests cover PUT, both GET routes, DELETE/204, current bearer
+token injection, path encoding, payload whitelisting and error propagation.
+These are mocked HTTP tests, not evidence of browser ritual completion.
+
+### Remaining before F7 acceptance
+
+- V2d.2: publish the identity from private core and add verification
+  commands and UI-safe subscriptions to `PrivateRemote`.
+- Reconcile boot/account-switch initialization and persistent identity
+  loading with the F7 model; the existing boot sweep still deletes the DB.
+- Complete device selection, pin/key-change handling and the ritual
+  confirmation flow without exposing identity keys to the shell.
+- V2e/V3: real Chromium ritual/pin/reload/sign-out coverage, in-chat UI,
+  full `pnpm gate`, real-device checks and owner review. None are implied
+  by passing directory transport tests.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off
