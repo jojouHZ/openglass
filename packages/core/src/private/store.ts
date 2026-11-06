@@ -33,6 +33,7 @@ import {
   verifyIdentitySignature,
   type DeviceIdentity,
 } from "./identity";
+import { IdentityDirectory } from "./directory";
 import { getPin, listPins, type DevicePin } from "./pins";
 import { RelayClient, type ConnState, type PeerUser } from "./relay";
 
@@ -115,6 +116,10 @@ export const usePrivateStore = defineStore("private", {
      *  have a user at boot, so the id is resolved lazily. */
     meUserId: "",
     getMeUserId: null as null | (() => string),
+    /** F7 — untrusted key directory transport; injectable for tests.
+     *  Publish/revoke only — a directory answer is never a proof of
+     *  verification (pins are). */
+    directory: null as IdentityDirectory | null,
     identity: null as DeviceIdentity | null,
     pins: new Map<string, DevicePin>(), // peerUserId → pin
     /** resolves once identity + pin cache are loaded — gates await it */
@@ -177,12 +182,14 @@ export const usePrivateStore = defineStore("private", {
       getAccessToken: () => string | null,
       client?: RelayClient,
       meUserId: string | (() => string) = "",
+      directory?: IdentityDirectory,
     ): void {
       if (this.client) return;
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
       this.getMeUserId =
         typeof meUserId === "function" ? meUserId : () => meUserId;
+      this.directory = directory ?? null;
       this.client = client ?? new RelayClient(relayUrl);
       this.ensureIdentity();
       const c = this.client;
@@ -317,6 +324,12 @@ export const usePrivateStore = defineStore("private", {
           if (generation !== this.generation) return;
           this.identity = identity;
           this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
+          // best-effort idempotent publish — peers need our public key to
+          // pin it; a failure retries on the next boot. Nothing private
+          // leaves the device: keyId is a digest of the public SPKI.
+          void this.directory
+            ?.publish({ keyId: identity.keyId, publicKey: identity.pubB64 })
+            .catch(() => undefined);
         } finally {
           this.notify();
         }
@@ -718,10 +731,19 @@ export const usePrivateStore = defineStore("private", {
     },
 
     teardown(): Promise<void> {
+      // capture before stop() nulls the identity — forget-device must
+      // also unpublish the key; best-effort: the token may already be
+      // gone, so a failed revoke still proceeds to the local wipe
+      const keyId = this.identity?.keyId;
+      const directory = this.directory;
+      this.directory = null;
       this.stop();
       const previousWork = this.storageWork;
       const cleanup = (async () => {
         await previousWork?.catch(() => undefined);
+        if (directory && keyId) {
+          await directory.revoke(keyId).catch(() => undefined);
+        }
         await wipeIdentityStore();
       })();
       this.storageWork = cleanup;

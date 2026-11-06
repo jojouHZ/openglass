@@ -100,6 +100,26 @@ function makePair(): { a: FakeRelay; b: FakeRelay } {
 const USER_A = { id: "ua", displayName: "Alice", tag: "alice#1" };
 const USER_B = { id: "ub", displayName: "Bob", tag: "bob#1" };
 
+/** Records directory calls — no HTTP: proves what the store publishes. */
+class FakeDirectory {
+  published: { keyId?: string; publicKey?: string; label?: string }[] = [];
+  revoked: string[] = [];
+  publish(body: { keyId?: string; publicKey?: string; label?: string }) {
+    this.published.push(body);
+    return Promise.resolve({ keyId: body.keyId, publicKey: body.publicKey });
+  }
+  listMine() {
+    return Promise.resolve([]);
+  }
+  listPeer() {
+    return Promise.resolve([]);
+  }
+  revoke(keyId: string) {
+    this.revoked.push(keyId);
+    return Promise.resolve();
+  }
+}
+
 /** Wait out crypto + queued deliveries (WebCrypto ops are real async). */
 function flush(ms = 50): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -209,6 +229,29 @@ describe("private store — session lifecycle", () => {
     // A's pins are scoped to A — B must not see them
     expect(sa.pins.size).toBe(0);
     await sa.teardown();
+  });
+
+  it("publishes the device identity key after authenticated bootstrap", async () => {
+    setActivePinia(createPinia());
+    const dir = new FakeDirectory();
+    const sa = usePrivateStore();
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), USER_A.id, dir as never);
+    await sa.ready;
+    expect(dir.published).toHaveLength(1);
+    expect(dir.published[0].keyId).toBe(sa.identity!.keyId);
+    expect(dir.published[0].publicKey).toBe(sa.identity!.pubB64);
+    await sa.teardown();
+  });
+
+  it("teardown revokes the published identity key before wiping", async () => {
+    setActivePinia(createPinia());
+    const dir = new FakeDirectory();
+    const sa = usePrivateStore();
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), USER_A.id, dir as never);
+    await sa.ready;
+    const keyId = sa.identity!.keyId;
+    await sa.teardown();
+    expect(dir.revoked).toEqual([keyId]);
   });
 
   it("boot of another user waits for logout cleanup", async () => {

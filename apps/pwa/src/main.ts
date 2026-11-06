@@ -65,6 +65,7 @@ async function bootstrap() {
       "/api/v1/relay",
       () => session.accessToken,
       () => session.user?.id ?? "",
+      "/api/v1",
     );
     wirePrivateLifecycle(remote, session);
   }
