@@ -175,6 +175,42 @@ describe("private store — session lifecycle", () => {
     expect(await getPin(USER_A.id, USER_B.id)).toBeUndefined();
   });
 
+  it("identity loads when the user id becomes known after boot", async () => {
+    setActivePinia(createPinia());
+    const sa = usePrivateStore();
+    let uid = "";
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), () => uid);
+    sa.connect();
+    await flush();
+    expect(sa.identity).toBeNull();
+    expect(sa.meUserId).toBe("");
+    uid = USER_A.id;
+    sa.connect();
+    await sa.ready;
+    expect(sa.meUserId).toBe(USER_A.id);
+    expect(sa.identity?.pubB64).toBeTruthy();
+    await sa.teardown();
+  });
+
+  it("re-login as another user loads that user's identity and pins only", async () => {
+    const { sa } = await twoParties();
+    const { savePin } = await import("./pins");
+    await savePin(USER_A.id, { ...sa.pins.get(USER_B.id)! });
+    let uid = USER_A.id;
+    sa.stop();
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), () => uid);
+    await sa.ready;
+    expect(sa.pins.get(USER_B.id)).toBeTruthy();
+    uid = USER_B.id;
+    sa.stop();
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), () => uid);
+    await sa.ready;
+    expect(sa.meUserId).toBe(USER_B.id);
+    // A's pins are scoped to A — B must not see them
+    expect(sa.pins.size).toBe(0);
+    await sa.teardown();
+  });
+
   it("boot of another user waits for logout cleanup", async () => {
     const { sa } = await twoParties();
     const previousIdentity = sa.identity!.pubB64;

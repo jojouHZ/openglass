@@ -110,8 +110,11 @@ export const usePrivateStore = defineStore("private", {
     relayUrl: "",
     getAccessToken: null as null | (() => string | null),
     /** F7 — signed-in user id + this device's ECDSA identity (loaded
-     *  at boot); pins are cached for synchronous invite gating. */
+     *  once the id is known); pins are cached for synchronous invite
+     *  gating. getMeUserId mirrors getAccessToken: the host may not
+     *  have a user at boot, so the id is resolved lazily. */
     meUserId: "",
+    getMeUserId: null as null | (() => string),
     identity: null as DeviceIdentity | null,
     pins: new Map<string, DevicePin>(), // peerUserId → pin
     /** resolves once identity + pin cache are loaded — gates await it */
@@ -173,36 +176,15 @@ export const usePrivateStore = defineStore("private", {
       relayUrl: string,
       getAccessToken: () => string | null,
       client?: RelayClient,
-      meUserId = "",
+      meUserId: string | (() => string) = "",
     ): void {
       if (this.client) return;
-      // Identity and pins survive ordinary restarts; serialize storage
-      // work so a previous logout finishes before loading this identity.
-      const generation = ++this.generation;
-      const previousWork = this.storageWork;
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
+      this.getMeUserId =
+        typeof meUserId === "function" ? meUserId : () => meUserId;
       this.client = client ?? new RelayClient(relayUrl);
-      this.meUserId = meUserId;
-      // identity + pin cache — gates must not see a half-loaded store:
-      // an invite fired before they resolve would wrongly fail the pin
-      // check, so pin-gated paths await this.ready first.
-      this.ready = (async () => {
-        try {
-          await previousWork;
-          if (generation !== this.generation || !meUserId) return;
-          await prepareDeviceStore();
-          const identity = await getOrCreateDeviceIdentity(meUserId);
-          const pins = await listPins(meUserId);
-          if (generation !== this.generation) return;
-          this.identity = identity;
-          this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
-        } finally {
-          this.notify();
-        }
-      })();
-      this.storageWork = this.ready;
-      void this.ready.catch(() => undefined);
+      this.ensureIdentity();
       const c = this.client;
 
       c.on("relay.invite", (ev) => {
@@ -309,6 +291,40 @@ export const usePrivateStore = defineStore("private", {
       });
     },
 
+    /** Load identity + pin cache once the signed-in user id is known.
+     *  Identity and pins survive ordinary restarts; storage work is
+     *  serialized so a previous logout finishes before loading. Re-runs
+     *  when the id changes (login as another user) — the generation
+     *  guard stops a stale async load from resurrecting the previous
+     *  owner's state. Gates must not see a half-loaded store: an invite
+     *  fired before this resolves would wrongly fail the pin check, so
+     *  pin-gated paths await this.ready first. */
+    ensureIdentity(): void {
+      const uid = this.getMeUserId?.() ?? "";
+      if (!uid || uid === this.meUserId || !this.client) return;
+      const generation = ++this.generation;
+      const previousWork = this.storageWork;
+      this.meUserId = uid;
+      this.identity = null;
+      this.pins.clear();
+      this.ready = (async () => {
+        try {
+          await previousWork;
+          if (generation !== this.generation) return;
+          await prepareDeviceStore();
+          const identity = await getOrCreateDeviceIdentity(uid);
+          const pins = await listPins(uid);
+          if (generation !== this.generation) return;
+          this.identity = identity;
+          this.pins = new Map(pins.map((p) => [p.peerUserId, p]));
+        } finally {
+          this.notify();
+        }
+      })();
+      this.storageWork = this.ready;
+      void this.ready.catch(() => undefined);
+    },
+
     /** Connect the relay — failures surface via relayState, never throw.
      *  Self-heals after teardown(): the SPA keeps running across a
      *  logout→login cycle, so a null client is rebuilt and re-wired. */
@@ -316,6 +332,7 @@ export const usePrivateStore = defineStore("private", {
       if (!this.client && this.relayUrl && this.getAccessToken) {
         this.boot(this.relayUrl, this.getAccessToken);
       }
+      this.ensureIdentity();
       const token = this.getAccessToken?.();
       if (!this.client || !token) return;
       void this.client.connect(token).catch(() => undefined);
