@@ -81,7 +81,7 @@ export interface PrivateRemote {
   boot(
     relayUrl: string,
     getAccessToken: () => string | null,
-    meUserId?: string,
+    meUserId?: string | (() => string),
   ): void;
   connect(): void;
   stop(): void;
