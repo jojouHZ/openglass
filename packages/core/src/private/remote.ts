@@ -17,6 +17,8 @@
 
 import type { Pinia } from "pinia";
 
+import { IdentityDirectory } from "./directory";
+
 import type { SasFingerprint } from "./engine";
 import type { ConnState, PeerUser } from "./relay";
 import {
@@ -82,6 +84,9 @@ export interface PrivateRemote {
     relayUrl: string,
     getAccessToken: () => string | null,
     meUserId?: string | (() => string),
+    /** REST base for the identity-key directory (e.g. "/api/v1"); the
+     *  transport is built inside the core — the host never sees it */
+    apiBaseUrl?: string,
   ): void;
   connect(): void;
   stop(): void;
@@ -179,8 +184,16 @@ export function createPrivateRemote(
   store.onChange(emit);
 
   return {
-    boot(relayUrl, getAccessToken, meUserId) {
-      store.boot(relayUrl, getAccessToken, undefined, meUserId);
+    boot(relayUrl, getAccessToken, meUserId, apiBaseUrl) {
+      store.boot(
+        relayUrl,
+        getAccessToken,
+        undefined,
+        meUserId,
+        apiBaseUrl
+          ? new IdentityDirectory(apiBaseUrl, getAccessToken)
+          : undefined,
+      );
     },
     connect() {
       store.connect();
