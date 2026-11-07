@@ -17,8 +17,6 @@
 
 import type { Pinia } from "pinia";
 
-import { IdentityDirectory } from "./directory";
-
 import { sasFingerprint, type SasFingerprint } from "./engine";
 import type { ConnState, PeerUser } from "./relay";
 import {
@@ -271,9 +269,7 @@ export function createPrivateRemote(
         getAccessToken,
         undefined,
         meUserId,
-        apiBaseUrl
-          ? new IdentityDirectory(apiBaseUrl, getAccessToken)
-          : undefined,
+        apiBaseUrl ?? undefined,
       );
     },
     connect() {
