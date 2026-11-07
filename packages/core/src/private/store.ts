@@ -118,8 +118,10 @@ export const usePrivateStore = defineStore("private", {
     getMeUserId: null as null | (() => string),
     /** F7 — untrusted key directory transport; injectable for tests.
      *  Publish/revoke only — a directory answer is never a proof of
-     *  verification (pins are). */
+     *  verification (pins are). directoryBaseUrl survives stop()/boot
+     *  cycles so a re-boot can rebuild the client lazily. */
     directory: null as IdentityDirectory | null,
+    directoryBaseUrl: "",
     identity: null as DeviceIdentity | null,
     pins: new Map<string, DevicePin>(), // peerUserId → pin
     /** resolves once identity + pin cache are loaded — gates await it */
@@ -182,14 +184,20 @@ export const usePrivateStore = defineStore("private", {
       getAccessToken: () => string | null,
       client?: RelayClient,
       meUserId: string | (() => string) = "",
-      directory?: IdentityDirectory,
+      directory?: IdentityDirectory | string,
     ): void {
       if (this.client) return;
       this.relayUrl = relayUrl;
       this.getAccessToken = getAccessToken;
       this.getMeUserId =
         typeof meUserId === "function" ? meUserId : () => meUserId;
-      this.directory = directory ?? null;
+      // re-boots (stop→connect, logout→login) call with no directory —
+      // keep the injected/base config instead of dropping it
+      if (typeof directory === "object" && directory) {
+        this.directory = directory;
+      } else if (typeof directory === "string") {
+        this.directoryBaseUrl = directory;
+      }
       this.client = client ?? new RelayClient(relayUrl);
       this.ensureIdentity();
       const c = this.client;
@@ -327,6 +335,10 @@ export const usePrivateStore = defineStore("private", {
           // best-effort idempotent publish — peers need our public key to
           // pin it; a failure retries on the next boot. Nothing private
           // leaves the device: keyId is a digest of the public SPKI.
+          // Lazily build the transport when only a base URL was given.
+          this.directory ??= this.directoryBaseUrl
+            ? new IdentityDirectory(this.directoryBaseUrl, this.getAccessToken!)
+            : null;
           void this.directory
             ?.publish({ keyId: identity.keyId, publicKey: identity.pubB64 })
             .catch(() => undefined);
@@ -750,7 +762,11 @@ export const usePrivateStore = defineStore("private", {
       // also unpublish the key; best-effort: the token may already be
       // gone, so a failed revoke still proceeds to the local wipe
       const keyId = this.identity?.keyId;
-      const directory = this.directory;
+      const directory =
+        this.directory ??
+        (this.directoryBaseUrl && this.getAccessToken
+          ? new IdentityDirectory(this.directoryBaseUrl, this.getAccessToken)
+          : null);
       this.directory = null;
       this.stop();
       const previousWork = this.storageWork;

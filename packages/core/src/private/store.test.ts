@@ -243,6 +243,23 @@ describe("private store — session lifecycle", () => {
     await sa.teardown();
   });
 
+  it("re-boot after stop keeps publishing identity (directory preserved)", async () => {
+    setActivePinia(createPinia());
+    const dir = new FakeDirectory();
+    const sa = usePrivateStore();
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), USER_A.id, dir as never);
+    await sa.ready;
+    expect(dir.published).toHaveLength(1);
+    sa.stop();
+    // the lifecycle-driven re-boot passes no directory — publish must
+    // still fire (was lost before: directory was reset to null)
+    sa.boot("/relay", () => "tok", new FakeRelay("/relay"), USER_A.id);
+    await sa.ready;
+    expect(dir.published).toHaveLength(2);
+    expect(dir.published[1].keyId).toBe(sa.identity!.keyId);
+    await sa.teardown();
+  });
+
   it("teardown revokes the published identity key before wiping", async () => {
     setActivePinia(createPinia());
     const dir = new FakeDirectory();
