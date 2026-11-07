@@ -19,7 +19,7 @@ import type { Pinia } from "pinia";
 
 import { IdentityDirectory } from "./directory";
 
-import type { SasFingerprint } from "./engine";
+import { sasFingerprint, type SasFingerprint } from "./engine";
 import type { ConnState, PeerUser } from "./relay";
 import {
   usePrivateStore,
@@ -75,6 +75,27 @@ export interface PrivateInvitesView {
   outgoing: readonly string[];
 }
 
+/** UI-safe view of one of the peer's published device keys — public
+ *  directory data only; pins and key material stay inside the core. */
+export interface VerificationDeviceView {
+  keyId: string;
+  publicKey: string;
+  label: string | null;
+}
+
+/** UI-safe snapshot of a device-verification ritual for one peer. */
+export interface VerificationView {
+  peerId: string;
+  /** unverified: no pin; pending: ritual open, awaiting OOB confirm;
+   *  verified: confirmed pin matches the shown key; key-changed: the
+   *  shown key differs from the existing pin — re-verification needed */
+  state: "unverified" | "pending" | "verified" | "key-changed";
+  /** SAS-style fingerprint over both identity public keys — display
+   *  data only, for out-of-band comparison */
+  fingerprint: SasFingerprint | null;
+  devices: readonly VerificationDeviceView[];
+}
+
 /** Everything a host may ask of the private module. */
 export interface PrivateRemote {
   // lifecycle — the host owns platform lifecycle (pagehide, app pause,
@@ -120,6 +141,29 @@ export interface PrivateRemote {
   ): Promise<void>;
   markDisplayed(sessionId: string): void;
   purgeRead(sessionId: string): void;
+
+  // device verification (F7) — the ritual lives in the ordinary chat
+  // window; the host renders safe snapshots, the core owns pins
+  /** Snapshot per peer: pin state, published device keys, ritual
+   *  fingerprint. Emits immediately and on every mutation. */
+  watchVerification(
+    peerId: string,
+    cb: (view: VerificationView) => void,
+  ): () => void;
+  /** Fetch the peer's published keys and open the ritual for `keyId`
+   *  (defaults to the first key). Computes the OOB fingerprint. */
+  startVerification(peerId: string, keyId?: string): Promise<void>;
+  /** OOB comparison succeeded — persist the pin for the shown key. */
+  confirmVerification(peerId: string): Promise<void>;
+  /** OOB comparison failed or aborted — discard the pending ritual. */
+  rejectVerification(peerId: string): void;
+  /** All live private sessions as safe views. */
+  watchActiveSessions(
+    cb: (views: PrivateSessionView[]) => void,
+  ): () => void;
+  /** Forget this device: revoke the published key, wipe identity, pins
+   *  and volatile state. Same destructive path as logout. */
+  forgetDevice(): Promise<void>;
 }
 
 function toSessionView(
@@ -157,6 +201,16 @@ export function createPrivateRemote(
   >();
   const inviteSubs = new Set<(view: PrivateInvitesView) => void>();
   const relaySubs = new Set<(state: ConnState) => void>();
+  const verifSubs = new Map<
+    string,
+    Set<(view: VerificationView) => void>
+  >();
+  const activeSubs = new Set<(views: PrivateSessionView[]) => void>();
+  /** per-peer open ritual — the device key being compared and its
+   *  fingerprint; discarded by confirm/reject */
+  const verifPending = new Map<string, { keyId: string; publicKey: string }>();
+  const verifFingerprint = new Map<string, SasFingerprint>();
+  const verifDevices = new Map<string, VerificationDeviceView[]>();
 
   function invitesView(): PrivateInvitesView {
     return {
@@ -171,6 +225,27 @@ export function createPrivateRemote(
     };
   }
 
+  function verificationView(peerId: string): VerificationView {
+    const pin = store.pins.get(peerId);
+    const pending = verifPending.get(peerId);
+    let state: VerificationView["state"] = "unverified";
+    if (pending) {
+      state = !pin
+        ? "pending"
+        : pin.publicKey === pending.publicKey
+          ? "verified"
+          : "key-changed";
+    } else if (pin) {
+      state = "verified";
+    }
+    return {
+      peerId,
+      state,
+      fingerprint: verifFingerprint.get(peerId) ?? null,
+      devices: verifDevices.get(peerId) ?? [],
+    };
+  }
+
   function emit(): void {
     for (const [peerId, subs] of sessionSubs) {
       const view = toSessionView(store.sessionByPeer(peerId));
@@ -179,6 +254,12 @@ export function createPrivateRemote(
     const invites = invitesView();
     for (const cb of inviteSubs) cb(invites);
     for (const cb of relaySubs) cb(store.relayState);
+    for (const [peerId, subs] of verifSubs) {
+      const view = verificationView(peerId);
+      for (const cb of subs) cb(view);
+    }
+    const active = store.activeSessions.map((s) => toSessionView(s)!);
+    for (const cb of activeSubs) cb(active);
   }
 
   store.onChange(emit);
@@ -254,6 +335,70 @@ export function createPrivateRemote(
     },
     purgeRead(sessionId) {
       store.purgeRead(sessionId);
+    },
+
+    watchVerification(peerId, cb) {
+      let subs = verifSubs.get(peerId);
+      if (!subs) {
+        subs = new Set();
+        verifSubs.set(peerId, subs);
+      }
+      subs.add(cb);
+      cb(verificationView(peerId));
+      return () => {
+        subs.delete(cb);
+        if (!subs.size) verifSubs.delete(peerId);
+      };
+    },
+    async startVerification(peerId, keyId) {
+      await store.ready;
+      const keys = await store.listPeerKeys(peerId);
+      verifDevices.set(
+        peerId,
+        keys.map((k) => ({
+          keyId: k.keyId,
+          publicKey: k.publicKey,
+          label: k.label ?? null,
+        })),
+      );
+      const key = keyId ? keys.find((k) => k.keyId === keyId) : keys[0];
+      if (key && store.identity) {
+        verifPending.set(peerId, {
+          keyId: key.keyId,
+          publicKey: key.publicKey,
+        });
+        verifFingerprint.set(
+          peerId,
+          await sasFingerprint(store.identity.pubB64, key.publicKey),
+        );
+      }
+      emit();
+    },
+    async confirmVerification(peerId) {
+      const pending = verifPending.get(peerId);
+      if (!pending) return;
+      await store.ready;
+      await store.addPin({
+        peerUserId: peerId,
+        keyId: pending.keyId,
+        publicKey: pending.publicKey,
+        verifiedAt: new Date().toISOString(),
+      });
+      verifPending.delete(peerId);
+      emit();
+    },
+    rejectVerification(peerId) {
+      verifPending.delete(peerId);
+      verifFingerprint.delete(peerId);
+      emit();
+    },
+    watchActiveSessions(cb) {
+      activeSubs.add(cb);
+      cb(store.activeSessions.map((s) => toSessionView(s)!));
+      return () => activeSubs.delete(cb);
+    },
+    forgetDevice() {
+      return store.teardown();
     },
   };
 }
