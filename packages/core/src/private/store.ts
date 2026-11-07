@@ -34,7 +34,7 @@ import {
   type DeviceIdentity,
 } from "./identity";
 import { IdentityDirectory } from "./directory";
-import { getPin, listPins, type DevicePin } from "./pins";
+import { getPin, listPins, savePin, type DevicePin } from "./pins";
 import { RelayClient, type ConnState, type PeerUser } from "./relay";
 
 export type PrivateStatus =
@@ -376,6 +376,21 @@ export const usePrivateStore = defineStore("private", {
         this.listeners.delete(fn);
       };
     },
+    /** F7 directory reads — the peer's published PUBLIC keys. A directory
+     *  answer is data for the ritual, never a proof: only a confirmed pin
+     *  gates sessions. Missing directory → empty (fail closed). */
+    async listPeerKeys(peerId: string) {
+      return (await this.directory?.listPeer(peerId)) ?? [];
+    },
+
+    /** Ritual confirmation — persist the verified device pin for the
+     *  signed-in user and refresh the sync gate cache. */
+    async addPin(pin: DevicePin): Promise<void> {
+      await savePin(this.meUserId, pin);
+      this.pins.set(pin.peerUserId, pin);
+      this.notify();
+    },
+
     /** S10 cancel — drop the pre-ack invite marker; no relay frame
      *  exists for cancellation, the server-side invite dies on its TTL. */
     cancelInvite(peerId: string): void {

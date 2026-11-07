@@ -5,11 +5,16 @@
 // MFE contract promises: immutable UI snapshots, whitelisted fields,
 // imperative notify-driven emission (no cross-module Vue reactivity).
 
+import "fake-indexeddb/auto";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
 
 import { RelayClient, type RelayEvent } from "./relay";
-import { createPrivateRemote, type PrivateSessionView } from "./remote";
+import {
+  createPrivateRemote,
+  type PrivateSessionView,
+  type VerificationView,
+} from "./remote";
 import { usePrivateStore, type PrivateSession } from "./store";
 
 class SilentRelay extends RelayClient {
@@ -55,6 +60,24 @@ class SilentRelay extends RelayClient {
 }
 
 const PEER = { id: "peer-1", displayName: "Bob", tag: "bob#1" };
+
+class FakeDir {
+  keys: { keyId: string; publicKey: string; label?: string }[] = [];
+  revoked: string[] = [];
+  publish() {
+    return Promise.resolve({});
+  }
+  listMine() {
+    return Promise.resolve([]);
+  }
+  listPeer() {
+    return Promise.resolve(this.keys);
+  }
+  revoke(keyId: string) {
+    this.revoked.push(keyId);
+    return Promise.resolve();
+  }
+}
 
 function seeded(store: ReturnType<typeof usePrivateStore>, over: Partial<PrivateSession> = {}) {
   const s: PrivateSession = {
@@ -245,5 +268,83 @@ describe("PrivateRemote — host boundary", () => {
     expect(store.sessions.size).toBe(0);
     expect(store.client).toBeNull();
     expect(store.relayState).toBe("offline");
+  });
+});
+
+describe("PrivateRemote — device verification", () => {
+  function vsetup() {
+    setActivePinia(createPinia());
+    const store = usePrivateStore();
+    const dir = new FakeDir();
+    store.boot("/relay", () => "tok", new SilentRelay("/relay"), "me", dir as never);
+    const remote = createPrivateRemote(store);
+    return { store, remote, dir };
+  }
+
+  it("start → pending fingerprint → confirm persists the pin", async () => {
+    const { store, remote, dir } = vsetup();
+    dir.keys = [{ keyId: "k1", publicKey: btoa("peer-pub-1"), label: "phone" }];
+    await store.ready;
+    const views: VerificationView[] = [];
+    remote.watchVerification(PEER.id, (v) => views.push(v));
+    expect(views[0].state).toBe("unverified");
+
+    await remote.startVerification(PEER.id);
+    expect(views.at(-1)?.state).toBe("pending");
+    expect(views.at(-1)?.fingerprint).toBeTruthy();
+    expect(views.at(-1)?.devices).toHaveLength(1);
+
+    await remote.confirmVerification(PEER.id);
+    expect(views.at(-1)?.state).toBe("verified");
+    expect(store.pins.get(PEER.id)?.publicKey).toBe(btoa("peer-pub-1"));
+    await store.teardown();
+  });
+
+  it("key-changed when the shown key differs from the pin", async () => {
+    const { store, remote, dir } = vsetup();
+    dir.keys = [{ keyId: "k1", publicKey: btoa("peer-pub-1") }];
+    await store.ready;
+    await remote.startVerification(PEER.id);
+    await remote.confirmVerification(PEER.id);
+
+    dir.keys = [{ keyId: "k2", publicKey: btoa("peer-pub-2") }];
+    const views: VerificationView[] = [];
+    remote.watchVerification(PEER.id, (v) => views.push(v));
+    await remote.startVerification(PEER.id);
+    expect(views.at(-1)?.state).toBe("key-changed");
+    await store.teardown();
+  });
+
+  it("reject discards the pending ritual without pinning", async () => {
+    const { store, remote, dir } = vsetup();
+    dir.keys = [{ keyId: "k1", publicKey: btoa("peer-pub-1") }];
+    await store.ready;
+    const views: VerificationView[] = [];
+    remote.watchVerification(PEER.id, (v) => views.push(v));
+    await remote.startVerification(PEER.id);
+    remote.rejectVerification(PEER.id);
+    expect(views.at(-1)?.state).toBe("unverified");
+    expect(store.pins.has(PEER.id)).toBe(false);
+    await store.teardown();
+  });
+
+  it("watchActiveSessions emits live views; forgetDevice revokes and wipes", async () => {
+    const { store, remote, dir } = vsetup();
+    await store.ready;
+    const keyId = store.identity!.keyId;
+    const lists: PrivateSessionView[][] = [];
+    remote.watchActiveSessions((v) => lists.push(v));
+    expect(lists[0]).toEqual([]);
+    seeded(store);
+    store.notify();
+    expect(lists.at(-1)).toHaveLength(1);
+    expect(lists.at(-1)?.[0]?.peerId).toBe(PEER.id);
+
+    await remote.forgetDevice();
+    expect(dir.revoked).toEqual([keyId]);
+    expect(store.identity).toBeNull();
+    expect(
+      (await indexedDB.databases()).some((db) => db.name === "openglass-private"),
+    ).toBe(false);
   });
 });
