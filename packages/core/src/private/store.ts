@@ -397,10 +397,21 @@ export const usePrivateStore = defineStore("private", {
 
     /** Ritual confirmation — persist the verified device pin for the
      *  signed-in user and refresh the sync gate cache. */
-    async addPin(pin: DevicePin): Promise<void> {
-      await savePin(this.meUserId, pin);
-      this.pins.set(pin.peerUserId, pin);
-      this.notify();
+    addPin(pin: DevicePin): Promise<void> {
+      const owner = this.meUserId;
+      const generation = this.generation;
+      if (!owner || !this.identity || !this.client) return Promise.resolve();
+      const previousWork = this.storageWork;
+      const work = (async () => {
+        await previousWork;
+        if (generation !== this.generation || owner !== this.meUserId) return;
+        await savePin(owner, pin);
+        if (generation !== this.generation || owner !== this.meUserId) return;
+        this.pins.set(pin.peerUserId, pin);
+        this.notify();
+      })();
+      this.storageWork = work;
+      return work;
     },
 
     /** S10 cancel — drop the pre-ack invite marker; no relay frame

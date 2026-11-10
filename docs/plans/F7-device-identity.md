@@ -241,6 +241,33 @@ No Chromium, full gate, real-device checks or live directory ACL tests ran.
 Verification pending-state cleanup and asynchronous confirmation races remain
 unverified and must be reviewed before F7 acceptance.
 
+## V2e.2 — verification lifecycle isolation
+
+Implementation: lifecycle generation changes clear pending rituals, device
+lists, fingerprints and request handles inside the remote. A per-peer
+request handle prevents late directory/fingerprint work from reopening a
+rejected or superseded ritual. Confirmation checks the same generation and
+pending object after awaiting readiness. Pin writes capture the owner,
+serialize with storage work, and cannot restore stopped RAM; teardown waits
+for writes before deleting IndexedDB.
+
+Three regressions first failed: stop retained a ritual, a delayed directory
+response reopened a rejected ritual, and confirmation raced DB deletion.
+All three pass after the fix. Core 122/122 and typechecks passed in the gate
+attempt. The first full gate failed: Go tools were missing from PATH, PWA
+consent had a test failure, and Chromium was absent. Build and production
+bundle guard passed. Isolated consent retest passed (9/9), not proof that
+flakiness is fixed. Go directory contract tests passed under the race
+ detector using the installed SDK. Chromium was installed for further work.
+A corrected-PATH gate exposed existing Go lint/format issues; full acceptance
+remains blocked until the complete gate and F7 Chromium scenarios pass.
+
+Preflight: graph.diff was clean and impact.of(remote) identified its tests.
+Vector search remains unavailable in the active Python environment as noted
+above; vector freshness is not established. No independent agent review is
+claimed. Owner requests continued local increments before mass review and
+manual acceptance; push/merge/deployment still require separate approval.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off

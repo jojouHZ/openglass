@@ -209,6 +209,8 @@ export function createPrivateRemote(
   const verifPending = new Map<string, { keyId: string; publicKey: string }>();
   const verifFingerprint = new Map<string, SasFingerprint>();
   const verifDevices = new Map<string, VerificationDeviceView[]>();
+  const verifRequests = new Map<string, symbol>();
+  let verificationGeneration = store.generation;
 
   function invitesView(): PrivateInvitesView {
     return {
@@ -245,6 +247,13 @@ export function createPrivateRemote(
   }
 
   function emit(): void {
+    if (verificationGeneration !== store.generation) {
+      verificationGeneration = store.generation;
+      verifPending.clear();
+      verifFingerprint.clear();
+      verifDevices.clear();
+      verifRequests.clear();
+    }
     for (const [peerId, subs] of sessionSubs) {
       const view = toSessionView(store.sessionByPeer(peerId));
       for (const cb of subs) cb(view);
@@ -347,43 +356,53 @@ export function createPrivateRemote(
       };
     },
     async startVerification(peerId, keyId) {
+      emit();
+      const generation = store.generation;
+      const request = Symbol();
+      verifRequests.set(peerId, request);
+      verifPending.delete(peerId);
+      verifFingerprint.delete(peerId);
+      verifDevices.delete(peerId);
+      emit();
+      const current = () => generation === store.generation && verifRequests.get(peerId) === request;
       await store.ready;
+      if (!current() || !store.identity || !store.meUserId) return;
+      const identity = store.identity;
       const keys = await store.listPeerKeys(peerId);
-      verifDevices.set(
-        peerId,
-        keys.map((k) => ({
-          keyId: k.keyId,
-          publicKey: k.publicKey,
-          label: k.label ?? null,
-        })),
-      );
+      if (!current()) return;
       const key = keyId ? keys.find((k) => k.keyId === keyId) : keys[0];
-      if (key && store.identity) {
-        verifPending.set(peerId, {
-          keyId: key.keyId,
-          publicKey: key.publicKey,
-        });
-        verifFingerprint.set(
-          peerId,
-          await sasFingerprint(store.identity.pubB64, key.publicKey),
-        );
+      const fingerprint = key ? await sasFingerprint(identity.pubB64, key.publicKey) : null;
+      if (!current()) return;
+      verifDevices.set(peerId, keys.map((k) => ({
+        keyId: k.keyId,
+        publicKey: k.publicKey,
+        label: k.label ?? null,
+      })));
+      if (key && fingerprint) {
+        verifPending.set(peerId, { keyId: key.keyId, publicKey: key.publicKey });
+        verifFingerprint.set(peerId, fingerprint);
       }
       emit();
     },
     async confirmVerification(peerId) {
+      emit();
+      const generation = store.generation;
       const pending = verifPending.get(peerId);
       if (!pending) return;
       await store.ready;
+      if (generation !== store.generation || verifPending.get(peerId) !== pending) return;
       await store.addPin({
         peerUserId: peerId,
         keyId: pending.keyId,
         publicKey: pending.publicKey,
         verifiedAt: new Date().toISOString(),
       });
+      if (generation !== store.generation || verifPending.get(peerId) !== pending) return;
       verifPending.delete(peerId);
       emit();
     },
     rejectVerification(peerId) {
+      verifRequests.delete(peerId);
       verifPending.delete(peerId);
       verifFingerprint.delete(peerId);
       emit();
