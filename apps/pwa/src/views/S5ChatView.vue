@@ -18,7 +18,7 @@ import {
   useSessionStore,
 } from "@openglass/core";
 
-import type { PrivateSessionView } from "@openglass/core/private/remote";
+import type { PrivateSessionView, VerificationView } from "@openglass/core/private/remote";
 
 import type { StagedAttachment } from "../components/chat/attachment";
 import { MAX_ATTACHMENT } from "../components/chat/attachment";
@@ -44,6 +44,11 @@ const PrivateInviteCard = privateEnabled
       () => import("../components/private/PrivateInviteCard.vue"),
     )
   : null;
+const DeviceVerification = privateEnabled
+  ? defineAsyncComponent(() => import("../components/private/DeviceVerification.vue"))
+  : null;
+const verificationOpen = ref(false);
+const verification = shallowRef<VerificationView | null>(null);
 
 const chatId = computed(() => String(route.params.chatId));
 const chat = computed(() => chats.chats.find((c) => c.id === chatId.value));
@@ -102,11 +107,12 @@ watch(
     stopPrivateWatch?.();
     stopPrivateWatch = null;
     privSession.value = null;
+    verification.value = null;
+    verificationOpen.value = false;
     if (peerId && privateRemote) {
-      stopPrivateWatch = privateRemote.watchSession(
-        peerId,
-        (v) => (privSession.value = v),
-      );
+      const stopSession = privateRemote.watchSession(peerId, (v) => (privSession.value = v));
+      const stopVerification = privateRemote.watchVerification(peerId, (v) => (verification.value = v));
+      stopPrivateWatch = () => { stopSession(); stopVerification(); };
     }
   },
   { immediate: true },
@@ -333,7 +339,11 @@ async function openPinned() {
 
 function onPrivateToggle() {
   const p = peer.value;
-  if (!p) return;
+  if (!p || notContacts.value) return;
+  if (verification.value?.state !== "verified") {
+    verificationOpen.value = true;
+    return;
+  }
   const s = privSession.value;
   router.push(
     !s
@@ -533,6 +543,16 @@ watch(
       :peer-id="peer.id"
       :chat-id="chatId"
       @verify="router.push({ name: 's11b-verify', params: { chatId } })"
+    />
+
+    <component
+      :is="DeviceVerification"
+      v-if="DeviceVerification && verificationOpen && peer"
+      :key="peer.id"
+      :peer-id="peer.id"
+      :peer-name="peer.displayName"
+      @confirmed="verificationOpen = false"
+      @cancel="verificationOpen = false"
     />
 
     <ChatSearch
