@@ -285,6 +285,35 @@ An earlier consent failure remains recorded; successful reruns alone do
 not establish its root cause. The new F7 browser contract test is pending
 validation and does not replace the V3 in-chat UI acceptance.
 
+## V2e.4 — real Chromium device-pair contract
+
+Added a real-Chromium test using the existing remote facade (discovered
+from Vue's test runtime, with no production test hook). It compares both
+fingerprints, confirms pins, reloads, establishes a signed session, delivers
+an encrypted message, reloads without restoring the session, checks the
+identity/pins store names, wipes on teardown, and switches users without
+inheriting pins. It explicitly selects the current devices' published key
+IDs; older directory entries from other test logins are not the device
+under comparison. Contact-flow plus this test pass together (4/4).
+
+The expanded browser regression initially found relay-established replay
+recreating an old session after reload. Unknown established sessions now
+receive burn instead of generating new session keys; a known RAM session
+or pending invitation is required. Unit fixtures now model invite ack before
+establishment. Core 123/123 and core/PWA typechecks pass; the browser test
+passes with the installed Chromium and local pwlibs LD_LIBRARY_PATH.
+
+A full browser suite run had 10/13 passing. The new test initially selected
+an older device key when other tests had already published keys (corrected
+with explicit selection and a combined rerun). Two legacy private UI tests
+still expect the pre-F7 unpinned/per-session ritual and destructive pagehide;
+they must be migrated with the V3 in-chat verification UI, not skipped.
+A prior overlapping browser/gate run shared a server that was shut down;
+its connection-refused failures are not product evidence. Run browser
+suites sequentially. Full gate remains not green; owner manual acceptance
+and V3 remain outstanding. Store-name inspection alone is not a complete
+forensic audit of IndexedDB contents.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off
