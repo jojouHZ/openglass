@@ -268,6 +268,23 @@ above; vector freshness is not established. No independent agent review is
 claimed. Owner requests continued local increments before mass review and
 manual acceptance; push/merge/deployment still require separate approval.
 
+## V2e.3 — directory authorization and gate repairs
+
+The directory Mem contract now checks cross-owner revoke rejection,
+owner revoke visibility to a mutual peer, and loss of read access after
+contact deletion. The targeted Go race tests pass. Fixed previously
+unhandled test response-close errors, asserted the post-revoke HTTP status,
+and applied gofmt to the contact response after verifiedAt removal.
+Golangci-lint reports zero issues with the installed SDK on PATH.
+
+The corrected-PATH gate passed Go race tests, both typechecks, core 122/122,
+and three consecutive PWA runs (205/205 each), build and bundle guard.
+The full gate is not green: browser dependencies still require the local
+pwlibs LD_LIBRARY_PATH, and browser scenarios must be rerun with it.
+An earlier consent failure remains recorded; successful reruns alone do
+not establish its root cause. The new F7 browser contract test is pending
+validation and does not replace the V3 in-chat UI acceptance.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off

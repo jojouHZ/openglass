@@ -19,9 +19,9 @@ import (
 
 func contactJSON(c *store.Contact) map[string]any {
 	return map[string]any{
-		"user":       userJSON(&c.User),
-		"mutual":     true, // contacts are always accepted mutual pairs
-		"addedAt":    c.AddedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		"user":    userJSON(&c.User),
+		"mutual":  true, // contacts are always accepted mutual pairs
+		"addedAt": c.AddedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
