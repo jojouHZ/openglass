@@ -47,6 +47,10 @@ const PrivateInviteCard = privateEnabled
 const DeviceVerification = privateEnabled
   ? defineAsyncComponent(() => import("../components/private/DeviceVerification.vue"))
   : null;
+const PrivateChatSurface = privateEnabled
+  ? defineAsyncComponent(() => import("../components/private/PrivateChatSurface.vue"))
+  : null;
+const privateLayer = ref(false);
 const verificationOpen = ref(false);
 const verification = shallowRef<VerificationView | null>(null);
 
@@ -108,6 +112,7 @@ watch(
     stopPrivateWatch = null;
     privSession.value = null;
     verification.value = null;
+    privateLayer.value = false;
     verificationOpen.value = false;
     if (peerId && privateRemote) {
       const stopSession = privateRemote.watchSession(peerId, (v) => (privSession.value = v));
@@ -118,11 +123,15 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => stopPrivateWatch?.());
+watch(privSession, (current, previous) => {
+  if (!current && previous) privateLayer.value = false;
+});
 const typing = computed(() => chats.typingIn(chatId.value));
 const offline = computed(() => chats.connState !== "online");
 const peerReadSeq = computed(() => chats.peerReadSeq[chatId.value] ?? 0);
 
 const subtitle = computed(() => {
+  if (privateLayer.value) return "private · ephemeral";
   if (typing.value) return "typing…";
   if (chat.value?.type === "group") {
     const n = chats.details[chatId.value]?.members?.length;
@@ -213,6 +222,7 @@ async function stageFile(f: File) {
 }
 
 async function onSend(text: string) {
+  if (privateLayer.value || verificationOpen.value) return;
   actionError.value = "";
   try {
     if (editing.value) {
@@ -344,14 +354,13 @@ function onPrivateToggle() {
     verificationOpen.value = true;
     return;
   }
-  const s = privSession.value;
-  router.push(
-    !s
-      ? { name: "s11-session-setup", params: { chatId: chatId.value } }
-      : s.status === "incoming" || s.status === "inviting"
-        ? { name: "s10-private-invite", params: { chatId: chatId.value } }
-        : { name: "s12-private-chat", params: { chatId: chatId.value } },
-  );
+  privateLayer.value = !privateLayer.value;
+  verificationOpen.value = false;
+  replyTo.value = null;
+  editing.value = null;
+  staged.value = null;
+  searchOpen.value = false;
+  menu.value = null;
 }
 
 async function toggleChatPin() {
@@ -504,8 +513,10 @@ watch(
       <button
         v-if="privateEnabled && peer && peer.id !== session.user?.id"
         class="grid size-11 place-items-center"
-        :class="privSession ? 'text-primary' : 'text-muted'"
-        aria-label="private session"
+        :class="privateLayer ? 'text-primary' : 'text-muted'"
+        :aria-label="privateLayer ? 'switch to public layer' : verification?.state === 'verified' ? 'switch to private layer' : 'verify device'"
+        :aria-pressed="privateLayer"
+        :disabled="notContacts"
         data-testid="private-toggle"
         @click="onPrivateToggle"
       >
@@ -539,10 +550,11 @@ watch(
     <!-- private invite / live-session card (pwa-dev only) -->
     <component
       :is="PrivateInviteCard"
-      v-if="PrivateInviteCard && peer && peer.id !== session.user?.id"
+      v-if="PrivateInviteCard && !privateLayer && peer && peer.id !== session.user?.id"
       :peer-id="peer.id"
       :chat-id="chatId"
-      @verify="router.push({ name: 's11b-verify', params: { chatId } })"
+      @verify="onPrivateToggle"
+      @open="onPrivateToggle"
     />
 
     <component
@@ -555,6 +567,16 @@ watch(
       @cancel="verificationOpen = false"
     />
 
+    <component
+      :is="PrivateChatSurface"
+      v-if="PrivateChatSurface && privateLayer && peer"
+      :key="peer.id"
+      :peer-id="peer.id"
+      :peer-name="peer.displayName"
+      :blocked="notContacts"
+      @verify="(privateLayer = false), (verificationOpen = true)"
+    />
+    <template v-if="!privateLayer">
     <ChatSearch
       v-if="searchOpen"
       :total="searchResults.length"
@@ -759,6 +781,7 @@ watch(
       {{ actionError }}
     </div>
     <Composer
+      v-if="!verificationOpen"
       :offline="offline || notContacts"
       :locked-reason="notContacts ? 'not contacts' : undefined"
       :reply-to="replyTo"
@@ -769,6 +792,7 @@ watch(
       @cancel="cancelStrip"
       @stage="stageFile"
     />
+    </template>
 
     <MessageMenu
       v-if="menu"
