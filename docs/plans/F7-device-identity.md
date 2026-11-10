@@ -205,6 +205,42 @@ required before advancing; no push, merge or deploy is included.
   full `pnpm gate`, real-device checks and owner review. None are implied
   by passing directory transport tests.
 
+## V2e.1 — authenticated reconnect regression
+
+Plan (2026-11-10): exercise the actual stop/connect path, rather than a
+manual boot that supplies the user ID again. Preserve the user-ID getter
+through self-healing boot so the current owner is resolved after stop or
+logout. Verify identity reuse, owner-scoped pins, and repeated publication.
+
+Ownership: frontend core implements; testing adds regressions; security
+checks owner isolation; documentation records evidence; orchestrator
+coordinates. Product, PWA, backend and DevOps are advisory, with no planned
+changes. Role activation is not independent review.
+
+Acceptance: regression fails before the fix; core/PWA tests and typechecks
+pass afterward. One local implementation commit, graph refresh, then owner
+review. No push, merge or deployment is authorized by this increment.
+Chromium, mutual directory ACL tests, verification lifecycle races and the
+full gate remain subsequent V2e work; no merge-ready claim until those pass.
+Screen-lock/Android work and V3 UI are excluded. Private code remains in
+project MVP scope but excluded from the production PWA bundle.
+
+Preflight: graph.diff reported no structural differences; impact.of(store)
+identified remote and store tests. Vector search failed because the active
+Python environment lacks sentence-transformers; vector freshness is unknown.
+Source code and owner decisions are authoritative. No new product decision
+is required for this reconnect correction.
+
+Evidence: the actual-connect regression first failed with an empty owner
+ID after stop. Passing the preserved getter into self-healing boot fixes
+that path. The test checks same-owner identity reuse and a different owner
+after logout, empty pin cache for that owner, and repeated publication
+before logout. Core 119/119 and PWA 205/205 tests and both typechecks passed.
+PWA tests emitted mock-network/AbortError diagnostics with exit code zero.
+No Chromium, full gate, real-device checks or live directory ACL tests ran.
+Verification pending-state cleanup and asynchronous confirmation races remain
+unverified and must be reviewed before F7 acceptance.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off

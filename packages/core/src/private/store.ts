@@ -355,7 +355,7 @@ export const usePrivateStore = defineStore("private", {
      *  logout→login cycle, so a null client is rebuilt and re-wired. */
     connect(): void {
       if (!this.client && this.relayUrl && this.getAccessToken) {
-        this.boot(this.relayUrl, this.getAccessToken);
+        this.boot(this.relayUrl, this.getAccessToken, undefined, this.getMeUserId ?? "");
       }
       this.ensureIdentity();
       const token = this.getAccessToken?.();

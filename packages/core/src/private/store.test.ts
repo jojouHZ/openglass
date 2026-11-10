@@ -3,7 +3,7 @@
 
 import "fake-indexeddb/auto";
 import { createPinia, setActivePinia } from "pinia";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { RelayClient, type RelayEvent } from "./relay";
 import { usePrivateStore, type PrivateSession } from "./store";
@@ -258,6 +258,36 @@ describe("private store — session lifecycle", () => {
     expect(dir.published).toHaveLength(2);
     expect(dir.published[1].keyId).toBe(sa.identity!.keyId);
     await sa.teardown();
+  });
+
+  it("actual connect after stop and logout resolves the current owner", async () => {
+    const connect = vi.spyOn(RelayClient.prototype, "connect").mockResolvedValue();
+    setActivePinia(createPinia());
+    const dir = new FakeDirectory();
+    const store = usePrivateStore();
+    let uid = USER_A.id;
+    try {
+      store.boot("/relay", () => "tok", new FakeRelay("/relay"), () => uid, dir as never);
+      await store.ready;
+      const originalKey = store.identity!.keyId;
+      store.stop();
+      store.connect();
+      await store.ready;
+      expect(store.meUserId).toBe(USER_A.id);
+      expect(store.identity?.keyId).toBe(originalKey);
+      expect(dir.published).toHaveLength(2);
+      await store.teardown();
+      uid = USER_B.id;
+      store.connect();
+      await store.ready;
+      expect(store.meUserId).toBe(USER_B.id);
+      expect(store.identity?.keyId).toBeTruthy();
+      expect(store.identity?.keyId).not.toBe(originalKey);
+      expect(store.pins.size).toBe(0);
+    } finally {
+      await store.teardown();
+      connect.mockRestore();
+    }
   });
 
   it("teardown revokes the published identity key before wiping", async () => {
