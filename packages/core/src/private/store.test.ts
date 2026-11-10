@@ -374,6 +374,34 @@ describe("private store — session lifecycle", () => {
     expect(b.messages[0].fromMe).toBe(false);
   });
 
+  it("late handshake work and old relay events cannot populate a new owner's module", async () => {
+    const { sa, ra } = await twoParties();
+    established(ra, "old-handshake", USER_B);
+    sa.stop();
+    const nextRelay = new FakeRelay("/relay");
+    sa.boot("/relay", () => "next-token", nextRelay, "next-owner");
+    ra.emit({ type: "relay.invite", data: { sessionId: "late-invite", from: USER_B, ttlSeconds: 300, strict: false, burnOnRead: false } });
+    await sa.ready;
+    await flush();
+    expect(sa.sessions.size).toBe(0);
+    expect(nextRelay.sent).toEqual([]);
+    await sa.teardown();
+  });
+
+  it("an in-flight send cannot use a new owner's relay after stop", async () => {
+    const { sa, ra, rb } = await twoParties();
+    established(ra, "stale-send", USER_B);
+    established(rb, "stale-send", USER_A);
+    await flush();
+    const sending = sa.send("stale-send", "old-owner-message");
+    sa.stop();
+    const nextRelay = new FakeRelay("/relay");
+    sa.boot("/relay", () => "next-token", nextRelay, "next-owner");
+    await expect(sending).rejects.toThrow();
+    expect(nextRelay.sent).toEqual([]);
+    await sa.teardown();
+  });
+
   it("burn wipes secrets but keeps the closed session entry", async () => {
     const { sa, sb, ra, rb } = await twoParties();
 
