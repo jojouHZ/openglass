@@ -73,15 +73,28 @@ test("device-pair ritual survives reload and authenticates a new volatile sessio
       await expect.poll(async () => (await command(page, "watchVerification", peer.id)).state).toBe("verified");
       expect(await command(page, "watchActiveSessions")).toEqual([]);
     }
-    await command(a, "startInvite", { id: seed.users.bob.id, displayName: seed.users.bob.displayName });
-    await expect.poll(async () => (await command(b, "watchInvites")).incoming.length).toBe(1);
+    await a.getByTestId("private-toggle").click();
+    await b.getByTestId("private-toggle").click();
+    await expect(a.getByTestId("private-layer")).toBeVisible();
+    await expect(a.getByTestId("priv-input")).toBeDisabled();
+    await a.getByTestId("start-private").click();
+    await expect(b.getByTestId("invite-incoming")).toBeVisible();
     const invite = (await command(b, "watchInvites")).incoming[0];
-    await command(b, "accept", invite.sessionId);
+    await b.getByTestId("invite-accept").click();
     for (const page of [a, b]) {
       await expect.poll(async () => (await command(page, "watchActiveSessions"))[0]?.status).toBe("verified");
     }
-    await command(a, "send", invite.sessionId, "volatile browser test");
-    await expect.poll(async () => (await command(b, "watchActiveSessions"))[0]?.messages[0]?.text).toBe("volatile browser test");
+    const publicSends = [];
+    a.on("request", (request) => {
+      if (request.method() === "POST" && request.url().includes("/messages")) publicSends.push(request.postData() ?? "");
+    });
+    await a.getByTestId("priv-input").fill("volatile browser test");
+    await a.getByTestId("priv-send").click();
+    await expect(b.getByTestId("priv-scroll")).toContainText("volatile browser test");
+    expect(publicSends.some((body) => body.includes("volatile browser test"))).toBe(false);
+    await expect(a).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
+    await a.getByTestId("private-toggle").click();
+    await expect(a.getByTestId("msg-scroll")).not.toContainText("volatile browser test");
     await a.reload();
     await expect(a.getByTestId("private-toggle")).toBeVisible();
     expect(await command(a, "watchActiveSessions")).toEqual([]);

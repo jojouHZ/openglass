@@ -62,6 +62,24 @@ a signed session works through the facade. This is not yet the complete
 same-window private composer implementation. Legacy private-route E2E
 migration and the full gate remain outstanding. No merge/deploy is implied.
 
+### V3.2 — same-window private surface
+
+The verified header switch now swaps public history/composer for a dev-only
+private surface without changing chat URL. Public reply/edit/upload state
+is cleared on layer changes; public send is guarded while private or in a
+verification ritual. The private surface supports invitations, TTL/strict
+choice, signed-session readiness, view-once sends, purge-on-exit and burn
+confirmation. Its composer is disabled without verified keys, relay access
+or contact consent. The live-session banner opens the in-chat layer.
+
+Component tests cover private-only routing, view-once, purge-on-exit,
+exchanging-key and removed-contact send gates. Real Chromium verifies
+in-chat verification, layer switching, invitation/acceptance, encrypted
+delivery and absence of the private test text in public message POSTs.
+PWA 209/209, typecheck, production build and private-artifact bundle guard
+passed. Legacy private UI E2E migration and whole-gate rerun remain pending;
+this is implementation evidence, not owner manual acceptance or merge approval.
+
 ## Current execution slices
 
 ### U1 — public UI acceptance on a real phone (next)

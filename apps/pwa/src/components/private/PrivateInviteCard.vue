@@ -13,7 +13,7 @@ import type { PrivateInvitesView } from "@openglass/core/private/remote";
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 
 const props = defineProps<{ peerId: string; chatId: string }>();
-const emit = defineEmits<{ verify: [sessionId: string] }>();
+const emit = defineEmits<{ verify: [sessionId: string]; open: [] }>();
 const remote = usePrivateRemote();
 
 const session = usePrivateSession(() => props.peerId);
@@ -47,7 +47,7 @@ function decline() {
     v-if="live && !incoming"
     class="mx-6 mt-2 flex w-[calc(100%-3rem)] items-center gap-2 rounded-card border border-line bg-soft px-4 py-2 text-left"
     data-testid="private-live-banner"
-    @click="$router.push({ name: 's12-private-chat', params: { chatId } })"
+    @click="emit('open')"
   >
     <svg viewBox="0 0 24 24" class="size-4 shrink-0 text-accent" fill="none" stroke="currentColor" stroke-width="2">
       <rect x="3" y="11" width="18" height="11" rx="2" />
