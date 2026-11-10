@@ -45,6 +45,23 @@ The hidden-page teardown policy was not approved and must not be implemented.
 The historical session/P0 plans below are superseded. F7 → M6 remains required.
 Desktop split view stays a separate later slice (F6).
 
+## V3 incremental evidence (2026-11-10)
+
+The owner authorized continued local increments, with mass review and manual
+acceptance before merge. V3.1 places device comparison inside the existing
+chat: the lock opens an inline panel, users select a published device,
+compare six objects and six digits, and independently confirm or reject.
+Directory/save failures surface without exposing internal diagnostics;
+device labels use escaped text. All access goes through PrivateRemote.
+The panel is dynamically imported only in the private dev build.
+
+Validation: two component tests, PWA 207/207, PWA typecheck, production build
+and bundle guard passed. Real Chromium verifies both users complete the
+in-chat ritual without leaving the chat URL, then pins survive reload and
+a signed session works through the facade. This is not yet the complete
+same-window private composer implementation. Legacy private-route E2E
+migration and the full gate remain outstanding. No merge/deploy is implied.
+
 ## Current execution slices
 
 ### U1 — public UI acceptance on a real phone (next)

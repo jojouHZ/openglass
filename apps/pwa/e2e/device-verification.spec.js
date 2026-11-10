@@ -32,12 +32,13 @@ async function signIn(page, user) {
       email: user.email,
     }));
   }, user);
-  const publishing = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().endsWith("/users/me/identity-keys"));
+  const publishing = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().endsWith("/users/me/identity-keys") && response.request().headers().authorization === `Bearer ${user.accessToken}`).then(async (response) => {
+    expect(response.ok()).toBe(true);
+    return (await response.json()).key.keyId;
+  });
   await page.goto(`/chats/${seed.chatId}`);
   await expect(page.getByTestId("private-toggle")).toBeVisible();
-  const response = await publishing;
-  expect(response.ok()).toBe(true);
-  return (await response.json()).key.keyId;
+  return publishing;
 }
 
 test("device-pair ritual survives reload and authenticates a new volatile session", async ({ browser }) => {
@@ -50,16 +51,20 @@ test("device-pair ritual survives reload and authenticates a new volatile sessio
     const aKeyId = await signIn(a, seed.users.alice);
     const bKeyId = await signIn(b, seed.users.bob);
     for (const [page, peer, keyId] of [[a, seed.users.bob, bKeyId], [b, seed.users.alice, aKeyId]]) {
-      await expect.poll(async () => {
-        await command(page, "startVerification", peer.id, keyId);
-        return (await command(page, "watchVerification", peer.id)).state;
-      }).toBe("pending");
+      await page.getByTestId("private-toggle").click();
+      await expect(page.getByTestId("device-verification")).toBeVisible();
+      await page.getByTestId("verification-device").selectOption(keyId);
+      await expect(page.getByTestId("verification-fingerprint")).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
+      expect((await command(page, "watchVerification", peer.id)).state).toBe("pending");
     }
     const av = await command(a, "watchVerification", seed.users.bob.id);
     const bv = await command(b, "watchVerification", seed.users.alice.id);
     expect(av.fingerprint).toEqual(bv.fingerprint);
-    await command(a, "confirmVerification", seed.users.bob.id);
-    await command(b, "confirmVerification", seed.users.alice.id);
+    await a.getByTestId("verification-confirm").click();
+    await b.getByTestId("verification-confirm").click();
+    await expect(a.getByTestId("device-verification")).not.toBeVisible();
+    await expect(b.getByTestId("device-verification")).not.toBeVisible();
     await a.reload();
     await b.reload();
     await expect(a.getByTestId("private-toggle")).toBeVisible();
