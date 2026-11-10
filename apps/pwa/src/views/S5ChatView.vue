@@ -199,6 +199,7 @@ async function chatAction(label: string, fn: () => Promise<unknown>) {
 }
 
 async function stageFile(f: File) {
+  if (privateLayer.value || verificationOpen.value) return;
   if (f.size > MAX_ATTACHMENT) {
     staged.value = {
       fileName: f.name,
@@ -356,9 +357,6 @@ function onPrivateToggle() {
   }
   privateLayer.value = !privateLayer.value;
   verificationOpen.value = false;
-  replyTo.value = null;
-  editing.value = null;
-  staged.value = null;
   searchOpen.value = false;
   menu.value = null;
 }
@@ -576,7 +574,7 @@ watch(
       :blocked="notContacts"
       @verify="(privateLayer = false), (verificationOpen = true)"
     />
-    <template v-if="!privateLayer">
+    <div v-show="!privateLayer" class="flex min-h-0 flex-1 flex-col">
     <ChatSearch
       v-if="searchOpen"
       :total="searchResults.length"
@@ -781,8 +779,8 @@ watch(
       {{ actionError }}
     </div>
     <Composer
-      v-if="!verificationOpen"
-      :offline="offline || notContacts"
+      v-show="!verificationOpen"
+      :offline="offline || notContacts || privateLayer || verificationOpen"
       :locked-reason="notContacts ? 'not contacts' : undefined"
       :reply-to="replyTo"
       :editing="editing"
@@ -792,7 +790,7 @@ watch(
       @cancel="cancelStrip"
       @stage="stageFile"
     />
-    </template>
+    </div>
 
     <MessageMenu
       v-if="menu"

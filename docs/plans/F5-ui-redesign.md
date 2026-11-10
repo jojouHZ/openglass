@@ -102,6 +102,30 @@ readiness item; contact verification badges, chat-list private-session chips,
 remaining screen/a11y sweep and release operations must be reconciled with
 the existing checklist before declaring the entire roadmap complete.
 
+### V3.4 — public draft isolation during layer switches
+
+A new Chromium assertion first reproduced loss of the public draft on a
+private/public switch. Public history and composer now stay mounted but
+hidden and disabled in private mode; reply/edit/upload state stays public,
+and public send/upload handlers reject calls while private or verifying.
+The browser test confirms the original public draft returns unchanged and
+no private test text appears in public message POSTs. This supersedes the
+V3.2 note about clearing public draft state.
+
+The final sequential gate passed again after this fix: core 125/125,
+PWA 209/209 three times, both typechecks, build/bundle guard, Go checks and
+Chromium 13/13. An earlier PWA-unit run overlapping browser activity failed
+two fixed-delay assertions (consent request count and pinned-bar load);
+the sequential gate passed. That does not prove those timing-sensitive
+unit assertions are deterministic under load.
+
+V3 remains in progress, not complete: F2 still requires the settings sheet
+and preference choice, removal of legacy private routes, mask/palette/pattern
+and vertical view-once control, timeline ended/reload states and list chips.
+U2/U3 and the owner mass review/manual acceptance are not completed by this
+implementation. Production OTP/provider configuration and live deployment
+remain separately owner-gated R1/R2 work.
+
 ## Current execution slices
 
 ### U1 — public UI acceptance on a real phone (next)
