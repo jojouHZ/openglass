@@ -314,6 +314,31 @@ suites sequentially. Full gate remains not green; owner manual acceptance
 and V3 remain outstanding. Store-name inspection alone is not a complete
 forensic audit of IndexedDB contents.
 
+## V2e.5 — asynchronous crypto ownership
+
+A regression reproduced an old owner's in-flight encrypted send using the
+new owner's relay after stop/reboot. Async send now binds generation, client
+and session instance; it rejects if any changes before wire send. Handshake,
+key derivation, decrypted delivery and encrypted receipts likewise check
+lifecycle ownership before committing results. Old relay callbacks are
+ignored after client replacement; pin-gated invite/accept continuations
+cannot cross a generation change. Tests cover stale send, late handshake
+and old-relay invite delivery after an account switch. Core 125/125 and
+core typecheck pass. This does not claim independent security audit.
+
+Legacy browser tests are migrated to the in-chat device-pair ritual and
+same-window private surface. View-once/burn and preserving tab-close plus
+explicit destructive teardown both pass in real Chromium (2/2). These
+replace the obsolete unpinned per-session ritual and destructive-pagehide
+expectations, not the production bundle guard or owner manual acceptance.
+Final validation for these increments: the complete pnpm gate passed with
+Go SDK/lint on PATH and pwlibs on LD_LIBRARY_PATH: gofmt, golangci-lint,
+Go race tests, both typechecks, core 125/125, PWA 209/209 three consecutive
+runs, production build, MVP bundle guard and real Chromium 13/13. Test
+output still includes mock-network/AbortError and WebSocket-reset diagnostics;
+no test failures occurred in this final run. This is local automated evidence,
+not owner mass review, real-phone acceptance or permission to merge/deploy.
+
 ## Risks
 - Largest security change since the private layer shipped: protocol
   change + persistent store; needs Security Agent design sign-off

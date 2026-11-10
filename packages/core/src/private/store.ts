@@ -35,7 +35,7 @@ import {
 } from "./identity";
 import { IdentityDirectory } from "./directory";
 import { getPin, listPins, savePin, type DevicePin } from "./pins";
-import { RelayClient, type ConnState, type PeerUser } from "./relay";
+import { RelayClient, type ConnState, type PeerUser, type RelayEvent } from "./relay";
 
 export type PrivateStatus =
   | "inviting" // we sent relay.invite, waiting for accept
@@ -201,8 +201,10 @@ export const usePrivateStore = defineStore("private", {
       this.client = client ?? new RelayClient(relayUrl);
       this.ensureIdentity();
       const c = this.client;
+      const on = <T extends RelayEvent["type"]>(type: T, handler: (event: Extract<RelayEvent, { type: T }>) => void) =>
+        c.on<T>(type, (event) => { if (this.client === c) handler(event); });
 
-      c.on("relay.invite", (ev) => {
+      on("relay.invite", (ev) => {
         const s: PrivateSession = {
           id: ev.data.sessionId,
           peer: ev.data.from,
@@ -227,7 +229,7 @@ export const usePrivateStore = defineStore("private", {
 
       // ack: server accepted our invite — the session now has a real
       // id, so declined/expired frames correlate by sessionId
-      c.on("relay.invited", (ev) => {
+      on("relay.invited", (ev) => {
         const existing = this.sessions.get(ev.data.sessionId);
         // dup/late ack after establishment must not regress the status
         if (existing && existing.status !== "inviting") return;
@@ -255,7 +257,7 @@ export const usePrivateStore = defineStore("private", {
         this.notify();
       });
 
-      c.on("relay.established", (ev) => {
+      on("relay.established", (ev) => {
         if (!this.sessions.has(ev.data.sessionId) && !this.pendingInvites.has(ev.data.peer.id)) {
           c.burn(ev.data.sessionId);
           return;
@@ -263,18 +265,18 @@ export const usePrivateStore = defineStore("private", {
         void this.onEstablished(ev.data);
       });
 
-      c.on("relay.declined", (ev) => this.dropSession(ev.data.sessionId));
+      on("relay.declined", (ev) => this.dropSession(ev.data.sessionId));
 
-      c.on("relay.msg", (ev) => {
+      on("relay.msg", (ev) => {
         void this.onMessage(ev.data.sessionId, ev.data.msgSeq, ev.data.blob);
       });
 
-      c.on("relay.error", () => {
+      on("relay.error", () => {
         // quota/not_found/etc — surfaced via session state, not logged:
         // error.code contains no private content
       });
 
-      c.on("relay.peer-offline", (ev) => {
+      on("relay.peer-offline", (ev) => {
         const s = this.sessions.get(ev.data.sessionId);
         if (s) {
           s.peerOfflineUntil = ev.data.graceEndsAt;
@@ -282,7 +284,7 @@ export const usePrivateStore = defineStore("private", {
         }
       });
 
-      c.on("relay.peer-online", (ev) => {
+      on("relay.peer-online", (ev) => {
         const s = this.sessions.get(ev.data.sessionId);
         if (s) {
           s.peerOfflineUntil = null;
@@ -290,7 +292,7 @@ export const usePrivateStore = defineStore("private", {
         }
       });
 
-      c.on("relay.closed", (ev) => {
+      on("relay.closed", (ev) => {
         const s = this.sessions.get(ev.data.sessionId);
         if (s) {
           s.status = "closed";
@@ -303,6 +305,7 @@ export const usePrivateStore = defineStore("private", {
       });
 
       c.onStateChange((s) => {
+        if (this.client !== c) return;
         this.relayState = s;
         if (s === "online") this.reconnectDelay = 1000;
         if (s === "offline") this.scheduleReconnect();
@@ -440,8 +443,10 @@ export const usePrivateStore = defineStore("private", {
       peer: PeerUser,
       opts: { ttlSeconds?: number; burnOnRead?: boolean; strict?: boolean } = {},
     ): void {
+      const generation = this.generation;
+      const client = this.client;
       void (async () => {
-        if (!(await this.pinned(peer.id))) return;
+        if (!(await this.pinned(peer.id)) || generation !== this.generation || this.client !== client) return;
         // server invite TTL is 60 s — if relay.invited never arrives the
         // invite was rejected and this marker must die with it
         this.pendingInvites.set(peer.id, {
@@ -455,9 +460,11 @@ export const usePrivateStore = defineStore("private", {
     },
 
     accept(sessionId: string): void {
+      const generation = this.generation;
+      const client = this.client;
       void (async () => {
         const s = this.sessions.get(sessionId);
-        if (!s || !(await this.pinned(s.peer.id))) return;
+        if (!s || !(await this.pinned(s.peer.id)) || generation !== this.generation || this.client !== client || this.sessions.get(sessionId) !== s) return;
         this.client?.accept(sessionId);
       })();
     },
@@ -475,6 +482,8 @@ export const usePrivateStore = defineStore("private", {
       resumeToken: string;
       ttlEndsAt: string;
     }): Promise<void> {
+      const generation = this.generation;
+      const client = this.client;
       const existing = this.sessions.get(d.sessionId);
       const invited = this.pendingInvites.get(d.peer.id);
       const s: PrivateSession = existing ?? {
@@ -509,8 +518,10 @@ export const usePrivateStore = defineStore("private", {
       try {
         if (!s.ownKeys) {
           const own = await generateSessionKeyPair();
+          if (generation !== this.generation || this.client !== client || this.sessions.get(d.sessionId) !== s || (s.status as PrivateStatus) === "closed") return;
           s.ownKeys = own;
           await this.ready;
+          if (generation !== this.generation || this.client !== client || !s.ownKeys) return;
           // handshake v2 — sign the ephemeral pub with this device's
           // identity; the peer verifies it against their pin of us
           const env: Envelope = { t: "key", k: own.rawPub };
@@ -518,13 +529,15 @@ export const usePrivateStore = defineStore("private", {
             env.i = this.identity.pubB64;
             env.s = await signWithIdentity(this.identity, fromB64(own.rawPub));
           }
-          this.client?.sendEnvelope(d.sessionId, encodeEnv(env));
+          if (generation !== this.generation || this.client !== client || !s.ownKeys) return;
+          client?.sendEnvelope(d.sessionId, encodeEnv(env));
         }
         // envelopes may have arrived before the session existed locally —
         // drain in wire order (key envelope first, then msgs); arrivals
         // during the drain re-queue via onMessage's draining check, so
         // loop until the buffer stays empty
         for (;;) {
+          if (generation !== this.generation || this.client !== client) return;
           const queued = this.pendingEnvelopes.get(d.sessionId) ?? [];
           this.pendingEnvelopes.delete(d.sessionId);
           if (!queued.length) break;
@@ -535,10 +548,12 @@ export const usePrivateStore = defineStore("private", {
       } finally {
         s.draining = false;
       }
+      if (generation !== this.generation || this.client !== client || this.sessions.get(d.sessionId) !== s) return;
       // peer's key may have arrived while our pair was generating
       if (s.pendingPeerPub) {
         await this.onPeerKey(d.sessionId, s.pendingPeerPub, s.pendingPeerSig ?? undefined, s.pendingPeerIdent ?? undefined);
       }
+      if (generation !== this.generation || this.client !== client || this.sessions.get(d.sessionId) !== s) return;
       this.notify();
       // reconnect path — drain anything buffered for us
       this.client?.resume(d.sessionId, d.resumeToken);
@@ -558,6 +573,8 @@ export const usePrivateStore = defineStore("private", {
     ): Promise<void> {
       const s = this.sessions.get(sessionId);
       if (!s?.ownKeys) return;
+      const generation = this.generation;
+      const ownKeys = s.ownKeys;
       s.pendingPeerPub = null;
       s.pendingPeerSig = null;
       s.pendingPeerIdent = null;
@@ -568,15 +585,19 @@ export const usePrivateStore = defineStore("private", {
         pin.publicKey === peerIdent &&
         !!peerSig &&
         (await verifyIdentitySignature(peerIdent, fromB64(peerRawPub), peerSig));
+      if (generation !== this.generation || this.sessions.get(sessionId) !== s || s.ownKeys !== ownKeys) return;
       if (!ok) {
         s.status = "closed";
         this.wipeSessionSecrets(s);
         this.notify();
         return;
       }
-      s.sessionKey = await deriveSessionKey(s.ownKeys, peerRawPub);
-      s.sas = await sasFingerprint(s.ownKeys.rawPub, peerRawPub);
-      if (s.status !== "closed") s.status = "verified";
+      const sessionKey = await deriveSessionKey(ownKeys, peerRawPub);
+      const sas = await sasFingerprint(ownKeys.rawPub, peerRawPub);
+      if (generation !== this.generation || this.sessions.get(sessionId) !== s || s.ownKeys !== ownKeys || s.status === "closed") return;
+      s.sessionKey = sessionKey;
+      s.sas = sas;
+      s.status = "verified";
       this.notify();
     },
 
@@ -599,6 +620,7 @@ export const usePrivateStore = defineStore("private", {
       blob: string,
     ): Promise<void> {
       const sessionId = s.id;
+      const generation = this.generation;
       // server msgSeq is per-session monotonic; resume can replay the
       // buffered tail — drop anything at-or-below the watermark
       if (seq <= s.lastSeq) return;
@@ -622,6 +644,7 @@ export const usePrivateStore = defineStore("private", {
       if (env.t === "msg" && s.sessionKey) {
         try {
           const p = await decryptEnvelope(s.sessionKey, env);
+          if (generation !== this.generation || this.sessions.get(sessionId) !== s || !s.sessionKey) return;
           if (p.k === "r") {
             // peer read our view-once messages — burn our copies now
             const ids = new Set(p.ids);
@@ -653,6 +676,8 @@ export const usePrivateStore = defineStore("private", {
     ): Promise<void> {
       const s = this.sessions.get(sessionId);
       if (!s?.sessionKey || !this.client) throw new Error("no session key");
+      const generation = this.generation;
+      const client = this.client;
       const id = crypto.randomUUID();
       const env = await encryptEnvelope(s.sessionKey, {
         k: "t",
@@ -660,7 +685,10 @@ export const usePrivateStore = defineStore("private", {
         text,
         bor: opts.viewOnce || undefined,
       });
-      this.client.sendEnvelope(sessionId, encodeEnv(env));
+      if (generation !== this.generation || this.client !== client || this.sessions.get(sessionId) !== s || !s.sessionKey) {
+        throw new Error("session ended during send");
+      }
+      client.sendEnvelope(sessionId, encodeEnv(env));
       s.messages.push({
         id,
         fromMe: true,
@@ -686,8 +714,14 @@ export const usePrivateStore = defineStore("private", {
       }
       if (!ids.length) return;
       this.notify();
+      const generation = this.generation;
+      const client = this.client;
       void encryptEnvelope(s.sessionKey, { k: "r", ids })
-        .then((env) => this.client?.sendEnvelope(sessionId, encodeEnv(env)))
+        .then((env) => {
+          if (generation === this.generation && this.client === client && this.sessions.get(sessionId) === s && s.sessionKey) {
+            client.sendEnvelope(sessionId, encodeEnv(env));
+          }
+        })
         .catch(() => undefined); // receipt loss → sender keeps its copy;
       // ours is still purged on view exit — degraded, not broken
     },
