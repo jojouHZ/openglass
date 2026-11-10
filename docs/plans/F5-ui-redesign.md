@@ -80,6 +80,28 @@ PWA 209/209, typecheck, production build and private-artifact bundle guard
 passed. Legacy private UI E2E migration and whole-gate rerun remain pending;
 this is implementation evidence, not owner manual acceptance or merge approval.
 
+### V3.3 — migrated browser acceptance and local gate
+
+Private UI E2E now compares current device keys before inviting, stays on
+the chat URL for setup, acceptance and messaging, checks view-once purge
+on layer exit and burn for both peers, and distinguishes preserving tab
+close from destructive teardown. The synthetic identity marker is retained
+on ordinary reopen, then explicit teardown removes the database.
+
+The final complete local gate passed: Go formatting/lint/race, typechecks,
+core 125/125, PWA 209/209 in three consecutive runs, production build,
+private-artifact bundle guard and Chromium 13/13. Run browser suites
+sequentially because Playwright can reuse another run's server. The local
+WSL environment uses ~/sdk/go/bin and ~/go/bin on PATH and
+~/pwlibs/usr/lib/x86_64-linux-gnu on LD_LIBRARY_PATH; no CI security setting
+was changed. Earlier failed attempts remain documented in F7.
+
+Owner mass review and real-device manual acceptance remain mandatory before
+merge. The in-chat implementation does not finish every F5 M7/M8 or release
+readiness item; contact verification badges, chat-list private-session chips,
+remaining screen/a11y sweep and release operations must be reconciled with
+the existing checklist before declaring the entire roadmap complete.
+
 ## Current execution slices
 
 ### U1 — public UI acceptance on a real phone (next)

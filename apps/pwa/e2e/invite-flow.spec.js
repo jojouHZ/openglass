@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const seed = JSON.parse(readFileSync(path.join(__dirname, ".e2e-state.json"), "utf8"));
 
 test.setTimeout(120000);
+const deviceKeys = new WeakMap();
 
 async function seedSession(page, user) {
   page.on("console", (msg) => console.log(`[${user.tag}] console:`, msg.text()));
@@ -46,7 +47,9 @@ async function seedSession(page, user) {
       }),
     );
   }, user);
+  const publishing = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().endsWith("/users/me/identity-keys") && response.request().headers().authorization === `Bearer ${user.accessToken}`).then(async (response) => (await response.json()).key.keyId);
   await page.goto(`/chats/${seed.chatId}`);
+  deviceKeys.set(page, await publishing);
   // Wait for the private toggle — it only renders once the direct chat
   // peer is loaded, which in turn requires the live REST call to return.
   try {
@@ -59,37 +62,38 @@ async function seedSession(page, user) {
   }
 }
 
-// Invite → accept → SAS → verify — both pages land on the private chat.
+// Device comparison → pin → invite → accept, all inside the existing chat.
 async function establishSession(alice, bob, { strict = false } = {}) {
-  // Alice starts the private session
+  // Both users explicitly compare the current published device keys.
+  for (const [page, other] of [[alice, bob], [bob, alice]]) {
+    await page.getByTestId("private-toggle").click();
+    await expect(page.getByTestId("device-verification")).toBeVisible();
+    await page.getByTestId("verification-device").selectOption(deviceKeys.get(other));
+    await expect(page.getByTestId("verification-fingerprint")).toBeVisible();
+  }
+  const aliceSAS = await alice.getByTestId("verification-fingerprint").textContent();
+  const bobSAS = await bob.getByTestId("verification-fingerprint").textContent();
+  expect(aliceSAS.trim()).toBe(bobSAS.trim());
+  await alice.getByTestId("verification-confirm").click();
+  await bob.getByTestId("verification-confirm").click();
+  await expect(alice.getByTestId("device-verification")).not.toBeVisible();
+  await expect(bob.getByTestId("device-verification")).not.toBeVisible();
+
+  // Alice starts the private session after the device-pair ritual.
   await alice.getByTestId("private-toggle").click();
-  await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/setup$/);
+  await bob.getByTestId("private-toggle").click();
   if (strict) await alice.getByTestId("opt-strict").click();
-  const startBtn = alice.getByTestId("start-private");
-  await expect(startBtn).toBeEnabled({ timeout: 30000 });
-  await startBtn.click();
-  await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/invite$/);
+  await expect(alice.getByTestId("start-private")).toBeEnabled({ timeout: 30000 });
+  await alice.getByTestId("start-private").click();
   await expect(alice.getByTestId("invite-waiting")).toBeVisible();
 
-  // Bob accepts the incoming invitation
-  await bob.getByTestId("private-toggle").click();
-  await expect(bob).toHaveURL(/\/chats\/[^/]+\/private\/invite$/);
+  // Bob accepts; signed session keys must pass the stored pin check.
   await expect(bob.getByTestId("invite-incoming")).toBeVisible();
   await bob.getByTestId("invite-accept").click();
-
-  // Both land on SAS verification
-  await expect(alice).toHaveURL(/\/chats\/[^/]+\/private\/verify$/, { timeout: 15000 });
-  await expect(bob).toHaveURL(/\/chats\/[^/]+\/private\/verify$/, { timeout: 15000 });
-
-  const aliceSAS = await alice.getByTestId("sas-grid").textContent({ timeout: 15000 });
-  const bobSAS = await bob.getByTestId("sas-grid").textContent({ timeout: 15000 });
-  expect(aliceSAS.trim()).toBe(bobSAS.trim());
-
-  await alice.getByTestId("sas-confirm").click();
-  await bob.getByTestId("sas-confirm").click();
-
-  await expect(alice).toHaveURL(/\/chats\/[^/]+\/private$/);
-  await expect(bob).toHaveURL(/\/chats\/[^/]+\/private$/);
+  await expect(alice.getByTestId("priv-input")).toBeEnabled({ timeout: 15000 });
+  await expect(bob.getByTestId("priv-input")).toBeEnabled({ timeout: 15000 });
+  await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
+  await expect(bob).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
 }
 
 test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) => {
@@ -124,10 +128,10 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   // Bob leaving the private screen purges his read view-once copy.
   // In-app navigation only — a page reload would wipe the whole volatile
   // session and priv-empty would prove nothing.
-  await bob.getByLabel("back").click();
+  await bob.getByTestId("private-toggle").click();
   await expect(bob).toHaveURL(/\/chats\/[^/]+$/);
   await bob.getByTestId("private-toggle").click();
-  await expect(bob).toHaveURL(/\/chats\/[^/]+\/private$/);
+  await expect(bob).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
   await expect(bob.getByTestId("priv-empty")).toBeVisible({ timeout: 5000 });
 
   // Alice burns the session from the inside — the relay's closed frame
@@ -143,7 +147,7 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   await bobCtx.close();
 });
 
-test("zero-trace teardown: tab close ejects peer and leaves no identity in IndexedDB", async ({ browser }) => {
+test("tab close stops the session but preserves trust; explicit teardown wipes IndexedDB", async ({ browser }) => {
   const aliceCtx = await browser.newContext();
   const alice = await aliceCtx.newPage();
   const bobCtx = await browser.newContext();
@@ -155,14 +159,14 @@ test("zero-trace teardown: tab close ejects peer and leaves no identity in Index
   // no 60 s grace wait in the test
   await establishSession(alice, bob, { strict: true });
 
-  // Give teardown something real to wipe: stand up the private identity
-  // DB the dev-tier keystore uses and put a marker record in it. (The
-  // runtime store is volatile-only today; this exercises the real wipe
-  // path, not a trivial absence.)
+  // Put a marker in the existing dev-tier identity store to distinguish
+  // preserving close/reopen from a destructive logout. This is synthetic
+  // test data, not a private message or persisted session key; the real
+  // device-pair persistence path is covered by device-verification.spec.
   await bob.evaluate(
     () =>
       new Promise((resolve, reject) => {
-        const req = indexedDB.open("openglass-private", 1);
+        const req = indexedDB.open("openglass-private", 2);
         req.onupgradeneeded = () => req.result.createObjectStore("identity");
         req.onsuccess = () => {
           const db = req.result;
@@ -178,18 +182,18 @@ test("zero-trace teardown: tab close ejects peer and leaves no identity in Index
       }),
   );
 
-  // Hard close — pagehide → teardown() (or a dirty kill; either way the
-  // next boot's prepareIdentityStore sweep must leave nothing behind)
+  // Ordinary close — pagehide stops volatile state without deleting
+  // identity and pins; explicit teardown below is the deletion boundary.
   await bob.close();
 
   // Strict peer-gone: relay.closed ejects Alice from the private screen
   await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 15000 });
 
-  // A fresh page in Bob's context boots the module — whichever path ran
-  // (graceful teardown or the dirty-boot sweep), the marker must be gone.
-  // The assertion is about the identity record, not about the DB name: the
-  // boot sweep itself may leave an empty DB behind, and polling for the
-  // name raced with that boot (flaky on a loaded machine).
+  // A fresh page in Bob's context boots the module and reuses device
+  // trust. The marker must remain until the explicit teardown below.
+  // The assertion distinguishes preserved records from an empty database;
+  // the separate F7 contract test checks persisted pins and device keys.
+  // Polling waits for authenticated bootstrap rather than an arbitrary delay.
   const probe = await bobCtx.newPage();
   await probe.goto("/");
   await expect
@@ -219,10 +223,17 @@ test("zero-trace teardown: tab close ejects peer and leaves no identity in Index
             };
           });
         }),
-      { timeout: 15000, message: "identity marker must not survive a dirty close" },
+      { timeout: 15000, message: "identity marker survives ordinary close" },
     )
-    .toBe(false);
+    .toBe(true);
 
+  await probe.evaluate(async () => {
+    const provides = document.querySelector("#app").__vue_app__._context.provides;
+    const remote = Reflect.ownKeys(provides).map((key) => provides[key])
+      .find((value) => typeof value?.teardown === "function");
+    await remote.teardown();
+  });
+  expect(await probe.evaluate(async () => (await indexedDB.databases()).map((db) => db.name))).not.toContain("openglass-private");
   await probe.close();
   await aliceCtx.close();
   await bobCtx.close();
