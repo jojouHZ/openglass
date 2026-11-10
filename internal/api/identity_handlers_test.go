@@ -26,7 +26,7 @@ func putKey(t *testing.T, ts *httptest.Server, path, body, tok string) (int, map
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var m map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&m)
 	return resp.StatusCode, m
@@ -76,7 +76,7 @@ func TestIdentityKeys_PublishListRevoke(t *testing.T) {
 		t.Fatalf("revoke-again: %d", c)
 	}
 	c, b = get(t, ts, "/api/v1/users/me/identity-keys", tok)
-	if len(b["keys"].([]any)) != 0 {
+	if c != 200 || len(b["keys"].([]any)) != 0 {
 		t.Fatalf("list after revoke: %v", b)
 	}
 }
@@ -97,5 +97,22 @@ func TestIdentityKeys_MutualOnlyRead(t *testing.T) {
 	c, b := get(t, ts, "/api/v1/users/"+bID+"/identity-keys", aTok)
 	if c != 200 || len(b["keys"].([]any)) != 1 {
 		t.Fatalf("mutual read: %d %v", c, b)
+	}
+	if c := del(t, ts, "/api/v1/users/me/identity-keys/b1", aTok); c != 404 {
+		t.Fatalf("cross-owner revoke: %d want 404", c)
+	}
+	if c := del(t, ts, "/api/v1/users/me/identity-keys/b1", bTok); c != 204 {
+		t.Fatalf("owner revoke: %d want 204", c)
+	}
+	c, b = get(t, ts, "/api/v1/users/"+bID+"/identity-keys", aTok)
+	if c != 200 || len(b["keys"].([]any)) != 0 {
+		t.Fatalf("mutual read after revoke: %d %v", c, b)
+	}
+	if c := del(t, ts, "/api/v1/contacts/"+bID, aTok); c != 204 {
+		t.Fatalf("remove contact: %d want 204", c)
+	}
+	c, _ = get(t, ts, "/api/v1/users/"+bID+"/identity-keys", aTok)
+	if c != 404 {
+		t.Fatalf("removed contact read: %d want 404", c)
 	}
 }
