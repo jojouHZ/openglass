@@ -256,6 +256,10 @@ export const usePrivateStore = defineStore("private", {
       });
 
       c.on("relay.established", (ev) => {
+        if (!this.sessions.has(ev.data.sessionId) && !this.pendingInvites.has(ev.data.peer.id)) {
+          c.burn(ev.data.sessionId);
+          return;
+        }
         void this.onEstablished(ev.data);
       });
 

@@ -165,7 +165,9 @@ function established(
   sessionId: string,
   peer: typeof USER_A,
   resumeToken = "rt",
+  flags = { burnOnRead: false, strict: false },
 ): void {
+  relay.emit({ type: "relay.invited", data: { sessionId, to: peer, ttlSeconds: 600, ...flags } });
   relay.emit({
     type: "relay.established",
     data: { sessionId, peer, resumeToken, ttlEndsAt: "2099-01-01T00:00:00Z" },
@@ -173,6 +175,17 @@ function established(
 }
 
 describe("private store — session lifecycle", () => {
+  it("rejects relay replay of a session absent from volatile state", async () => {
+    const { sa, ra } = await twoParties();
+    ra.emit({
+      type: "relay.established",
+      data: { sessionId: "old-session", peer: USER_B, resumeToken: "old-token", ttlEndsAt: "2099-01-01T00:00:00Z" },
+    });
+    await flush();
+    expect(sa.sessions.size).toBe(0);
+    expect(ra.sent).toContainEqual({ type: "relay.burn", data: { sessionId: "old-session" } });
+    await sa.teardown();
+  });
   it("stop clears volatile state but reboot retains identity and the owner's pins", async () => {
     const { sa, ra } = await twoParties();
     const { savePin } = await import("./pins");
@@ -604,7 +617,7 @@ describe("private store — session lifecycle", () => {
       data: { sessionId: "s9", from: USER_A, ttlSeconds: 300, burnOnRead: true, strict: true },
     });
     sb.accept("s9");
-    established(ra, "s9", USER_B);
+    established(ra, "s9", USER_B, "rt", { burnOnRead: true, strict: true });
     established(rb, "s9", USER_A);
     await flush();
     expect(sa.outgoingInvites).not.toContain("ub"); // consumed by established
