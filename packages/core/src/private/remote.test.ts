@@ -328,6 +328,52 @@ describe("PrivateRemote — device verification", () => {
     await store.teardown();
   });
 
+  it("stop discards rituals and a later owner cannot confirm them", async () => {
+    const { store, remote, dir } = vsetup();
+    dir.keys = [{ keyId: "k1", publicKey: btoa("peer") }];
+    await store.ready;
+    await remote.startVerification(PEER.id);
+    const views: VerificationView[] = [];
+    remote.watchVerification(PEER.id, (v) => views.push(v));
+    remote.stop();
+    expect(views.at(-1)).toMatchObject({ state: "unverified", fingerprint: null, devices: [] });
+    store.boot("/relay", () => "tok", new SilentRelay("/relay"), "other");
+    await store.ready;
+    await remote.confirmVerification(PEER.id);
+    expect(store.pins.size).toBe(0);
+    await store.teardown();
+  });
+
+  it("late directory responses cannot reopen a rejected ritual", async () => {
+    const { store, remote, dir } = vsetup();
+    await store.ready;
+    let resolve!: (keys: typeof dir.keys) => void;
+    dir.listPeer = () => new Promise((r) => { resolve = r; });
+    const starting = remote.startVerification(PEER.id);
+    await Promise.resolve();
+    remote.rejectVerification(PEER.id);
+    resolve([{ keyId: "late", publicKey: btoa("late") }]);
+    await starting;
+    const views: VerificationView[] = [];
+    remote.watchVerification(PEER.id, (v) => views.push(v));
+    expect(views.at(-1)).toMatchObject({ state: "unverified", fingerprint: null });
+    await remote.confirmVerification(PEER.id);
+    expect(store.pins.size).toBe(0);
+    await store.teardown();
+  });
+
+  it("logout during confirmation leaves no pin cache or database", async () => {
+    const { store, remote, dir } = vsetup();
+    dir.keys = [{ keyId: "k1", publicKey: btoa("peer") }];
+    await store.ready;
+    await remote.startVerification(PEER.id);
+    const confirming = remote.confirmVerification(PEER.id);
+    await remote.teardown();
+    await confirming;
+    expect(store.pins.size).toBe(0);
+    expect((await indexedDB.databases()).some((db) => db.name === "openglass-private")).toBe(false);
+  });
+
   it("watchActiveSessions emits live views; forgetDevice revokes and wipes", async () => {
     const { store, remote, dir } = vsetup();
     await store.ready;
