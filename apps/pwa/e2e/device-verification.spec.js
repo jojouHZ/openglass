@@ -73,9 +73,11 @@ test("device-pair ritual survives reload and authenticates a new volatile sessio
       await expect.poll(async () => (await command(page, "watchVerification", peer.id)).state).toBe("verified");
       expect(await command(page, "watchActiveSessions")).toEqual([]);
     }
+    await a.getByTestId("composer-input").fill("public draft stays public");
     await a.getByTestId("private-toggle").click();
     await b.getByTestId("private-toggle").click();
     await expect(a.getByTestId("private-layer")).toBeVisible();
+    await expect(a.getByTestId("composer-input")).not.toBeVisible();
     await expect(a.getByTestId("priv-input")).toBeDisabled();
     await a.getByTestId("start-private").click();
     await expect(b.getByTestId("invite-incoming")).toBeVisible();
@@ -95,6 +97,7 @@ test("device-pair ritual survives reload and authenticates a new volatile sessio
     await expect(a).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
     await a.getByTestId("private-toggle").click();
     await expect(a.getByTestId("msg-scroll")).not.toContainText("volatile browser test");
+    await expect(a.getByTestId("composer-input")).toHaveValue("public draft stays public");
     await a.reload();
     await expect(a.getByTestId("private-toggle")).toBeVisible();
     expect(await command(a, "watchActiveSessions")).toEqual([]);
