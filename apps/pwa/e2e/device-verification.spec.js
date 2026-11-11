@@ -80,6 +80,8 @@ test("device-pair ritual survives reload and authenticates a new volatile sessio
     await expect(a.getByTestId("composer-input")).not.toBeVisible();
     await expect(a.getByTestId("priv-input")).toBeDisabled();
     await a.getByTestId("start-private").click();
+    await expect(a.getByTestId("private-sheet")).toBeVisible();
+    await a.getByTestId("sheet-start").click();
     await expect(b.getByTestId("invite-incoming")).toBeVisible();
     const invite = (await command(b, "watchInvites")).incoming[0];
     await b.getByTestId("invite-accept").click();

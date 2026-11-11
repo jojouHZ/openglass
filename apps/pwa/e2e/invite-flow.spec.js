@@ -82,9 +82,11 @@ async function establishSession(alice, bob, { strict = false } = {}) {
   // Alice starts the private session after the device-pair ritual.
   await alice.getByTestId("private-toggle").click();
   await bob.getByTestId("private-toggle").click();
-  if (strict) await alice.getByTestId("opt-strict").click();
   await expect(alice.getByTestId("start-private")).toBeEnabled({ timeout: 30000 });
   await alice.getByTestId("start-private").click();
+  await expect(alice.getByTestId("private-sheet")).toBeVisible();
+  if (strict) await alice.getByTestId("opt-strict").click();
+  await alice.getByTestId("sheet-start").click();
   await expect(alice.getByTestId("invite-waiting")).toBeVisible();
 
   // Bob accepts; signed session keys must pass the stored pin check.
