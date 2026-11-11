@@ -119,8 +119,20 @@ two fixed-delay assertions (consent request count and pinned-bar load);
 the sequential gate passed. That does not prove those timing-sensitive
 unit assertions are deterministic under load.
 
-V3 remains in progress, not complete: F2 still requires the settings sheet
-and preference choice, removal of legacy private routes, mask/palette/pattern
+### V3.5 — settings sheet and legacy route removal
+
+`PrivateSheet` now owns invite options (5/15/60 min lifetime, strict mode,
+opt-in local preference persistence for those two values only, and a
+plain-language "what the server sees" note). `S10–S12` private routes and
+their views are deleted; old `/private/*` deep links fall into the catch-all,
+and `S7` "private session" opens `S5` with `?layer=private`. The MVP bundle
+guard markers were updated to the new private component names.
+
+Evidence: PWA unit 196/196, typecheck clean, targeted Chromium
+3/3 (device-verification + invite-flow incl. tab-close/teardown). Full gate
+re-runs at the next slice boundary.
+
+V3 remains in progress, not complete: F2 still requires mask/palette/pattern
 and vertical view-once control, timeline ended/reload states and list chips.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
