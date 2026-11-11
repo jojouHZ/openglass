@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 const dist = new URL("../dist/assets", import.meta.url).pathname;
 const MARKERS = [
-  /S1[012][A-Z]/, // S10PrivateInvite / S11SessionSetup / S11bVerify / S12PrivateChat chunks
+  /DeviceVerification|PrivateChatSurface|PrivateInviteCard|PrivateSheet/, // private component chunks
   /openglass-private/, // dev-tier IndexedDB name must never ship
   /relay\.(invite|accept|send|resume|burn)/, // relay protocol strings
   /\.private-mode/, // private palette scope (styles/private.css)

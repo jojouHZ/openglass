@@ -96,7 +96,8 @@ async function privateSession() {
   errorMsg.value = "";
   try {
     const { chat } = await api().chats.openDirect(userId.value);
-    router.push({ name: "s10-private-invite", params: { chatId: chat.id } });
+    // Private layer is same-window: open the chat; the user flips the lock there.
+    router.push({ name: "s5-chat-view", params: { chatId: chat.id }, query: { layer: "private" } });
   } catch {
     errorMsg.value = "failed to open chat";
   } finally {

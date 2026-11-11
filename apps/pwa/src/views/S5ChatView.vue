@@ -112,7 +112,9 @@ watch(
     stopPrivateWatch = null;
     privSession.value = null;
     verification.value = null;
-    privateLayer.value = false;
+    // a deep intent (?layer=private, e.g. from the contact profile) opens
+    // the private layer once; the URL stays the chat's own
+    privateLayer.value = privateEnabled && route.query.layer === "private" && !!peerId;
     verificationOpen.value = false;
     if (peerId && privateRemote) {
       const stopSession = privateRemote.watchSession(peerId, (v) => (privSession.value = v));
