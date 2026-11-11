@@ -7,6 +7,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import type { PrivateSessionView } from "@openglass/core/private/remote";
 import PrivateChatSurface from "./PrivateChatSurface.vue";
+import PrivateSheet from "./PrivateSheet.vue";
 
 function setup(verified = true) {
   const snapshot: PrivateSessionView = {
@@ -52,5 +53,26 @@ describe("same-window private surface", () => {
     await ready.wrapper.get("form").trigger("submit");
     expect(ready.remote.send).not.toHaveBeenCalled();
     ready.wrapper.unmount();
+  });
+});
+
+describe("private session settings sheet", () => {
+  it("emits chosen options and persists only lifetime/strict when asked", async () => {
+    localStorage.clear();
+    const wrapper = mount(PrivateSheet, { props: { open: true } });
+    await wrapper.get('[data-testid="ttl-300"]').trigger("click");
+    await wrapper.get('[data-testid="opt-remember"]').trigger("click");
+    expect(wrapper.text()).toContain("can't read messages");
+    await wrapper.get('[data-testid="sheet-start"]').trigger("click");
+    expect(wrapper.emitted("start")).toEqual([[{ ttlSeconds: 300, strict: false }]]);
+    expect(JSON.parse(localStorage.getItem("og.private.prefs")!)).toEqual({ ttlSeconds: 300, strict: false });
+    wrapper.unmount();
+    localStorage.clear();
+  });
+
+  it("rejects malformed stored preferences instead of crashing", () => {
+    localStorage.setItem("og.private.prefs", "{broken");
+    expect(() => mount(PrivateSheet, { props: { open: true } })).not.toThrow();
+    localStorage.clear();
   });
 });

@@ -4,6 +4,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { ConnState, PrivateInviteView, PrivateSessionView, VerificationView } from "@openglass/core/private/remote";
 import { usePrivateRemote } from "../../privateRemote";
+import PrivateSheet from "./PrivateSheet.vue";
 
 const props = defineProps<{ peerId: string; peerName: string; blocked: boolean }>();
 const emit = defineEmits<{ verify: [] }>();
@@ -15,8 +16,7 @@ const relay = ref<ConnState>("offline");
 const outgoing = ref(false);
 const text = ref("");
 const viewOnce = ref(false);
-const strict = ref(false);
-const ttl = ref(900);
+const sheetOpen = ref(false);
 const busy = ref(false);
 const error = ref("");
 const confirmBurn = ref(false);
@@ -59,8 +59,8 @@ async function send() {
   }
 }
 
-function start() {
-  if (enabled.value) remote.startInvite({ id: props.peerId, displayName: props.peerName }, { ttlSeconds: ttl.value, strict: strict.value });
+function start(opts: { ttlSeconds: number; strict: boolean }) {
+  if (enabled.value) remote.startInvite({ id: props.peerId, displayName: props.peerName }, opts);
 }
 function accept() {
   if (enabled.value && incoming.value) remote.accept(incoming.value.sessionId);
@@ -91,13 +91,8 @@ function burn() {
       <button class="min-h-11 px-4 text-muted" @click="remote.cancelInvite(peerId)">Cancel invite</button>
     </div>
     <div v-else-if="!session" class="px-4 py-3">
-      <label class="block text-meta text-muted">Lifetime
-        <select v-model.number="ttl" class="ml-2 min-h-11 rounded-control bg-bg px-3 text-ink" aria-label="private session lifetime">
-          <option :value="300">5 min</option><option :value="900">15 min</option><option :value="3600">1 hour</option>
-        </select>
-      </label>
-      <label class="flex min-h-11 items-center gap-2 text-meta text-ink"><input v-model="strict" type="checkbox" data-testid="opt-strict" />Strict: close on disconnect</label>
-      <button class="min-h-11 rounded-pill bg-primary px-4 text-meta text-primary-foreground disabled:opacity-40" :disabled="!enabled" data-testid="start-private" @click="start">Invite to private session</button>
+      <button class="min-h-11 rounded-pill bg-primary px-4 text-meta text-primary-foreground disabled:opacity-40" :disabled="!enabled" data-testid="start-private" @click="sheetOpen = true">Invite to private session</button>
+      <PrivateSheet v-model:open="sheetOpen" @start="start" />
     </div>
     <p v-if="session?.status === 'exchanging'" class="px-4 py-3 text-meta text-muted" role="status">Checking signed session keys…</p>
     <p v-if="session?.peerOfflineUntil" class="px-4 py-2 text-meta text-muted">Peer offline — session may expire.</p>
