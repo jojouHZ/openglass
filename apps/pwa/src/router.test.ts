@@ -5,11 +5,11 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The private-module boundary is architectural: pwa-mvp must not ship
-// S10–S12. These tests codify the gate (VITE_PRIVATE_MODULE) instead of
-// relying on manual bundle audits.
+// The private-module boundary is architectural: the pwa-mvp bundle must
+// not ship private code. Legacy private routes were removed — private
+// messaging happens inside the S5 chat surface now.
 
-const PRIVATE_NAMES = [
+const LEGACY_PRIVATE_NAMES = [
   "s10-private-invite",
   "s11-session-setup",
   "s11b-verify",
@@ -34,16 +34,16 @@ describe("router", () => {
     }
   });
 
-  it("excludes private routes by default (pwa-mvp)", async () => {
+  it("has no private routes — the private layer is same-window", async () => {
     const router = await loadRouter();
     const names = router.getRoutes().map((r) => r.name);
-    for (const n of PRIVATE_NAMES) expect(names).not.toContain(n);
+    for (const n of LEGACY_PRIVATE_NAMES) expect(names).not.toContain(n);
   });
 
-  it("includes private routes only with VITE_PRIVATE_MODULE=1 (pwa-dev)", async () => {
-    vi.stubEnv("VITE_PRIVATE_MODULE", "1");
+  it("redirects old private deep links to the chat list", async () => {
     const router = await loadRouter();
-    const names = router.getRoutes().map((r) => r.name);
-    for (const n of PRIVATE_NAMES) expect(names).toContain(n);
+    await router.push("/chats/abc/private").catch(() => {});
+    // catch-all → s4-chat-list → auth gate (no session here) → s1-invite
+    expect(router.currentRoute.value.name).toBe("s1-invite");
   });
 });

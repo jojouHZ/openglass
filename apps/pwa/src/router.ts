@@ -44,37 +44,10 @@ if (import.meta.env.DEV) {
   routes.push({ path: "/states", name: "s16-states", component: Placeholder, meta: { screen: "S16" } });
 }
 
-// Private-layer screens S10–S12 exist ONLY in the pwa-dev build
-// (VITE_PRIVATE_MODULE=1). The pwa-mvp bundle must not contain the
-// private module — dynamic imports keep it out of the chunk graph.
-if (import.meta.env.VITE_PRIVATE_MODULE === "1") {
-  routes.push(
-    {
-      path: "/chats/:chatId/private/invite",
-      name: "s10-private-invite",
-      component: () => import("./views/private/S10PrivateInvite.vue"),
-      meta: { screen: "S10", private: true, auth: true },
-    },
-    {
-      path: "/chats/:chatId/private/setup",
-      name: "s11-session-setup",
-      component: () => import("./views/private/S11SessionSetup.vue"),
-      meta: { screen: "S11", private: true, auth: true },
-    },
-    {
-      path: "/chats/:chatId/private/verify",
-      name: "s11b-verify",
-      component: () => import("./views/private/S11bVerify.vue"),
-      meta: { screen: "S11b", private: true, auth: true },
-    },
-    {
-      path: "/chats/:chatId/private",
-      name: "s12-private-chat",
-      component: () => import("./views/private/S12PrivateChat.vue"),
-      meta: { screen: "S12", private: true, auth: true },
-    },
-  );
-}
+// Private-layer routes S10–S12 were removed: private messaging lives inside
+// the same-window layer of S5 now. Old deep links fall into the catch-all.
+// Private components are still imported only under the private feature flag
+// so the pwa-mvp bundle stays clean.
 
 const AUTH_FLOW = new Set(["s0-entry", "s1-invite", "s2-otp", "s3-profile-setup"]);
 
