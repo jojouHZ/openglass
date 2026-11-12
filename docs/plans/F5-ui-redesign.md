@@ -132,8 +132,33 @@ Evidence: PWA unit 196/196, typecheck clean, targeted Chromium
 3/3 (device-verification + invite-flow incl. tab-close/teardown). Full gate
 re-runs at the next slice boundary.
 
-V3 remains in progress, not complete: F2 still requires mask/palette/pattern
-and vertical view-once control, timeline ended/reload states and list chips.
+### V3.6 — private visual identity, view-once switch, timeline cues, list chip
+
+- `PrivateChatSurface` now imports `styles/private.css` (stays inside the
+  private chunk) and scopes `.private-mode` + the tiled mask pattern
+  (stroke alpha 0.08/0.09, spec ≤ 9%); `PrivateSheet` gained a persisted
+  "patterned background" preference for the plain-gradient fallback.
+- S5 flips the whole chat chrome to the private palette while the layer
+  is on; the public message list is unmounted in that state (the F2
+  "recessed 60%" wording is implemented as layer replacement, not a
+  dimmed split view — flagged for owner review).
+- Every private bubble carries the mask glyph; the view-once control is
+  the spec's vertical switch (flame thumb), with a lock glyph in the same
+  slot while the contact is unverified.
+- Timeline cues: "invite sent" under the waiting state, a "session ·
+  verified" divider, and an "ended · N messages erased" card observed
+  from session transitions. A reload-lost session renders no card —
+  volatile sessions cannot be distinguished from never-existing ones.
+- `S4` chat list shows a `private` chip via `watchActiveSessions`
+  (empty in the mvp build — no remote).
+
+Evidence: PWA unit 196/196, typecheck clean, targeted Chromium 4/4
+(device-verification, invite-flow ×2, public smoke). Full gate pending
+at the next boundary.
+
+V3 remains in progress, not complete: remaining items are the contacts
+shield cue and the owner mass review. Public-history "recessed" rendering
+is an open design question above.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
 remain separately owner-gated R1/R2 work.
