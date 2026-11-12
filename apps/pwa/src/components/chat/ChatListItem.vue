@@ -9,7 +9,7 @@ import { useChatsStore, useSessionStore } from "@openglass/core";
 
 import Avatar from "../ui/Avatar.vue";
 
-const props = defineProps<{ chat: ChatSummary }>();
+const props = defineProps<{ chat: ChatSummary; privateActive?: boolean }>();
 const emit = defineEmits<{ open: [] }>();
 
 const chats = useChatsStore();
@@ -73,7 +73,18 @@ const time = computed(() => {
       </span>
     </span>
     <span class="min-w-0 flex-1">
-      <span class="block truncate text-name font-semibold text-ink">{{ title }}</span>
+      <span class="block truncate text-name font-semibold text-ink">
+        {{ title }}
+        <span
+          v-if="privateActive"
+          class="ml-1 inline-flex translate-y-[-1px] items-center gap-0.5 rounded-pill bg-pv px-1.5 py-0.5 align-middle text-micro font-normal text-pv-fg"
+          data-testid="private-chip"
+          title="private session"
+        >
+          <svg viewBox="0 0 24 24" class="size-2.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          private
+        </span>
+      </span>
       <span v-if="typing" class="block truncate text-msg text-primary" data-testid="typing">
         typing…
       </span>

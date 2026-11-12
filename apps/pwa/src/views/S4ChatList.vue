@@ -1,14 +1,16 @@
 // Copyright (C) 2025 OpenGlass contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import { Plus, Search } from "lucide-vue-next";
 
 import { useChatsStore, useContactsStore, useSessionStore } from "@openglass/core";
+import type { PrivateSessionView } from "@openglass/core/private/remote";
 
 import ChatListItem from "../components/chat/ChatListItem.vue";
 import Avatar from "../components/ui/Avatar.vue";
+import { injectPrivateRemote } from "../privateRemote";
 
 const chats = useChatsStore();
 const contacts = useContactsStore();
@@ -51,6 +53,20 @@ async function answer(chatId: string, accept: boolean) {
 }
 
 const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatId: id } });
+
+// F2 — "private" chip on chats with a live private session (pwa-dev only;
+// the remote is null in the mvp build and this stays empty)
+const privatePeers = shallowRef<ReadonlySet<string>>(new Set());
+const privateRemote = injectPrivateRemote();
+let stopActiveWatch: (() => void) | null = null;
+onMounted(() => {
+  if (privateRemote) {
+    stopActiveWatch = privateRemote.watchActiveSessions((views: PrivateSessionView[]) => {
+      privatePeers.value = new Set(views.map((v) => v.peerId));
+    });
+  }
+});
+onBeforeUnmount(() => stopActiveWatch?.());
 </script>
 
 <template>
@@ -171,6 +187,7 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
           v-for="c in sorted"
           :key="c.id"
           :chat="c"
+          :private-active="c.type === 'direct' && !!c.peer && privatePeers.has(c.peer.id)"
           @open="open(c.id)"
         />
       </template>
