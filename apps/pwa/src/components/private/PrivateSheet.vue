@@ -20,27 +20,29 @@ const STORAGE_KEY = "og.private.prefs";
 const ttl = ref(900);
 const strict = ref(false);
 const remember = ref(false);
+const pattern = ref(true);
 
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    ttlSeconds: ttl.value, strict: strict.value, pattern: pattern.value,
+  }));
+}
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
   if (saved && TTL_OPTIONS.some((o) => o.value === saved.ttlSeconds)) {
     ttl.value = saved.ttlSeconds;
     strict.value = saved.strict === true;
+    pattern.value = saved.pattern !== false;
     remember.value = true;
   }
 } catch { /* malformed local value is ignored */ }
 
 watch(remember, (on) => {
-  if (on) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ttlSeconds: ttl.value, strict: strict.value }));
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  if (on) save();
+  else localStorage.removeItem(STORAGE_KEY);
 });
-watch([ttl, strict], () => {
-  if (remember.value) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ttlSeconds: ttl.value, strict: strict.value }));
-  }
+watch([ttl, strict, pattern], () => {
+  if (remember.value) save();
 });
 
 function start() {
@@ -75,6 +77,12 @@ function start() {
       <Switch v-model="strict" data-testid="opt-strict" />
       <span class="text-msg text-ink">strict mode
         <span class="text-meta text-muted">— any disconnect ends the session</span>
+      </span>
+    </label>
+    <label class="flex min-h-11 items-center gap-3">
+      <Switch v-model="pattern" data-testid="opt-pattern" />
+      <span class="text-msg text-ink">patterned background
+        <span class="text-meta text-muted">— off uses a plain gradient</span>
       </span>
     </label>
     <label class="flex min-h-11 items-center gap-3">

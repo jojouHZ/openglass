@@ -32,3 +32,20 @@
   --og-danger: #fca5a5;
   --og-pattern: #c4adff; --og-pattern-op: 0.09;
 }
+
+/* Tiled mask pattern over the private background — opacity comes from
+   the SVG stroke alpha (0.08 light / 0.09 dark, spec: ≤ 9%).
+   `.og-no-pattern` swaps it for a plain gradient (a11y setting).
+   Declared AFTER .private-mode so `background` in the scope does not
+   reset the pattern image. */
+.og-pattern-bg {
+  background-color: var(--og-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 24 24' fill='none' stroke='%23b79cff' stroke-opacity='0.08' stroke-width='1.4'%3E%3Crect x='3' y='11' width='18' height='11' rx='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E");
+  background-size: 56px 56px;
+}
+.dark .og-pattern-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 24 24' fill='none' stroke='%23c4adff' stroke-opacity='0.09' stroke-width='1.4'%3E%3Crect x='3' y='11' width='18' height='11' rx='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E");
+}
+.og-no-pattern.og-pattern-bg {
+  background-image: linear-gradient(160deg, var(--og-card) 0%, var(--og-bg) 55%, var(--og-muted) 100%);
+}

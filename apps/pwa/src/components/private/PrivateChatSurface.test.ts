@@ -32,7 +32,7 @@ describe("same-window private surface", () => {
   it("sends through the private remote with the view-once choice and purges on exit", async () => {
     const { wrapper, remote } = setup();
     await wrapper.get('[data-testid="priv-input"]').setValue("private only");
-    await wrapper.get('[data-testid="view-once-toggle"]').setValue(true);
+    await wrapper.get('[data-testid="view-once-toggle"]').trigger("click");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
     expect(remote.send).toHaveBeenCalledWith("session", "private only", { viewOnce: true });
@@ -65,7 +65,7 @@ describe("private session settings sheet", () => {
     expect(wrapper.text()).toContain("can't read messages");
     await wrapper.get('[data-testid="sheet-start"]').trigger("click");
     expect(wrapper.emitted("start")).toEqual([[{ ttlSeconds: 300, strict: false }]]);
-    expect(JSON.parse(localStorage.getItem("og.private.prefs")!)).toEqual({ ttlSeconds: 300, strict: false });
+    expect(JSON.parse(localStorage.getItem("og.private.prefs")!)).toEqual({ ttlSeconds: 300, strict: false, pattern: true });
     wrapper.unmount();
     localStorage.clear();
   });
