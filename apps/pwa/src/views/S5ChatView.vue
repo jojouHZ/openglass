@@ -475,7 +475,11 @@ watch(
 
   <!-- h-full + overflow-hidden: the header and composer stay pinned;
        only the messages layer scrolls (flex child needs min-h-0) -->
-  <main v-else class="relative flex h-full flex-col overflow-hidden">
+  <main
+    v-else
+    class="relative flex h-full flex-col overflow-hidden"
+    :class="{ 'private-mode': privateLayer }"
+  >
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line bg-card px-4 pb-3 pt-8">
       <button class="grid size-11 place-items-center text-ink" aria-label="back" @click="router.push({ name: 's4-chat-list' })">

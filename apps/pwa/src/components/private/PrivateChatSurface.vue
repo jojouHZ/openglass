@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { Flame } from "lucide-vue-next";
 import type { ConnState, PrivateInviteView, PrivateSessionView, VerificationView } from "@openglass/core/private/remote";
 import { usePrivateRemote } from "../../privateRemote";
 import PrivateSheet from "./PrivateSheet.vue";
+import "../../styles/private.css";
 
 const props = defineProps<{ peerId: string; peerName: string; blocked: boolean }>();
 const emit = defineEmits<{ verify: [] }>();
@@ -20,6 +22,15 @@ const sheetOpen = ref(false);
 const busy = ref(false);
 const error = ref("");
 const confirmBurn = ref(false);
+// remembered "plain background" preference — local only, sheet writes it
+const plainBg = ref(false);
+try {
+  const saved = JSON.parse(localStorage.getItem("og.private.prefs") ?? "null");
+  plainBg.value = saved?.pattern === false;
+} catch { /* malformed local value is ignored */ }
+// timeline cards: invite sent / session started / session ended —
+// derived from observed transitions, never persisted
+const endedInfo = ref<{ messages: number } | null>(null);
 const off = [
   remote.watchSession(props.peerId, (value) => { session.value = value; }),
   remote.watchVerification(props.peerId, (value) => { verification.value = value; }),
@@ -37,6 +48,14 @@ watch(() => session.value?.messages.map((message) => `${message.id}:${message.re
   if (session.value?.status === "verified") remote.markDisplayed(session.value.sessionId);
 }, { immediate: true });
 watch(() => session.value?.sessionId, () => { text.value = ""; error.value = ""; });
+// session end → timeline card with the erased message count; a reload
+// loses the session entirely (volatile by design) so "lost" can't be
+// distinguished from "never existed" — no false card is rendered
+watch(session, (next, prev) => {
+  const live = (s: PrivateSessionView | null | undefined) => !!s && s.status !== "closed" && s.status !== "incoming" && s.status !== "inviting";
+  if (live(prev) && !live(next)) endedInfo.value = { messages: prev!.messages.length };
+  if (live(next)) endedInfo.value = null;
+}, { immediate: true });
 onBeforeUnmount(() => {
   off.forEach((stop) => stop());
   if (session.value) remote.purgeRead(session.value.sessionId);
@@ -73,7 +92,12 @@ function burn() {
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col border-t border-line bg-soft" aria-label="private layer" data-testid="private-layer">
+  <section
+    class="private-mode og-pattern-bg flex min-h-0 flex-1 flex-col border-t border-line"
+    :class="{ 'og-no-pattern': plainBg }"
+    aria-label="private layer"
+    data-testid="private-layer"
+  >
     <div class="flex flex-wrap items-center gap-3 px-4 py-2 text-meta text-muted">
       <span class="flex-1">Private · ephemeral · {{ relay }}</span>
       <button class="min-h-11 px-3 text-ink" data-testid="reverify-device" @click="emit('verify')">Verify device</button>
@@ -88,6 +112,7 @@ function burn() {
     </div>
     <div v-else-if="outgoing" class="px-4 py-3" data-testid="invite-waiting">
       <p class="text-msg text-ink">Waiting for {{ peerName }}…</p>
+      <p class="text-meta text-muted" data-testid="timeline-invite">invite sent · the server sees only opaque envelopes</p>
       <button class="min-h-11 px-4 text-muted" @click="remote.cancelInvite(peerId)">Cancel invite</button>
     </div>
     <div v-else-if="!session" class="px-4 py-3">
@@ -97,14 +122,44 @@ function burn() {
     <p v-if="session?.status === 'exchanging'" class="px-4 py-3 text-meta text-muted" role="status">Checking signed session keys…</p>
     <p v-if="session?.peerOfflineUntil" class="px-4 py-2 text-meta text-muted">Peer offline — session may expire.</p>
     <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-testid="priv-scroll">
-      <p v-if="!session?.messages.length" class="text-center text-meta text-muted" data-testid="priv-empty">No private messages. Messages and session keys are not saved.</p>
+      <p v-if="session?.status === 'verified'" class="mb-3 text-center text-micro text-muted" data-testid="timeline-started">
+        private session · verified — messages erased on close
+      </p>
+      <p v-if="endedInfo" class="mb-3 text-center text-micro text-muted" data-testid="timeline-ended">
+        private session ended · {{ endedInfo.messages }} message{{ endedInfo.messages === 1 ? "" : "s" }} erased
+      </p>
+      <p v-if="!session?.messages.length && !endedInfo" class="text-center text-meta text-muted" data-testid="priv-empty">No private messages. Messages and session keys are not saved.</p>
       <div v-for="message in session?.messages ?? []" :key="message.id" class="mb-2 flex" :class="message.fromMe ? 'justify-end' : 'justify-start'">
-        <div class="max-w-[85%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-msg" :class="message.fromMe ? 'bg-bubble-own text-own-fg' : 'bg-bubble-in text-in-fg'">{{ message.text }}<span v-if="message.viewOnce" class="ml-2 text-micro">view once</span></div>
+        <div class="max-w-[85%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-msg" :class="message.fromMe ? 'bg-bubble-own text-own-fg' : 'bg-bubble-in text-in-fg'">
+          <svg viewBox="0 0 24 24" class="mr-1.5 inline-block size-3 align-[-2px] opacity-70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{ message.text }}<span v-if="message.viewOnce" class="ml-2 text-micro">view once</span>
+        </div>
       </div>
     </div>
     <p v-if="error" class="px-4 text-meta text-danger" role="alert">{{ error }}</p>
     <form class="flex items-end gap-2 border-t border-line px-4 py-3" @submit.prevent="send">
-      <label class="flex min-h-11 flex-col items-center text-micro text-muted"><input v-model="viewOnce" type="checkbox" data-testid="view-once-toggle" />view once</label>
+      <!-- F-4: compact vertical switch — flame in the thumb, lock in the
+           same slot while the contact is unverified -->
+      <button
+        v-if="trusted"
+        type="button"
+        role="switch"
+        :aria-checked="viewOnce"
+        aria-label="view once"
+        class="flex h-11 w-7 shrink-0 flex-col items-center justify-between rounded-full border py-1.5 transition-colors"
+        :class="viewOnce ? 'border-primary bg-primary' : 'border-line bg-soft'"
+        data-testid="view-once-toggle"
+        @click="viewOnce = !viewOnce"
+      >
+        <span
+          class="grid size-5 place-items-center rounded-full transition-colors"
+          :class="viewOnce ? 'bg-primary-foreground text-primary' : 'bg-card text-muted'"
+        >
+          <Flame class="size-3" :stroke-width="2" />
+        </span>
+      </button>
+      <span v-else class="grid h-11 w-7 shrink-0 place-items-center text-muted" title="verify device first" data-testid="view-once-lock">
+        <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </span>
       <textarea v-model="text" class="min-h-11 min-w-0 flex-1 rounded-control border border-line bg-bg px-3 py-2 text-[16px] text-ink" :disabled="!canSend || busy" aria-label="private message" placeholder="Private message" data-testid="priv-input" />
       <button class="min-h-11 rounded-pill bg-primary px-4 text-meta text-primary-foreground disabled:opacity-40" :disabled="!canSend || busy || !text.trim()" data-testid="priv-send">Send</button>
     </form>
