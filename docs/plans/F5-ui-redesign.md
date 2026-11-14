@@ -232,6 +232,30 @@ and stripping, Chromium 13/13, full `pnpm gate` green.
 
 Evidence: PWA 210/210 (+7 cue/shield component tests), typecheck clean.
 V3 remaining: the owner mass review only.
+
+### U2.1 — audit + onboarding family (S1–S3)
+
+Audit of S1–S3, S7–S9a, S14/S15 and shared dialogs against the concept:
+focus ring is global (`:focus-visible` in tokens.css), AppButton/AppInput
+are 44px, back buttons are size-11.
+
+| Screen | Gap | Status |
+|---|---|---|
+| global | `prefers-reduced-motion` ignored entirely | **fixed** — global media query collapses animation/transition durations |
+| S2 | resend control ~20px | **fixed** — min-h-11 |
+| S3 | suggestion chips ~28px | **fixed** — min-h-11 |
+| S3 | `requestedTag` cannot be typed (chips only) | recorded — functional contract question, not styling |
+| S9a | picker close `size-10` (40px); sheet actions `py-2` | next U2 slice |
+| S14 | per-row `sign out`/`revoke` bare text | next U2 slice |
+| S1, S7, S8, S15 | states, 44px targets, errors | clean |
+
+Testing: flaky route assertions in `onboarding.test.ts` fixed —
+lazy route chunks can outlast the 250ms flush, navigations now wait
+for the commit via `vi.waitFor`. Root-caused on a clean HEAD, not a
+regression from this slice.
+
+Evidence: PWA onboarding 4/4 (+44px class contract, +flake fix),
+E2E touch-targets extended to `/invite`; full gate below.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
 remain separately owner-gated R1/R2 work.

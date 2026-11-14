@@ -82,7 +82,7 @@ async function resend() {
       <AppButton :loading="loading" :disabled="code.length !== 6">Verify</AppButton>
       <button
         type="button"
-        class="min-h-11 px-3 text-meta text-muted"
+        class="inline-flex min-h-11 items-center px-3 text-meta text-muted"
         :class="cooldown === 0 && 'text-accent'"
         :disabled="cooldown > 0"
         @click="resend"
