@@ -221,6 +221,7 @@ onMounted(async () => {
     <div
       v-else-if="!chat"
       class="grid flex-1 place-items-center text-meta text-muted"
+      role="status"
       data-testid="loading"
     >
       loading…

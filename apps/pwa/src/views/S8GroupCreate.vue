@@ -105,6 +105,7 @@ async function create() {
       <div
         v-if="loadFailed && !roster.length"
         class="grid h-full place-items-center px-6 text-center"
+        role="alert"
         data-testid="load-error"
       >
         <div class="flex flex-col items-center gap-3">
