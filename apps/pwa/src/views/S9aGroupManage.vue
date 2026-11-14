@@ -218,6 +218,14 @@ onMounted(async () => {
 
     <div v-if="loadError" class="grid flex-1 place-items-center text-meta text-muted">{{ loadError }}</div>
 
+    <div
+      v-else-if="!chat"
+      class="grid flex-1 place-items-center text-meta text-muted"
+      data-testid="loading"
+    >
+      loading…
+    </div>
+
     <div v-else class="min-h-0 flex-1 overflow-y-auto">
       <div v-if="pageError" class="px-6 py-2 text-meta text-danger" data-testid="page-error">
         {{ pageError }}

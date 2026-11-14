@@ -104,3 +104,24 @@ describe("S8 group creation", () => {
     });
   });
 });
+
+describe("S8 load failure", () => {
+  it("a failed contacts load says so and offers a retry instead of an empty picker", async () => {
+    const orig = ctx.api.contacts.list;
+    ctx.api.contacts.list = () => Promise.reject(new Error("offline"));
+    contacts().$patch({ loaded: false, list: [] });
+    try {
+      await router.push({ name: "s8-group-create" });
+      const w = mount(S8GroupCreate, { global: { plugins: [router, pinia] } });
+      await vi.waitFor(() => expect(w.find('[data-testid="load-error"]').exists()).toBe(true));
+      expect(w.find('[data-testid="empty"]').exists()).toBe(false);
+      ctx.api.contacts.list = orig;
+      await w.find('[data-testid="load-retry"]').trigger("click");
+      await vi.waitFor(() => expect(w.findAll('[data-testid="member-row"]').length).toBeGreaterThan(0));
+      expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
+      w.unmount();
+    } finally {
+      ctx.api.contacts.list = orig;
+    }
+  });
+});

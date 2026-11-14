@@ -19,13 +19,22 @@ const title = ref("");
 const selected = ref(new Set<string>());
 const busy = ref(false);
 const errorMsg = ref("");
+const loadFailed = ref(false);
 
 // contacts-only picker (B3 rule: outgoing edge suffices — the server
 // re-checks anyway; the picker just never offers strangers)
 const roster = computed(() => contacts.list);
 const canCreate = computed(() => title.value.trim().length > 0 && selected.value.size > 0);
 
-onMounted(() => void contacts.refresh().catch(() => undefined));
+async function load() {
+  loadFailed.value = false;
+  try {
+    await contacts.refresh();
+  } catch {
+    loadFailed.value = !contacts.loaded;
+  }
+}
+onMounted(load);
 
 function toggle(id: string) {
   if (selected.value.has(id)) selected.value.delete(id);
@@ -94,7 +103,25 @@ async function create() {
       </UserRow>
 
       <div
-        v-if="!roster.length && contacts.loaded"
+        v-if="loadFailed && !roster.length"
+        class="grid h-full place-items-center px-6 text-center"
+        data-testid="load-error"
+      >
+        <div class="flex flex-col items-center gap-3">
+          <div class="text-body text-ink">couldn't load your contacts</div>
+          <div class="text-meta text-muted">check your connection and try again</div>
+          <button
+            class="mt-1 h-11 rounded-pill bg-primary px-6 text-msg text-primary-foreground"
+            data-testid="load-retry"
+            @click="load"
+          >
+            retry
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-else-if="!roster.length && contacts.loaded"
         class="grid h-full place-items-center px-6 text-center"
         data-testid="empty"
       >

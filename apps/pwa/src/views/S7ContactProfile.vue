@@ -26,6 +26,7 @@ const loading = ref(true);
 const notFound = ref(false);
 const busy = ref(false);
 const errorMsg = ref("");
+const loadFailed = ref(false);
 const confirmRemove = ref(false);
 const reporting = ref(false);
 
@@ -45,12 +46,14 @@ const verifyCue = computed(() => {
 async function load() {
   loading.value = true;
   errorMsg.value = "";
+  loadFailed.value = false;
   try {
     const r = await api().users.get(userId.value);
     user.value = r.user;
     relationship.value = r.relationship;
   } catch (e) {
     if (e instanceof ApiRequestError && e.status === 404) notFound.value = true;
+    else if (!user.value) loadFailed.value = true;
     else errorMsg.value = "failed to load profile";
   } finally {
     loading.value = false;
@@ -177,6 +180,24 @@ async function message() {
       <div class="flex flex-col items-center gap-3">
         <div class="text-body text-ink">user not found</div>
         <div class="text-meta text-muted">the profile may have been removed</div>
+      </div>
+    </div>
+
+    <div
+      v-else-if="loadFailed"
+      class="grid flex-1 place-items-center px-6 text-center"
+      data-testid="load-error"
+    >
+      <div class="flex flex-col items-center gap-3">
+        <div class="text-body text-ink">couldn't load this profile</div>
+        <div class="text-meta text-muted">check your connection and try again</div>
+        <button
+          class="mt-1 h-11 rounded-pill bg-primary px-6 text-msg text-primary-foreground"
+          data-testid="load-retry"
+          @click="load"
+        >
+          retry
+        </button>
       </div>
     </div>
 
