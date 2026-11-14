@@ -4,6 +4,7 @@
 // @vitest-environment happy-dom
 
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
 import type { PrivateSessionView } from "@openglass/core/private/remote";
 import PrivateChatSurface from "./PrivateChatSurface.vue";
@@ -19,11 +20,13 @@ function setup(verified = true) {
     watchVerification: (_: string, cb: (value: unknown) => void) => { cb({ state: "verified" }); return vi.fn(); },
     watchRelayState: (cb: (value: string) => void) => { cb("online"); return vi.fn(); },
     watchInvites: (cb: (value: unknown) => void) => { cb({ incoming: [], outgoing: [] }); return vi.fn(); },
+    watchActiveSessions: (cb: (value: PrivateSessionView[]) => void) => { cb([snapshot]); return vi.fn(); },
     send: vi.fn(async () => {}), purgeRead: vi.fn(), markDisplayed: vi.fn(), burn: vi.fn(),
+    startInvite: vi.fn(), accept: vi.fn(),
   };
   const wrapper = mount(PrivateChatSurface, {
     props: { peerId: "peer", peerName: "Bob", blocked: false },
-    global: { provide: { "og.private": remote } },
+    global: { provide: { "og.private": remote }, plugins: [createPinia()] },
   });
   return { wrapper, remote };
 }
