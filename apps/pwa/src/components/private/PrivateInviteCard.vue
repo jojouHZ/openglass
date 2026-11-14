@@ -6,20 +6,30 @@
      VITE_PRIVATE_MODULE; the mvp bundle never sees this file). -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
 
-import type { PrivateInvitesView } from "@openglass/core/private/remote";
+import type { PrivateInvitesView, PrivateSessionView } from "@openglass/core/private/remote";
 
+import { useChatsStore } from "@openglass/core";
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
+import ConfirmDialog from "../ConfirmDialog.vue";
 
 const props = defineProps<{ peerId: string; chatId: string }>();
 const emit = defineEmits<{ verify: [sessionId: string]; open: [] }>();
 const remote = usePrivateRemote();
+const chats = useChatsStore();
 
 const session = usePrivateSession(() => props.peerId);
 const invites = ref<PrivateInvitesView>({ incoming: [], outgoing: [] });
-const stopInvites = remote.watchInvites((v) => (invites.value = v));
-onBeforeUnmount(stopInvites);
+// rule 5 — one private session per client: accepting while another
+// is live asks, then terminates the previous one
+const activeSessions = shallowRef<readonly PrivateSessionView[]>([]);
+const pendingSwitch = ref<{ burnSessionId: string; run: () => void } | null>(null);
+const stopAll = [
+  remote.watchInvites((v) => (invites.value = v)),
+  remote.watchActiveSessions((v) => (activeSessions.value = v)),
+];
+onBeforeUnmount(() => stopAll.forEach((stop) => stop()));
 
 /** incoming invite from this peer, or our outgoing pending invite */
 const incoming = computed(() =>
@@ -32,9 +42,34 @@ const live = computed(() => {
   return s && s.status !== "incoming" && s.status !== "inviting" ? s : null;
 });
 
-function accept() {
+const otherLive = computed(() =>
+  activeSessions.value.find((s) => s.peerId !== props.peerId && s.status !== "closed"),
+);
+const otherLiveName = computed(() => {
+  const other = otherLive.value;
+  if (!other) return "";
+  const chat = chats.chats.find((c) => c.type === "direct" && c.peer?.id === other.peerId);
+  return chat ? chats.chatTitle(chat) : "another chat";
+});
+function doAccept() {
   if (!incoming.value) return;
   remote.accept(incoming.value.sessionId);
+  emit("verify", incoming.value.sessionId);
+}
+function accept() {
+  if (!incoming.value) return;
+  if (otherLive.value) {
+    pendingSwitch.value = { burnSessionId: otherLive.value.sessionId, run: doAccept };
+    return;
+  }
+  doAccept();
+}
+function confirmSwitch() {
+  const pending = pendingSwitch.value;
+  pendingSwitch.value = null;
+  if (!pending) return;
+  remote.burn(pending.burnSessionId);
+  pending.run();
 }
 function decline() {
   if (incoming.value) remote.decline(incoming.value.sessionId);
@@ -77,7 +112,7 @@ function decline() {
     <button
       class="rounded-pill bg-primary px-4 py-1.5 text-meta text-primary-foreground"
       data-testid="private-accept"
-      @click="accept(); emit('verify', incoming!.sessionId)"
+      @click="accept()"
     >
       accept
     </button>
@@ -102,4 +137,13 @@ function decline() {
     </svg>
     <span class="text-meta text-muted">private invite sent — waiting…</span>
   </div>
+
+  <ConfirmDialog
+    v-if="pendingSwitch"
+    title="End the current private session?"
+    :body="`You have an active private session with ${otherLiveName}. Accepting a new one will end it.`"
+    confirm-label="End & accept"
+    @confirm="confirmSwitch"
+    @cancel="pendingSwitch = null"
+  />
 </template>
