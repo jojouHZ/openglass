@@ -156,9 +156,42 @@ Evidence: PWA unit 196/196, typecheck clean, targeted Chromium 4/4
 (device-verification, invite-flow ×2, public smoke). Full gate pending
 at the next boundary.
 
-V3 remains in progress, not complete: remaining items are the contacts
-shield cue and the owner mass review. Public-history "recessed" rendering
-is an open design question above.
+### V3.7 — unified timeline model (owner rules, 2026-11-14)
+
+Owner decision replaces the separate private pane with a shared
+timeline; no dimming/split view (rejected as a hack):
+
+1. No way back to public without turning the private layer off —
+   the layer toggle is the only exit.
+2. The private segment starts with a system divider plus a rule line.
+3. Turning the private layer OFF **ends the session** (burn — for both
+   sides). Implemented in `S5ChatView.onPrivateToggle`.
+4. Sessions survive in-app navigation (other chats/contacts); on the
+   native targets the shell owns lifecycle, so app-switching survives
+   too — browser dev tier keeps volatile pagehide semantics.
+5. Exactly one private session per client: starting or accepting while
+   another is live shows a confirm ("End the current private session?")
+   and burns the previous one. Implemented in `PrivateChatSurface`.
+6. Private messages render into the shared timeline from the remote
+   snapshot only — they never enter the chats store, `/messages`, or
+   persistent history.
+7. Private-layer typing IS shown (owner override of the earlier "hide"
+   suggestion) — the header subtitle keeps `typing…` in private mode.
+8. Incoming invite while a session is live follows the same rule-5
+   confirm path.
+9. Public drafts still survive layer switches; private text can never
+   land in the public composer.
+
+Private-layer production targets are the native shells (keychain-class
+storage, F8); the browser stays the dev/demo tier under
+`VITE_PRIVATE_MODULE=1`.
+
+Evidence: PWA unit 196/196, typecheck clean, Chromium 3/3 on
+device-verification + invite-flow, including the rewritten rule-3
+assertion (toggle-off ends the session for both sides and shows the
+ended note). Full gate pending at the next boundary.
+
+V3 remaining: contacts shield cue (dev-only) and the owner mass review.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
 remain separately owner-gated R1/R2 work.
