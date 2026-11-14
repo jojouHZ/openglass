@@ -441,7 +441,7 @@ func (r *Relay) dispatch(ctx context.Context, c *conn, f *Frame) {
 	case "relay.accept":
 		r.onAccept(ctx, c, str(f.Data["sessionId"]))
 	case "relay.decline":
-		r.onDecline(c, str(f.Data["sessionId"]))
+		r.onDecline(c, str(f.Data["sessionId"]), str(f.Data["reason"]))
 	case "relay.send":
 		r.onSend(c, str(f.Data["sessionId"]), str(f.Data["blob"]))
 	case "relay.resume":
@@ -576,7 +576,7 @@ func (r *Relay) onAccept(ctx context.Context, c *conn, sid string) {
 	}
 }
 
-func (r *Relay) onDecline(c *conn, sid string) {
+func (r *Relay) onDecline(c *conn, sid, reason string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	s := r.sessions[sid]
@@ -584,8 +584,15 @@ func (r *Relay) onDecline(c *conn, sid string) {
 		r.errTo(c, "not_found")
 		return
 	}
-	// declined: inviter hears relay.declined, then the session dies
-	r.emitToUserLocked(s.a, "relay.declined", map[string]any{"sessionId": s.id})
+	// declined: inviter hears relay.declined, then the session dies.
+	// `busy` is the only caller-set reason — the invitee auto-declines
+	// cross-peer invites while a private session is live; anything else
+	// is stripped so clients cannot push arbitrary text to the inviter.
+	data := map[string]any{"sessionId": s.id}
+	if reason == "busy" {
+		data["reason"] = "busy"
+	}
+	r.emitToUserLocked(s.a, "relay.declined", data)
 	r.destroySessionLocked(s)
 }
 

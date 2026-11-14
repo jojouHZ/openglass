@@ -400,8 +400,37 @@ func TestRelay_Decline(t *testing.T) {
 	if f.Type != "relay.declined" {
 		t.Fatalf("want relay.declined, got %v", f)
 	}
+	if _, has := f.Data["reason"]; has {
+		t.Fatal("plain decline must not carry a reason")
+	}
 	if rl.SessionCount() != 0 {
 		t.Fatal("declined session must be destroyed")
+	}
+}
+
+func TestRelay_DeclineBusyReason(t *testing.T) {
+	ts, st, _ := newTestRelay(t)
+	ua, ub := mkUser(t, st, "a@x"), mkUser(t, st, "b@x")
+	befriend(t, st, ua, ub)
+	ca, cb := connect(t, ts, ua.ID, "sa"), connect(t, ts, ub.ID, "sb")
+	defer func() { _ = ca.Close() }()
+	defer func() { _ = cb.Close() }()
+
+	sid := invite(t, ca, cb, ub.ID, nil)
+	send(t, cb, "relay.decline", map[string]any{"sessionId": sid, "reason": "busy"})
+	f := read(t, ca)
+	if f.Type != "relay.declined" || f.Data["reason"] != "busy" {
+		t.Fatalf("want relay.declined{busy}, got %v", f)
+	}
+	// an unknown reason is stripped, never forwarded raw
+	sid = invite(t, ca, cb, ub.ID, nil)
+	send(t, cb, "relay.decline", map[string]any{"sessionId": sid, "reason": "evil-payload"})
+	f = read(t, ca)
+	if f.Type != "relay.declined" {
+		t.Fatalf("want relay.declined, got %v", f)
+	}
+	if _, has := f.Data["reason"]; has {
+		t.Fatal("unknown decline reason must be stripped")
 	}
 }
 
