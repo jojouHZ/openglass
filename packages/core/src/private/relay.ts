@@ -41,7 +41,7 @@ export type RelayEvent =
       type: "relay.established";
       data: { sessionId: string; peer: PeerUser; resumeToken: string; ttlEndsAt: string };
     }
-  | { type: "relay.declined"; data: { sessionId: string } }
+  | { type: "relay.declined"; data: { sessionId: string; reason?: "busy" } }
   | { type: "relay.msg"; data: { sessionId: string; msgSeq: number; blob: string } }
   | { type: "relay.peer-offline"; data: { sessionId: string; graceEndsAt: string } }
   | { type: "relay.peer-online"; data: { sessionId: string } }
@@ -140,8 +140,8 @@ export class RelayClient {
   accept(sessionId: string): void {
     this.send("relay.accept", { sessionId });
   }
-  decline(sessionId: string): void {
-    this.send("relay.decline", { sessionId });
+  decline(sessionId: string, reason?: "busy"): void {
+    this.send("relay.decline", reason === "busy" ? { sessionId, reason } : { sessionId });
   }
   sendEnvelope(sessionId: string, blob: string): void {
     this.send("relay.send", { sessionId, blob });

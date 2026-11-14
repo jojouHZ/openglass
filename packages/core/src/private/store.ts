@@ -105,6 +105,12 @@ export const usePrivateStore = defineStore("private", {
       string,
       { burnOnRead: boolean; strict: boolean; expiresAt: number }
     >(),
+    /** peers whose incoming invite was auto-declined while a live
+     *  session existed — volatile UI notes, cleared with the module */
+    missedInvites: new Map<string, { peerName: string; at: number }>(),
+    /** peers who declined our outgoing invite — busy = they were in a
+     *  live session; cleared when we invite that peer again */
+    declinedOutgoing: new Map<string, { peerName: string; busy: boolean }>(),
     relayState: "offline" as ConnState,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
     reconnectDelay: 1000,
@@ -174,6 +180,15 @@ export const usePrivateStore = defineStore("private", {
     incomingInvites(state): PrivateSession[] {
       return [...state.sessions.values()].filter((s) => s.status === "incoming");
     },
+    /** a real connection exists — exchanging keys or later. Pending
+     *  invites (incoming/outgoing) do NOT count: they are not a
+     *  connection, and counting them would let invite spam lock the
+     *  owner out of private messaging entirely */
+    hasLiveSession(state): boolean {
+      return [...state.sessions.values()].some(
+        (s) => s.status === "exchanging" || s.status === "unverified" || s.status === "verified",
+      );
+    },
   },
 
   actions: {
@@ -205,6 +220,20 @@ export const usePrivateStore = defineStore("private", {
         c.on<T>(type, (event) => { if (this.client === c) handler(event); });
 
       on("relay.invite", (ev) => {
+        // one private connection per client: an incoming invite while a
+        // session is live is auto-declined "busy" — the peer is told we
+        // cannot join, and the invite never reaches the accept UI (a
+        // pending invite must not be able to block or displace the live
+        // session — otherwise invite spam becomes a lock-out attack)
+        if (this.hasLiveSession) {
+          this.missedInvites.set(ev.data.from.id, {
+            peerName: ev.data.from.displayName ?? ev.data.from.tag ?? ev.data.from.id,
+            at: Date.now(),
+          });
+          c.decline(ev.data.sessionId, "busy");
+          this.notify();
+          return;
+        }
         const s: PrivateSession = {
           id: ev.data.sessionId,
           peer: ev.data.from,
@@ -265,7 +294,16 @@ export const usePrivateStore = defineStore("private", {
         void this.onEstablished(ev.data);
       });
 
-      on("relay.declined", (ev) => this.dropSession(ev.data.sessionId));
+      on("relay.declined", (ev) => {
+        const s = this.sessions.get(ev.data.sessionId);
+        if (s) {
+          this.declinedOutgoing.set(s.peer.id, {
+            peerName: s.peer.displayName ?? s.peer.tag ?? s.peer.id,
+            busy: ev.data.reason === "busy",
+          });
+        }
+        this.dropSession(ev.data.sessionId);
+      });
 
       on("relay.msg", (ev) => {
         void this.onMessage(ev.data.sessionId, ev.data.msgSeq, ev.data.blob);
@@ -447,6 +485,10 @@ export const usePrivateStore = defineStore("private", {
       const client = this.client;
       void (async () => {
         if (!(await this.pinned(peer.id)) || generation !== this.generation || this.client !== client) return;
+        // a stale invite elsewhere must never materialize into a second
+        // live session later — silently drop our other pending invites
+        this.cancelOutgoingExcept(peer.id);
+        this.declinedOutgoing.delete(peer.id); // retry clears the note
         // server invite TTL is 60 s — if relay.invited never arrives the
         // invite was rejected and this marker must die with it
         this.pendingInvites.set(peer.id, {
@@ -465,12 +507,36 @@ export const usePrivateStore = defineStore("private", {
       void (async () => {
         const s = this.sessions.get(sessionId);
         if (!s || !(await this.pinned(s.peer.id)) || generation !== this.generation || this.client !== client || this.sessions.get(sessionId) !== s) return;
+        // fail closed on the one-connection rule: a live session may
+        // have appeared after the invite arrived — decline busy instead
+        // of stacking a second connection
+        if (this.hasLiveSession) {
+          this.missedInvites.set(s.peer.id, {
+            peerName: s.peer.displayName ?? s.peer.tag ?? s.peer.id,
+            at: Date.now(),
+          });
+          this.decline(sessionId, "busy");
+          return;
+        }
+        this.cancelOutgoingExcept(s.peer.id);
         this.client?.accept(sessionId);
       })();
     },
-    decline(sessionId: string): void {
-      this.client?.decline(sessionId);
+    decline(sessionId: string, reason?: "busy"): void {
+      this.client?.decline(sessionId, reason);
       this.dropSession(sessionId);
+    },
+
+    /** Drop our pending outgoing invites to every peer except `keep` —
+     *  the wire has no cancel frame; server-side invites die on their
+     *  TTL or fail closed via the established-check. */
+    cancelOutgoingExcept(keepPeerId: string): void {
+      for (const peerId of [...this.pendingInvites.keys()]) {
+        if (peerId !== keepPeerId) this.pendingInvites.delete(peerId);
+      }
+      for (const s of [...this.sessions.values()]) {
+        if (s.status === "inviting" && s.peer.id !== keepPeerId) this.sessions.delete(s.id);
+      }
     },
 
     /** established for BOTH sides. Re-emitted by the server on every
@@ -798,6 +864,8 @@ export const usePrivateStore = defineStore("private", {
       this.sessions.clear();
       this.pendingEnvelopes.clear();
       this.pendingInvites.clear();
+      this.missedInvites.clear();
+      this.declinedOutgoing.clear();
       this.identity = null;
       this.pins.clear();
       this.meUserId = "";
