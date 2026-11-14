@@ -186,10 +186,11 @@ Private-layer production targets are the native shells (keychain-class
 storage, F8); the browser stays the dev/demo tier under
 `VITE_PRIVATE_MODULE=1`.
 
-Evidence: PWA unit 196/196, typecheck clean, Chromium 3/3 on
-device-verification + invite-flow, including the rewritten rule-3
-assertion (toggle-off ends the session for both sides and shows the
-ended note). Full gate pending at the next boundary.
+Evidence: PWA unit 197/197, typecheck clean, Chromium 13/13 including
+the rewritten rule-3 assertion (toggle-off ends the session for both
+sides and shows the ended note). Full `pnpm gate` green on `6dc380b`:
+gofmt, golangci-lint, `go test -race` (Mem+PG), typecheck, core 125/125,
+pwa tests ×3, build, mvp bundle guard, real Chromium 13/13.
 
 V3 remaining: contacts shield cue (dev-only) and the owner mass review.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
