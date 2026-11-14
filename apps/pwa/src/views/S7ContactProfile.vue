@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ChevronLeft } from "lucide-vue-next";
+import { ChevronLeft, Shield, ShieldAlert, ShieldCheck } from "lucide-vue-next";
 
 import type { Relationship, User } from "@openglass/core";
 import { api, ApiRequestError, useContactsStore } from "@openglass/core";
@@ -11,6 +11,7 @@ import { api, ApiRequestError, useContactsStore } from "@openglass/core";
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import ReportDialog from "../components/ReportDialog.vue";
+import { usePeerVerification } from "../privateRemote";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,6 +28,19 @@ const busy = ref(false);
 const errorMsg = ref("");
 const confirmRemove = ref(false);
 const reporting = ref(false);
+
+// Device-pin cue — null in the mvp build: no remote, no cue.
+const verification = usePeerVerification(() => userId.value);
+const verifyCue = computed(() => {
+  const v = verification.value;
+  if (!v) return null;
+  switch (v.state) {
+    case "verified": return { label: "device verified", warn: false };
+    case "key-changed": return { label: "key changed — re-verify", warn: true };
+    case "pending": return { label: "verification pending", warn: false };
+    default: return { label: "device not verified", warn: false };
+  }
+});
 
 async function load() {
   loading.value = true;
@@ -98,6 +112,21 @@ async function privateSession() {
     const { chat } = await api().chats.openDirect(userId.value);
     // Private layer is same-window: open the chat; the user flips the lock there.
     router.push({ name: "s5-chat-view", params: { chatId: chat.id }, query: { layer: "private" } });
+  } catch {
+    errorMsg.value = "failed to open chat";
+  } finally {
+    busy.value = false;
+  }
+}
+
+/** pwa-dev only — opens the chat straight into the device ritual. */
+async function verifyDevice() {
+  if (busy.value) return;
+  busy.value = true;
+  errorMsg.value = "";
+  try {
+    const { chat } = await api().chats.openDirect(userId.value);
+    router.push({ name: "s5-chat-view", params: { chatId: chat.id }, query: { verify: "1" } });
   } catch {
     errorMsg.value = "failed to open chat";
   } finally {
@@ -226,6 +255,27 @@ async function message() {
           @click="privateSession"
         >
           private session
+        </button>
+
+        <button
+          v-if="verifyCue && relationship === 'contact_mutual'"
+          class="flex h-11 w-full items-center justify-center gap-2 rounded-input border text-msg"
+          :class="
+            verifyCue.warn
+              ? 'border-danger/50 text-danger'
+              : 'border-line text-muted'
+          "
+          data-testid="device-verification-cue"
+          @click="verifyDevice"
+        >
+          <ShieldAlert v-if="verifyCue.warn" class="size-4" :stroke-width="1.5" />
+          <ShieldCheck
+            v-else-if="verification?.state === 'verified'"
+            class="size-4"
+            :stroke-width="1.5"
+          />
+          <Shield v-else class="size-4" :stroke-width="1.5" />
+          {{ verifyCue.label }}
         </button>
 
         <button

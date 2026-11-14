@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
+import { ShieldAlert, ShieldCheck } from "lucide-vue-next";
 
 import type { User } from "@openglass/core";
 import { useContactsStore, useSessionStore } from "@openglass/core";
 
 import { useOpenChat } from "../composables/openChat";
+import { usePeerVerification } from "../privateRemote";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import ReportDialog from "./ReportDialog.vue";
 import UserMenu from "./UserMenu.vue";
@@ -29,6 +31,16 @@ const nav = useOpenChat();
 
 const isSelf = computed(() => props.user.id === session.user?.id);
 const menuEnabled = computed(() => !!props.menu && !isSelf.value);
+
+// device-pin cue (dev PWA): shield for a verified device, alert shield
+// when the shown key differs from the pin — null-safe in the mvp build
+const verification = usePeerVerification(() => props.user.id);
+const shield = computed(() => {
+  const s = verification.value?.state;
+  if (s === "verified") return "verified";
+  if (s === "key-changed") return "key-changed";
+  return null;
+});
 
 // ---- gesture: right-click, or a still 500 ms touch (scrolling cancels it) ----
 const LONG_PRESS_MS = 500;
@@ -101,8 +113,22 @@ async function remove() {
   >
     <Avatar :name="user.displayName" :tag="user.tag" />
     <span class="min-w-0 flex-1">
-      <span class="block truncate text-name font-semibold text-ink" data-testid="user-name">
-        {{ user.displayName }}
+      <span class="flex items-center gap-1.5 truncate text-name font-semibold text-ink" data-testid="user-name">
+        <span class="truncate">{{ user.displayName }}</span>
+        <ShieldAlert
+          v-if="shield === 'key-changed'"
+          class="size-3.5 shrink-0 text-danger"
+          :stroke-width="1.5"
+          data-testid="user-key-changed"
+          aria-label="device key changed"
+        />
+        <ShieldCheck
+          v-else-if="shield === 'verified'"
+          class="size-3.5 shrink-0 text-muted"
+          :stroke-width="1.5"
+          data-testid="user-verified"
+          aria-label="device verified"
+        />
       </span>
       <span class="block truncate text-msg text-muted" data-testid="user-tag">
         {{ subtitle ?? user.tag }}

@@ -15,6 +15,7 @@ import { PRIVATE_REMOTE_KEY } from "@openglass/core";
 import type {
   PrivateRemote,
   PrivateSessionView,
+  VerificationView,
 } from "@openglass/core/private/remote";
 
 /** Private views — absent remote is a wiring bug, fail loudly. */
@@ -51,6 +52,33 @@ export function usePrivateSession(
       view.value = null;
       if (peerId) {
         stop = remote.watchSession(peerId, (v) => {
+          view.value = v;
+        });
+      }
+    },
+    { immediate: true },
+  );
+  onBeforeUnmount(() => stop?.());
+  return view;
+}
+
+/** Subscribe a public screen (S7, contact rows) to a peer's device-pin
+ *  verification view — returns null when the private module is absent
+ *  (mvp build) so hosts render nothing. Auto-unsubscribes on unmount. */
+export function usePeerVerification(
+  getPeerId: () => string | null | undefined,
+): Readonly<Ref<VerificationView | null>> {
+  const remote = injectPrivateRemote();
+  const view = ref<VerificationView | null>(null);
+  let stop: (() => void) | null = null;
+  watch(
+    getPeerId,
+    (peerId) => {
+      stop?.();
+      stop = null;
+      view.value = null;
+      if (peerId && remote) {
+        stop = remote.watchVerification(peerId, (v) => {
           view.value = v;
         });
       }

@@ -129,7 +129,10 @@ watch(
     // a deep intent (?layer=private, e.g. from the contact profile) opens
     // the private layer once; the URL stays the chat's own
     privateLayer.value = privateEnabled && route.query.layer === "private" && !!peerId;
-    verificationOpen.value = false;
+    // ?verify=1 (e.g. from the contact profile cue) opens the device
+    // ritual straight away instead of the private layer
+    verificationOpen.value =
+      privateEnabled && route.query.verify === "1" && !!peerId;
     if (peerId && privateRemote) {
       const stopSession = privateRemote.watchSession(peerId, (v) => (privSession.value = v));
       const stopVerification = privateRemote.watchVerification(peerId, (v) => (verification.value = v));
