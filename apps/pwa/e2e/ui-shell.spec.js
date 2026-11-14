@@ -120,8 +120,8 @@ test("keyboard focus is always visible", async ({ browser }) => {
 test("touch targets: every button on the root screens and in a chat is at least 44 px", async ({ browser }) => {
   const { alice } = seed.users;
   const { ctx, page } = await open(browser, alice);
-  const tooSmall = () =>
-    page.evaluate(() =>
+  const tooSmall = (pg = page) =>
+    pg.evaluate(() =>
       [...document.querySelectorAll("button, a[href], [role=radio]")]
         .filter((e) => e.offsetParent !== null || getComputedStyle(e).position === "fixed")
         .map((e) => {
@@ -136,6 +136,14 @@ test("touch targets: every button on the root screens and in a chat is at least 
     expect(await tooSmall(), `undersized targets on ${route}`).toEqual([]);
   }
   await ctx.close();
+
+  // signed-out onboarding (S1): the same 44px floor applies
+  const anon = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const p = await anon.newPage();
+  await p.goto("/invite");
+  await p.waitForTimeout(600);
+  expect(await tooSmall(p), "undersized targets on /invite").toEqual([]);
+  await anon.close();
 });
 
 test("mobile: every text field is >= 16px, so iOS never zooms the page on focus", async ({ browser }) => {

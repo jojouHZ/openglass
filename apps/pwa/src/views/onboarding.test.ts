@@ -9,7 +9,7 @@
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { bindApiClient, useSessionStore } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
@@ -17,6 +17,7 @@ import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
 import { pinia } from "../pinia";
 import { createAppRouter } from "../router";
 import S1InviteEmail from "./S1InviteEmail.vue";
+import S2Otp from "./S2Otp.vue";
 import S3ProfileSetup from "./S3ProfileSetup.vue";
 
 const ctx = createMockNodeApiClient({
@@ -59,7 +60,8 @@ describe("S1 invite/email", () => {
     await flush();
     await flush(); // let the router push settle
     expect(session().pendingEmail).toBe("anna@openglass.demo");
-    expect(router.currentRoute.value.name).toBe("s2-otp");
+    // lazy route chunks can outlast a fixed flush — wait for the commit
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s2-otp"));
   });
 });
 
@@ -87,6 +89,25 @@ describe("S3 profile setup", () => {
     expect(session().authed).toBe(true);
     // prefix-style suggestions normalize to name#NNNN
     expect(session().user?.tag).toContain(chips[0]!.text());
-    expect(router.currentRoute.value.name).toBe("s4-chat-list");
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s4-chat-list"));
+  });
+
+  it("suggestion chips and the OTP resend control keep the 44px touch floor", async () => {
+    // class contract — happy-dom has no layout; E2E measures real boxes
+    await session().requestOtp("new2@x.io", "GLS-DEMO");
+    await session().verifyOtp("123456", "vitest");
+    const w3 = mountView(S3ProfileSetup);
+    await w3.find('input[placeholder="display name"]').setValue("anna");
+    await w3.find("form").trigger("submit");
+    await flush();
+    const chips = w3.findAll("button.rounded-pill");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips[0]!.classes()).toContain("min-h-11");
+    w3.unmount();
+
+    const w2 = mountView(S2Otp);
+    const resend = w2.findAll("button").find((b) => b.text().includes("resend"));
+    expect(resend?.classes()).toContain("min-h-11");
+    w2.unmount();
   });
 });
