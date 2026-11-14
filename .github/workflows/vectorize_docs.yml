@@ -19,7 +19,7 @@ permissions:
 jobs:
   vectorize:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     services:
       qdrant:
