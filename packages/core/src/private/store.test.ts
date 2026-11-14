@@ -686,6 +686,21 @@ describe("private store — one-connection policy", () => {
     void sa;
   });
 
+  it("a fresh invite from the same peer clears the stale busy note", async () => {
+    const { sb, ra, rb } = await twoParties();
+    sb.missedInvites.set("uc", { peerName: "Carol", at: 1 });
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+    sb.sessions.get("s1")!.status = "closed"; // session over — invite allowed again
+    rb.emit({
+      type: "relay.invite",
+      data: { sessionId: "s-c2", from: USER_C, ttlSeconds: 600, burnOnRead: false, strict: false },
+    });
+    expect(sb.sessions.get("s-c2")?.status).toBe("incoming");
+    expect(sb.missedInvites.has("uc")).toBe(false);
+  });
+
   it("inviter learns the decline reason — busy vs plain", async () => {
     const { sa, ra } = await twoParties();
     sa.startInvite(USER_B);
