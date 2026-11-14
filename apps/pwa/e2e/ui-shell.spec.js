@@ -130,7 +130,7 @@ test("touch targets: every button on the root screens and in a chat is at least 
         })
         .filter((x) => x.w < 44 || x.h < 44),
     );
-  for (const route of ["/chats", "/contacts", "/settings", `/chats/${seed.chatId}`]) {
+  for (const route of ["/chats", "/contacts", "/settings", "/settings/security", `/chats/${seed.chatId}`]) {
     await page.goto(route);
     await page.waitForTimeout(800);
     expect(await tooSmall(), `undersized targets on ${route}`).toEqual([]);

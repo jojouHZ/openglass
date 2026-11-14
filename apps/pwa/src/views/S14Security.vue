@@ -106,7 +106,7 @@ onMounted(async () => {
         </div>
         <button
           v-if="s.current"
-          class="text-meta text-danger"
+          class="inline-flex min-h-11 items-center px-2 text-meta text-danger"
           :disabled="busy"
           data-testid="sign-out-this"
           @click="confirmSignOut = true"
@@ -115,7 +115,7 @@ onMounted(async () => {
         </button>
         <button
           v-else
-          class="text-meta text-danger"
+          class="inline-flex min-h-11 items-center px-2 text-meta text-danger"
           :disabled="busy"
           :data-testid="`revoke-${s.id}`"
           @click="confirmTarget = s"

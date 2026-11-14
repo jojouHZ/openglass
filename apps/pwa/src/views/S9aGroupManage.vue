@@ -287,14 +287,14 @@ onMounted(async () => {
       <AppInput v-model="titleDraft" label="group name" placeholder="group name" maxlength="128" />
       <div class="mt-2 flex gap-2">
         <AppButton :loading="busy" data-testid="title-save" @click="saveTitle">save</AppButton>
-        <button class="text-muted" @click="editingTitle = false">cancel</button>
+        <button class="inline-flex min-h-11 items-center px-3 text-muted" @click="editingTitle = false">cancel</button>
       </div>
     </div>
 
     <!-- add member picker -->
     <div v-if="addMode" class="fixed inset-0 z-40 flex flex-col bg-bg">
       <div class="flex items-center gap-3 px-6 pb-4 pt-8">
-        <button class="grid size-10 shrink-0 place-items-center text-ink" aria-label="close picker" @click="addMode = false">
+        <button class="grid size-11 shrink-0 place-items-center text-ink" aria-label="close picker" @click="addMode = false">
           <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.25">
             <path d="m15 18-6-6 6-6" />
           </svg>
@@ -360,7 +360,7 @@ onMounted(async () => {
             <button
               v-for="[key, label] in RIGHT_KEYS"
               :key="key"
-              class="rounded-pill border px-3 py-1 text-meta"
+              class="inline-flex min-h-11 items-center rounded-pill border px-4 text-meta"
               :class="sheet.rights?.[key] ? 'border-primary bg-primary text-primary-foreground' : 'border-line text-muted'"
               :disabled="busy"
               :data-testid="`right-${key}`"
@@ -374,7 +374,7 @@ onMounted(async () => {
         <div class="mt-4 flex flex-col">
           <button
             v-if="isOwner && sheet.role !== 'owner'"
-            class="py-2 text-left text-name text-ink"
+            class="min-h-11 py-2 text-left text-name text-ink"
             data-testid="transfer"
             @click="((confirmKind = 'transfer'), (confirmMember = sheet), (sheet = null))"
           >
@@ -382,13 +382,13 @@ onMounted(async () => {
           </button>
           <button
             v-if="canRemove && sheet.role !== 'owner'"
-            class="py-2 text-left text-name text-danger"
+            class="min-h-11 py-2 text-left text-name text-danger"
             data-testid="remove-member"
             @click="((confirmKind = 'remove'), (confirmMember = sheet), (sheet = null))"
           >
             remove from group
           </button>
-          <button class="py-2 text-left text-name text-muted" @click="sheet = null">close</button>
+          <button class="min-h-11 py-2 text-left text-name text-muted" @click="sheet = null">close</button>
         </div>
         <div v-if="sheetError" class="mt-2 text-meta text-danger" data-testid="sheet-error">{{ sheetError }}</div>
       </template>

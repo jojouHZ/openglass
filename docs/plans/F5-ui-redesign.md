@@ -245,8 +245,8 @@ are 44px, back buttons are size-11.
 | S2 | resend control ~20px | **fixed** — min-h-11 |
 | S3 | suggestion chips ~28px | **fixed** — min-h-11 |
 | S3 | `requestedTag` cannot be typed (chips only) | recorded — functional contract question, not styling |
-| S9a | picker close `size-10` (40px); sheet actions `py-2` | next U2 slice |
-| S14 | per-row `sign out`/`revoke` bare text | next U2 slice |
+| S9a | picker close `size-10` (40px); sheet actions, permission chips, title-edit cancel `<44px` | **fixed (U2.2)** — size-11 / min-h-11 |
+| S14 | per-row `sign out`/`revoke` bare text | **fixed (U2.2)** — min-h-11 |
 | S1, S7, S8, S15 | states, 44px targets, errors | clean |
 
 Testing: flaky route assertions in `onboarding.test.ts` fixed —
@@ -664,3 +664,11 @@ and mark real-device acceptance pending, not passed. No unsafe rush to deploy.
 The release MVP still excludes private artifacts. F7/M6 are dev-tier work, not a
 reason to silently redefine the production bundle contract. Extra contact
 permissions, vault expansion and desktop features remain outside P0.
+
+
+### U2.2 — S9a / S14 touch targets
+
+The two deferred gaps from U2.1 are closed: S9a picker close, permission chips,
+sheet actions and title-edit cancel, and S14 per-row sign out / revoke now meet
+the 44px floor. The E2E touch-target sweep covers `/settings/security`; S9a is
+covered by class-contract unit tests (the seed has no group chat).
