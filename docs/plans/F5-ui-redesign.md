@@ -262,7 +262,7 @@ remain separately owner-gated R1/R2 work.
 
 ## Current execution slices
 
-### U1 — public UI acceptance on a real phone (next)
+### U1 — public UI acceptance on a real phone (owner-run, post-merge)
 Goal: use the remaining VPS window for release-PWA interaction testing, not
 private browser lifecycle repair. Scope is the current public UI; no new features,
 crypto, relay, identity or same-window private integration.
@@ -390,9 +390,9 @@ can run on a later VPS and must not depend on retaining today's test server.
 | M3 ✅ | Tokens v3 (four modes as CSS variables), theme store + Appearance setting + `theme-color` meta, Avatar (hash colour), Chip, contrast + hue tests |
 | M4 ✅ | App shell + tab bar (route meta `nav`), Contacts root (requests / sent / contacts — needs F1), Settings root restyle |
 | M5 ✅ | Chat list rows, chat view: header, bubbles (tail style), grouping, pinned bar, attachments (photo/file cards), reply quote, typing, composer |
-| M6 | Private pane + sheet + lock/switch states (= F2 plan, after F7) |
-| M7 | Remaining screens (S1–S3, S7–S9a, S14, S15), motion, a11y pass, empty/loading/error states |
-| M8 | Local gate: unit, typecheck, build, bundle guard, E2E, concept-vs-app side-by-side review, owner manual test |
+| M6 ✅ | Same-window private layer + sheet + lock/switch states (= F2 plan, after F7): V1–V3.8, V9 |
+| M7 ✅ | Remaining screens (S1–S3, S7–S9a, S14, S15), motion, a11y pass, empty/loading/error states: U2.1–U2.3 (phone-level a11y confirmed only by the owner's U1 run) |
+| M8 ◐ | Local gate, bundle guard and Chromium E2E done and green; concept-vs-app side-by-side review and owner manual test pending (post-merge, on the test server) |
 
 ## Out of scope
 - No new features beyond the concept (F1/F7/F2 carry the logic).
@@ -527,9 +527,9 @@ Passed: login, messages, group creation, report (verified in the DB via
 | O5 | demo for the mediator: needs a reusable invite + a code without an inbox | done: master invite (`--uses`) + demo login code limited to fake demo addresses (dev mode only) |
 | O6 | wants the private layer on the server within 1–2 sessions | `dev.openglass.space` serves the current private layer as soon as the DNS record exists; redesign (M6) follows F7 |
 | O7 | people lists: tap should open the chat, right-click / long-press a menu (Profile, Report …) | done: tap = chat for mutual contacts (profile for anyone else); context menu Message · Profile · Report · Remove contact (Reka menu at the pointer; touch long-press cancelled by scrolling and not followed by a tap); applied to Contacts and group members |
-| O8 | SAS currently displays 12 emoji; owner expects 5. Native emoji differ between desktop and mobile and are difficult to compare | open: audit the current SAS mapping and security strength before changing length; use identical self-hosted visuals and text labels across devices |
+| O8 | SAS currently displays 12 emoji; owner expects 5. Native emoji differ between desktop and mobile and are difficult to compare | V1 replaced emoji with 6 nameable self-hosted objects + 6 digits (identical on every device). **Owner decision needed:** the original target was five symbols; 6 objects + 6 digits was shipped, so confirm or change it |
 | O9 | after mobile screen lock, desktop tears down the private session but mobile resumes stale messages; Back opens invite creation instead of the public chat; a second session cannot deliver mobile messages to desktop | open, release blocker for private demo: reproduce both initiator/receiver roles; investigate lifecycle, transport and session cleanup before assigning a root cause |
-| O10 | private chat is a separate screen rather than a layer in the same chat window, contrary to concept 07 | open: implement the approved same-window private pane; preserve isolation of private state and explicit public/private send cues |
+| O10 | private chat is a separate screen rather than a layer in the same chat window, contrary to concept 07 | done (V3): the private layer lives in the S5 timeline, isolated behind PrivateRemote, with explicit layer cues |
 
 ## Historical proposal — next two work sessions (superseded)
 
@@ -672,3 +672,24 @@ The two deferred gaps from U2.1 are closed: S9a picker close, permission chips,
 sheet actions and title-edit cancel, and S14 per-row sign out / revoke now meet
 the 44px floor. The E2E touch-target sweep covers `/settings/security`; S9a is
 covered by class-contract unit tests (the seed has no group chat).
+
+### U2.3 — loading and error states (M7 closure)
+
+Audit of the remaining empty/loading/error states found three real defects,
+each fixed with a regression test written first:
+
+- S7 profile: a non-404 load failure rendered a blank screen (the error text
+  lived inside the loaded branch). Now an error card with a retry.
+- S8 group picker: a failed contacts load showed an empty picker. Now an error
+  card with a retry, distinct from the genuine "no contacts yet" state.
+- S9a group manage: an empty member list was shown while details were in
+  flight. Now a loading placeholder.
+
+### F5 closure status
+
+Done and merged: M1–M7, V1–V3.8, V9, U2.1–U2.3. Open and deliberately outside
+this plan's code work: U1 and the M8 side-by-side review and owner test
+(owner-run on the test server after merge), O9 (browser lifecycle, deferred to
+native shells by the owner), the O8 five-vs-six symbol confirmation (owner
+decision), a three-user busy-invite Chromium scenario (backlog), and R1/R2
+(separate slices that need provider and production access).
