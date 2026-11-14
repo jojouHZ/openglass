@@ -234,6 +234,9 @@ export const usePrivateStore = defineStore("private", {
           this.notify();
           return;
         }
+        // a fresh invite clears the stale "tried while busy" note —
+        // otherwise it would keep showing after a manual accept/decline
+        this.missedInvites.delete(ev.data.from.id);
         const s: PrivateSession = {
           id: ev.data.sessionId,
           peer: ev.data.from,
