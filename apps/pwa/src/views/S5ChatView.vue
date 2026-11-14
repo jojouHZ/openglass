@@ -504,7 +504,7 @@ watch(
   <main
     v-else
     class="relative flex h-full flex-col overflow-hidden"
-    :class="{ 'private-mode': privateLayer, 'og-pattern-bg': privateLayer && privatePattern, 'og-no-pattern': privateLayer && !privatePattern }"
+    :class="{ 'private-mode': privateLayer, 'pv-pattern': privateLayer && privatePattern, 'pv-plain': privateLayer && !privatePattern }"
   >
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line bg-card px-4 pb-3 pt-8">

@@ -6,7 +6,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient, Chat } from "@openglass/core";
+import type { ApiClient, ChatSummary, User } from "@openglass/core";
 import { bindApiClient, useChatsStore } from "@openglass/core";
 import type { PrivateSessionView } from "@openglass/core/private/remote";
 import PrivateChatSurface from "./PrivateChatSurface.vue";
@@ -32,9 +32,10 @@ function setup(verified = true) {
   const pinia = createPinia();
   const chats = useChatsStore(pinia);
   chats.chats.push({
-    id: "chat", type: "direct", title: null,
-    peer: { id: "peer", displayName: "Bob" } as Chat["peer"],
-  } as Chat);
+    id: "chat", type: "direct", title: null, memberCount: 2, pinned: false,
+    lastActivityAt: new Date(0).toISOString(), unreadCount: 0,
+    peer: { id: "peer", displayName: "Bob" } as User,
+  } as ChatSummary);
   const wrapper = mount(PrivateChatSurface, {
     props: { peerId: "peer", peerName: "Bob", blocked: false },
     global: { provide: { "og.private": remote }, plugins: [pinia] },
