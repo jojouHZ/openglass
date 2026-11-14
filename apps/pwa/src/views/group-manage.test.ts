@@ -101,6 +101,9 @@ describe("S9a group management", () => {
     await dimaRow!.find('[data-testid="member-manage"]').trigger("click");
     const sheet = w.find('[data-testid="member-sheet"]');
     expect(sheet.exists()).toBe(true);
+    // touch floor (class contract — E2E measures real boxes elsewhere)
+    expect(sheet.find('[data-testid="right-pinMessages"]').classes()).toContain("min-h-11");
+    expect(sheet.find('[data-testid="remove-member"]').classes()).toContain("min-h-11");
     // grant pinMessages — label moves from tag to a chip list
     await sheet.find('[data-testid="right-pinMessages"]').trigger("click");
     await vi.waitFor(() => {

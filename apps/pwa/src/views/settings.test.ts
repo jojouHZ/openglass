@@ -152,6 +152,9 @@ describe("S14 security", () => {
     const rows = w.findAll('[data-testid="session-row"]');
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(w.text()).toContain("this device");
+    // per-row actions keep the 44px touch floor (class contract)
+    expect(w.find('[data-testid="sign-out-this"]').classes()).toContain("min-h-11");
+    expect(w.find('[data-testid^="revoke-d"]').classes()).toContain("min-h-11");
     // fixture: 1 current + 1 other — revoke the other
     const before = session().sessions.filter((s) => !s.current).length;
     await w.find('[data-testid^="revoke-d"]').trigger("click");
