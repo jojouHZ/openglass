@@ -127,19 +127,13 @@ test("private invite -> SAS verify -> view-once -> burn", async ({ browser }) =>
   // Receipt from Bob removes Alice's copy
   await expect(alice.locator('[data-testid="priv-scroll"]')).not.toContainText("burn after reading", { timeout: 15000 });
 
-  // Bob leaving the private screen purges his read view-once copy.
-  // In-app navigation only — a page reload would wipe the whole volatile
-  // session and priv-empty would prove nothing.
+  // Bob turning the layer OFF ends the session for BOTH sides (rule 3):
+  // his read view-once copy dies with it, and each side sees the
+  // "session ended · N messages erased" note in the public timeline.
   await bob.getByTestId("private-toggle").click();
   await expect(bob).toHaveURL(/\/chats\/[^/]+$/);
-  await bob.getByTestId("private-toggle").click();
-  await expect(bob).toHaveURL(new RegExp(`/chats/${seed.chatId}$`));
-  await expect(bob.getByTestId("priv-empty")).toBeVisible({ timeout: 5000 });
-
-  // Alice burns the session from the inside — the relay's closed frame
-  // ejects Bob from the private screen he re-entered.
-  await alice.getByTestId("burn-btn").click();
-  await alice.getByTestId("confirm-action").click();
+  await expect(bob.getByTestId("private-ended")).toBeVisible({ timeout: 10000 });
+  await expect(alice.getByTestId("private-ended")).toBeVisible({ timeout: 10000 });
 
   // Both return to the public chat
   await expect(alice).toHaveURL(new RegExp(`/chats/${seed.chatId}$`), { timeout: 10000 });

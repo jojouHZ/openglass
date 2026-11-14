@@ -51,6 +51,16 @@ const PrivateChatSurface = privateEnabled
   ? defineAsyncComponent(() => import("../components/private/PrivateChatSurface.vue"))
   : null;
 const privateLayer = ref(false);
+// pattern/gradient preference is written by the private sheet — re-read
+// each time the layer opens so the background matches the choice
+const privatePattern = ref(true);
+watch(privateLayer, (on) => {
+  if (!on) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem("og.private.prefs") ?? "null");
+    privatePattern.value = saved?.pattern !== false;
+  } catch { /* malformed local value is ignored */ }
+});
 const verificationOpen = ref(false);
 const verification = shallowRef<VerificationView | null>(null);
 
@@ -144,8 +154,8 @@ const offline = computed(() => chats.connState !== "online");
 const peerReadSeq = computed(() => chats.peerReadSeq[chatId.value] ?? 0);
 
 const subtitle = computed(() => {
-  if (privateLayer.value) return "private · ephemeral";
   if (typing.value) return "typing…";
+  if (privateLayer.value) return "private · ephemeral";
   if (chat.value?.type === "group") {
     const n = chats.details[chatId.value]?.members?.length;
     // detail still loading / fetch failed — show nothing over a false 0
@@ -368,6 +378,11 @@ function onPrivateToggle() {
     verificationOpen.value = true;
     return;
   }
+  // rule 3: turning the layer off ends the session — there is no
+  // "back to public while private runs" state
+  if (privateLayer.value && privSession.value && privateRemote) {
+    privateRemote.burn(privSession.value.sessionId);
+  }
   privateLayer.value = !privateLayer.value;
   verificationOpen.value = false;
   searchOpen.value = false;
@@ -489,7 +504,7 @@ watch(
   <main
     v-else
     class="relative flex h-full flex-col overflow-hidden"
-    :class="{ 'private-mode': privateLayer }"
+    :class="{ 'private-mode': privateLayer, 'og-pattern-bg': privateLayer && privatePattern, 'og-no-pattern': privateLayer && !privatePattern }"
   >
     <!-- header -->
     <div class="flex items-center gap-3 border-b border-line bg-card px-4 pb-3 pt-8">
@@ -582,16 +597,7 @@ watch(
       @cancel="verificationOpen = false"
     />
 
-    <component
-      :is="PrivateChatSurface"
-      v-if="PrivateChatSurface && privateLayer && peer"
-      :key="peer.id"
-      :peer-id="peer.id"
-      :peer-name="peer.displayName"
-      :blocked="notContacts"
-      @verify="(privateLayer = false), (verificationOpen = true)"
-    />
-    <div v-show="!privateLayer" class="flex min-h-0 flex-1 flex-col">
+    <div class="flex min-h-0 flex-1 flex-col">
     <ChatSearch
       v-if="searchOpen"
       :total="searchResults.length"
@@ -792,8 +798,42 @@ watch(
           </div>
         </div>
       </template>
+      <!-- private segment: appended to the SAME timeline — private
+           messages never enter the chats store or /messages history;
+           they are rendered straight from the remote snapshot -->
+      <template v-if="privateLayer">
+        <div v-if="privSession" class="flex items-center gap-3 py-3" data-testid="private-divider">
+          <span class="h-px flex-1 bg-line" />
+          <span class="rounded-pill bg-pv px-3 py-1 text-sub font-medium text-pv-fg">
+            private session · verified — erased on close
+          </span>
+          <span class="h-px flex-1 bg-line" />
+        </div>
+        <div data-testid="priv-scroll">
+          <div
+            v-if="!privSession?.messages.length"
+            class="py-4 text-center text-meta text-muted"
+            data-testid="priv-empty"
+          >
+            no private messages — nothing is saved
+          </div>
+          <div
+            v-for="message in privSession?.messages ?? []"
+            :key="message.id"
+            class="mb-2 flex"
+            :class="message.fromMe ? 'justify-end' : 'justify-start'"
+          >
+            <div
+              class="max-w-[80%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-msg"
+              :class="message.fromMe ? 'bg-bubble-own text-own-fg' : 'border border-line bg-bubble-in text-in-fg'"
+            >
+              <svg viewBox="0 0 24 24" class="mr-1.5 inline-block size-3 align-[-2px] opacity-70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{ message.text }}<span v-if="message.viewOnce" class="ml-2 text-micro">view once</span>
+            </div>
+          </div>
+        </div>
+      </template>
       <div
-        v-if="!win.loading && !win.messages.length && !win.loadError"
+        v-if="!win.loading && !win.messages.length && !win.loadError && !privSession"
         class="py-8 text-center text-meta text-muted"
       >
         no messages yet
@@ -803,8 +843,17 @@ watch(
     <div v-if="actionError" class="px-6 pb-1 text-meta text-danger" data-testid="action-error">
       {{ actionError }}
     </div>
+    <component
+      :is="PrivateChatSurface"
+      v-if="PrivateChatSurface && privateLayer && peer"
+      :key="peer.id"
+      :peer-id="peer.id"
+      :peer-name="peer.displayName"
+      :blocked="notContacts"
+      @verify="(privateLayer = false), (verificationOpen = true)"
+    />
     <Composer
-      v-show="!verificationOpen"
+      v-show="!verificationOpen && !privateLayer"
       :offline="offline || notContacts || privateLayer || verificationOpen"
       :locked-reason="notContacts ? 'not contacts' : undefined"
       :reply-to="replyTo"

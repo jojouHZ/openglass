@@ -3,8 +3,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { Flame } from "lucide-vue-next";
+import { useChatsStore } from "@openglass/core";
 import type { ConnState, PrivateInviteView, PrivateSessionView, VerificationView } from "@openglass/core/private/remote";
 import { usePrivateRemote } from "../../privateRemote";
+import ConfirmDialog from "../ConfirmDialog.vue";
 import PrivateSheet from "./PrivateSheet.vue";
 import "../../styles/private.css";
 
@@ -22,12 +24,29 @@ const sheetOpen = ref(false);
 const busy = ref(false);
 const error = ref("");
 const confirmBurn = ref(false);
-// remembered "plain background" preference — local only, sheet writes it
-const plainBg = ref(false);
-try {
-  const saved = JSON.parse(localStorage.getItem("og.private.prefs") ?? "null");
-  plainBg.value = saved?.pattern === false;
-} catch { /* malformed local value is ignored */ }
+const chats = useChatsStore();
+// rule 5 — one private session per client: starting/accepting while
+// another is live asks, then terminates the previous one
+const activeSessions = shallowRef<readonly PrivateSessionView[]>([]);
+const pendingSwitch = ref<{ burnSessionId: string; run: () => void } | null>(null);
+const otherLive = computed(() => activeSessions.value.find((s) => s.peerId !== props.peerId && s.status !== "closed"));
+const otherLiveName = computed(() => {
+  const other = otherLive.value;
+  if (!other) return "";
+  const chat = chats.chats.find((c) => c.type === "direct" && c.peer?.id === other.peerId);
+  return chat ? chats.chatTitle(chat) : "another chat";
+});
+function requestOrConfirm(run: () => void) {
+  if (otherLive.value) pendingSwitch.value = { burnSessionId: otherLive.value.sessionId, run };
+  else run();
+}
+function confirmSwitch() {
+  const pending = pendingSwitch.value;
+  pendingSwitch.value = null;
+  if (!pending) return;
+  remote.burn(pending.burnSessionId);
+  pending.run();
+}
 const off = [
   remote.watchSession(props.peerId, (value) => { session.value = value; }),
   remote.watchVerification(props.peerId, (value) => { verification.value = value; }),
@@ -36,6 +55,7 @@ const off = [
     incoming.value = value.incoming.find((invite) => invite.peerId === props.peerId) ?? null;
     outgoing.value = value.outgoing.includes(props.peerId);
   }),
+  remote.watchActiveSessions((views) => { activeSessions.value = views; }),
 ];
 const trusted = computed(() => verification.value?.state === "verified");
 const enabled = computed(() => trusted.value && relay.value === "online" && !props.blocked);
@@ -68,10 +88,14 @@ async function send() {
 }
 
 function start(opts: { ttlSeconds: number; strict: boolean }) {
-  if (enabled.value) remote.startInvite({ id: props.peerId, displayName: props.peerName }, opts);
+  requestOrConfirm(() => {
+    if (enabled.value) remote.startInvite({ id: props.peerId, displayName: props.peerName }, opts);
+  });
 }
 function accept() {
-  if (enabled.value && incoming.value) remote.accept(incoming.value.sessionId);
+  requestOrConfirm(() => {
+    if (enabled.value && incoming.value) remote.accept(incoming.value.sessionId);
+  });
 }
 function burn() {
   if (session.value) remote.burn(session.value.sessionId);
@@ -82,8 +106,7 @@ function burn() {
 
 <template>
   <section
-    class="private-mode og-pattern-bg flex min-h-0 flex-1 flex-col border-t border-line"
-    :class="{ 'og-no-pattern': plainBg }"
+    class="shrink-0 border-t border-line"
     aria-label="private layer"
     data-testid="private-layer"
   >
@@ -110,17 +133,6 @@ function burn() {
     </div>
     <p v-if="session?.status === 'exchanging'" class="px-4 py-3 text-meta text-muted" role="status">Checking signed session keys…</p>
     <p v-if="session?.peerOfflineUntil" class="px-4 py-2 text-meta text-muted">Peer offline — session may expire.</p>
-    <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-testid="priv-scroll">
-      <p v-if="session?.status === 'verified'" class="mb-3 text-center text-micro text-muted" data-testid="timeline-started">
-        private session · verified — messages erased on close
-      </p>
-      <p v-if="!session?.messages.length" class="text-center text-meta text-muted" data-testid="priv-empty">No private messages. Messages and session keys are not saved.</p>
-      <div v-for="message in session?.messages ?? []" :key="message.id" class="mb-2 flex" :class="message.fromMe ? 'justify-end' : 'justify-start'">
-        <div class="max-w-[85%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-msg" :class="message.fromMe ? 'bg-bubble-own text-own-fg' : 'bg-bubble-in text-in-fg'">
-          <svg viewBox="0 0 24 24" class="mr-1.5 inline-block size-3 align-[-2px] opacity-70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{ message.text }}<span v-if="message.viewOnce" class="ml-2 text-micro">view once</span>
-        </div>
-      </div>
-    </div>
     <p v-if="error" class="px-4 text-meta text-danger" role="alert">{{ error }}</p>
     <form class="flex items-end gap-2 border-t border-line px-4 py-3" @submit.prevent="send">
       <!-- F-4: compact vertical switch — flame in the thumb, lock in the
@@ -154,5 +166,13 @@ function burn() {
       <button class="min-h-11 px-4 text-danger" data-testid="confirm-action" @click="burn">Burn</button>
       <button class="min-h-11 px-4 text-muted" @click="confirmBurn = false">Cancel</button>
     </div>
+    <ConfirmDialog
+      v-if="pendingSwitch"
+      title="End the current private session?"
+      :body="`You have an active private session with ${otherLiveName}. Starting a new one will end it.`"
+      confirm-label="End & start"
+      @confirm="confirmSwitch"
+      @cancel="pendingSwitch = null"
+    />
   </section>
 </template>
