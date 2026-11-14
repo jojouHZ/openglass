@@ -69,7 +69,7 @@ async function submit() {
           v-for="s in suggestions"
           :key="s"
           type="button"
-          class="rounded-pill border border-line px-3 py-1 text-meta text-accent"
+          class="inline-flex min-h-11 items-center rounded-pill border border-line px-4 text-meta text-accent"
           @click="requestedTag = s"
         >
           {{ s }}
