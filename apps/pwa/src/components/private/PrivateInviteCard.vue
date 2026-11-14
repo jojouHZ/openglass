@@ -6,51 +6,41 @@
      VITE_PRIVATE_MODULE; the mvp bundle never sees this file). -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 
-import type { PrivateInvitesView, PrivateSessionView } from "@openglass/core/private/remote";
+import type { PrivateInvitesView } from "@openglass/core/private/remote";
 
-import { useChatsStore } from "@openglass/core";
 import { usePrivateRemote, usePrivateSession } from "../../privateRemote";
 import ConfirmDialog from "../ConfirmDialog.vue";
+import { useSessionGuard } from "./useSessionGuard";
 
 const props = defineProps<{ peerId: string; chatId: string }>();
 const emit = defineEmits<{ verify: [sessionId: string]; open: [] }>();
 const remote = usePrivateRemote();
-const chats = useChatsStore();
-
-const session = usePrivateSession(() => props.peerId);
-const invites = ref<PrivateInvitesView>({ incoming: [], outgoing: [] });
 // rule 5 — one private session per client: accepting while another
 // is live asks, then terminates the previous one
-const activeSessions = shallowRef<readonly PrivateSessionView[]>([]);
-const pendingSwitch = ref<{ burnSessionId: string; run: () => void } | null>(null);
-const stopAll = [
-  remote.watchInvites((v) => (invites.value = v)),
-  remote.watchActiveSessions((v) => (activeSessions.value = v)),
-];
-onBeforeUnmount(() => stopAll.forEach((stop) => stop()));
+const { pendingSwitch, otherLiveName, requestOrConfirm, confirmSwitch } = useSessionGuard(() => props.peerId);
+
+const session = usePrivateSession(() => props.peerId);
+const invites = ref<PrivateInvitesView>({ incoming: [], outgoing: [], missed: [], declined: [] });
+const stopInvites = remote.watchInvites((v) => (invites.value = v));
+onBeforeUnmount(stopInvites);
 
 /** incoming invite from this peer, or our outgoing pending invite */
 const incoming = computed(() =>
   invites.value.incoming.find((i) => i.peerId === props.peerId) ?? null,
 );
 const outgoing = computed(() => invites.value.outgoing.includes(props.peerId));
+/** they tried to invite us while we were busy — invite auto-declined */
+const missed = computed(() => invites.value.missed.find((m) => m.peerId === props.peerId) ?? null);
+/** our invite to this peer was declined — busy means a live session, not a refusal */
+const declined = computed(() => invites.value.declined.find((d) => d.peerId === props.peerId) ?? null);
 /** a live session — past the invite phase (key exchange or later) */
 const live = computed(() => {
   const s = session.value;
   return s && s.status !== "incoming" && s.status !== "inviting" ? s : null;
 });
 
-const otherLive = computed(() =>
-  activeSessions.value.find((s) => s.peerId !== props.peerId && s.status !== "closed"),
-);
-const otherLiveName = computed(() => {
-  const other = otherLive.value;
-  if (!other) return "";
-  const chat = chats.chats.find((c) => c.type === "direct" && c.peer?.id === other.peerId);
-  return chat ? chats.chatTitle(chat) : "another chat";
-});
 function doAccept() {
   if (!incoming.value) return;
   remote.accept(incoming.value.sessionId);
@@ -58,18 +48,7 @@ function doAccept() {
 }
 function accept() {
   if (!incoming.value) return;
-  if (otherLive.value) {
-    pendingSwitch.value = { burnSessionId: otherLive.value.sessionId, run: doAccept };
-    return;
-  }
-  doAccept();
-}
-function confirmSwitch() {
-  const pending = pendingSwitch.value;
-  pendingSwitch.value = null;
-  if (!pending) return;
-  remote.burn(pending.burnSessionId);
-  pending.run();
+  requestOrConfirm(doAccept);
 }
 function decline() {
   if (incoming.value) remote.decline(incoming.value.sessionId);
@@ -136,6 +115,34 @@ function decline() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
     <span class="text-meta text-muted">private invite sent — waiting…</span>
+  </div>
+
+  <!-- our invite was declined — busy is honest "can't join right now" -->
+  <div
+    v-else-if="declined"
+    class="mx-6 mt-2 flex items-center gap-2 rounded-card border border-line bg-soft px-4 py-2"
+    data-testid="private-declined"
+  >
+    <svg viewBox="0 0 24 24" class="size-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    <span class="text-meta text-muted">
+      {{ declined.busy ? "can't join a private session right now — they're in one" : "private invite declined" }}
+    </span>
+  </div>
+
+  <!-- they tried to invite us while a session was live -->
+  <div
+    v-else-if="missed"
+    class="mx-6 mt-2 flex items-center gap-2 rounded-card border border-line bg-soft px-4 py-2"
+    data-testid="private-missed"
+  >
+    <svg viewBox="0 0 24 24" class="size-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    <span class="text-meta text-muted">tried to invite you while you were in a private session</span>
   </div>
 
   <ConfirmDialog

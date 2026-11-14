@@ -57,16 +57,26 @@ const open = (id: string) => router.push({ name: "s5-chat-view", params: { chatI
 // F2 — "private" chip on chats with a live private session (pwa-dev only;
 // the remote is null in the mvp build and this stays empty)
 const privatePeers = shallowRef<ReadonlySet<string>>(new Set());
+// mask badge on chats with an unanswered or auto-declined invite —
+// the notification lives inside that contact's chat, the badge points to it
+const invitedPeers = shallowRef<ReadonlySet<string>>(new Set());
 const privateRemote = injectPrivateRemote();
 let stopActiveWatch: (() => void) | null = null;
+let stopInviteWatch: (() => void) | null = null;
 onMounted(() => {
   if (privateRemote) {
     stopActiveWatch = privateRemote.watchActiveSessions((views: PrivateSessionView[]) => {
       privatePeers.value = new Set(views.map((v) => v.peerId));
     });
+    stopInviteWatch = privateRemote.watchInvites((v) => {
+      invitedPeers.value = new Set([
+        ...v.incoming.map((i) => i.peerId),
+        ...v.missed.map((m) => m.peerId),
+      ]);
+    });
   }
 });
-onBeforeUnmount(() => stopActiveWatch?.());
+onBeforeUnmount(() => { stopActiveWatch?.(); stopInviteWatch?.(); });
 </script>
 
 <template>
@@ -188,6 +198,7 @@ onBeforeUnmount(() => stopActiveWatch?.());
           :key="c.id"
           :chat="c"
           :private-active="c.type === 'direct' && !!c.peer && privatePeers.has(c.peer.id)"
+          :private-invite="c.type === 'direct' && !!c.peer && invitedPeers.has(c.peer.id)"
           @open="open(c.id)"
         />
       </template>

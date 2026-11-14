@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed } from "vue";
-import { Bookmark, Users } from "lucide-vue-next";
+import { Bookmark, Users, VenetianMask } from "lucide-vue-next";
 
 import type { ChatSummary } from "@openglass/core";
 import { useChatsStore, useSessionStore } from "@openglass/core";
 
 import Avatar from "../ui/Avatar.vue";
 
-const props = defineProps<{ chat: ChatSummary; privateActive?: boolean }>();
+const props = defineProps<{ chat: ChatSummary; privateActive?: boolean; privateInvite?: boolean }>();
 const emit = defineEmits<{ open: [] }>();
 
 const chats = useChatsStore();
@@ -70,6 +70,16 @@ const time = computed(() => {
         data-testid="group-badge"
       >
         <Users class="size-2.5" :stroke-width="2.25" />
+      </span>
+      <!-- incoming/missed private invite — mask glyph on the left,
+           opposite the unread counter on the right -->
+      <span
+        v-if="privateInvite"
+        class="absolute -bottom-0.5 -left-0.5 grid size-5 place-items-center rounded-full border-2 border-bg bg-pv text-pv-fg"
+        data-testid="private-invite-badge"
+        title="private session invite"
+      >
+        <VenetianMask class="size-2.5" :stroke-width="2.25" />
       </span>
     </span>
     <span class="min-w-0 flex-1">
