@@ -212,7 +212,26 @@ Evidence: core 129/129 (+4 policy tests), PWA 203/203 (+ confirm-path
 and invite-card component tests), Go relay incl. busy-reason whitelist
 and stripping, Chromium 13/13, full `pnpm gate` green.
 
-V3 remaining: contacts shield cue (dev-only) and the owner mass review.
+### V9 — contacts device-pin cues (identity cues, dev PWA)
+
+- `usePeerVerification` (in `privateRemote.ts`) — null-safe sibling of
+  `usePrivateSession`: subscribes a public screen to `watchVerification`,
+  stays null without the remote so the mvp build renders and bundles
+  nothing.
+- `S7ContactProfile` — device-verification chip below the actions for
+  mutual contacts: "device verified" (calm), "device not verified",
+  "verification pending", "key changed — re-verify" (danger styling —
+  not colour alone). A tap opens the direct chat into the ritual via
+  `?verify=1`.
+- `UserRow` — shield glyph beside the name: `ShieldCheck` for a
+  matching pin, `ShieldAlert` (danger) when the published key no longer
+  matches the pin. Unverified rows and rows without a remote show
+  nothing.
+- `S5ChatView` honours `?verify=1` (deep intent, same pattern as
+  `?layer=private`) and opens `DeviceVerification` straight away.
+
+Evidence: PWA 210/210 (+7 cue/shield component tests), typecheck clean.
+V3 remaining: the owner mass review only.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
 remain separately owner-gated R1/R2 work.
