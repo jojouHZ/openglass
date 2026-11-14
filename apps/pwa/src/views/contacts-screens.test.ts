@@ -216,6 +216,24 @@ describe("S7 contact profile", () => {
     expect(w.find('[data-testid="action-add"]').exists()).toBe(true);
   });
 
+  it("a failed profile load shows an error with a retry, never a blank screen", async () => {
+    const orig = ctx.api.users.get;
+    ctx.api.users.get = () => Promise.reject(new ApiRequestError(500, { code: "internal", message: "boom" }));
+    try {
+      await router.push({ name: "s7-contact-profile", params: { userId: stranger.id } });
+      const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
+      await vi.waitFor(() => expect(w.find('[data-testid="load-error"]').exists()).toBe(true));
+      expect(w.find('[data-testid="not-found"]').exists()).toBe(false);
+      ctx.api.users.get = orig;
+      await w.find('[data-testid="load-retry"]').trigger("click");
+      await vi.waitFor(() => expect(w.find('[data-testid="display-name"]').exists()).toBe(true));
+      expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
+      w.unmount();
+    } finally {
+      ctx.api.users.get = orig;
+    }
+  });
+
   it("unknown user renders the not-found state", async () => {
     await router.push({
       name: "s7-contact-profile",

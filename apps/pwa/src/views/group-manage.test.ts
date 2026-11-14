@@ -53,6 +53,25 @@ beforeAll(async () => {
 afterAll(() => ctx.server.close());
 
 describe("S9a group management", () => {
+  it("shows a loading state while the group details are still on the way", async () => {
+    const orig = ctx.api.chats.get;
+    const pending: Array<() => void> = [];
+    ctx.api.chats.get = (id) => new Promise((res) => { pending.push(() => res(orig(id))); });
+    chats().$patch({ details: {} });
+    try {
+      await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
+      const w = mount(S9aGroupManage, { global: { plugins: [router, pinia] } });
+      await vi.waitFor(() => expect(w.find('[data-testid="loading"]').exists()).toBe(true));
+      ctx.api.chats.get = orig;
+      pending.forEach((release) => release());
+      await vi.waitFor(() => expect(w.find('[data-testid="loading"]').exists()).toBe(false));
+      expect(w.findAll('[data-testid="member-row"]').length).toBeGreaterThan(0);
+      w.unmount();
+    } finally {
+      ctx.api.chats.get = orig;
+    }
+  });
+
   it("lists members with role and rights labels", async () => {
     const w = await mountManage();
     const rows = w.findAll('[data-testid="member-row"]');
