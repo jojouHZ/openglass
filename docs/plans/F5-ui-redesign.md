@@ -192,6 +192,26 @@ sides and shows the ended note). Full `pnpm gate` green on `6dc380b`:
 gofmt, golangci-lint, `go test -race` (Mem+PG), typecheck, core 125/125,
 pwa tests ×3, build, mvp bundle guard, real Chromium 13/13.
 
+### V3.8 — busy-invite model (owner refinement of rule 5)
+
+- An unanswered invite is NOT a connection: incoming invites while a
+  session is live are auto-declined `busy` by the core store — spam
+  cannot lock the owner out. `relay.decline`/`relay.declined` carry an
+  optional whitelisted `reason: "busy"`.
+- The invitee's chat shows "tried to invite you…"; the inviter's chat
+  shows "can't join a private session right now". Our own stale
+  outgoing invites are dropped silently on start/accept.
+- Chat list: mask badge (`VenetianMask`) on the row's left edge —
+  opposite the unread counter — for incoming/missed invites.
+- `useSessionGuard` composable dedupes the one-connection confirm for
+  the surface and the invite card.
+- `accept()` is fail-closed: a live session appearing after the invite
+  arrived turns the accept into a busy decline.
+
+Evidence: core 129/129 (+4 policy tests), PWA 203/203 (+ confirm-path
+and invite-card component tests), Go relay incl. busy-reason whitelist
+and stripping, Chromium 13/13, full `pnpm gate` green.
+
 V3 remaining: contacts shield cue (dev-only) and the owner mass review.
 U2/U3 and the owner mass review/manual acceptance are not completed by this
 implementation. Production OTP/provider configuration and live deployment
