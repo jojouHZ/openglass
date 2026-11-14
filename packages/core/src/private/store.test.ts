@@ -72,8 +72,8 @@ class FakeRelay extends RelayClient {
   override accept(sessionId: string): void {
     this.sent.push({ type: "relay.accept", data: { sessionId } });
   }
-  override decline(sessionId: string): void {
-    this.sent.push({ type: "relay.decline", data: { sessionId } });
+  override decline(sessionId: string, reason?: "busy"): void {
+    this.sent.push({ type: "relay.decline", data: reason ? { sessionId, reason } : { sessionId } });
   }
   override burn(sessionId: string): void {
     this.sent.push({ type: "relay.burn", data: { sessionId } });
@@ -652,6 +652,87 @@ describe("private store — session lifecycle", () => {
     const a = sa.sessions.get("s9")!;
     expect(a.burnOnRead).toBe(true);
     expect(a.strict).toBe(true);
+  });
+});
+
+describe("private store — one-connection policy", () => {
+  const USER_C = { id: "uc", displayName: "Carol", tag: "carol#1" };
+  const pinC = (store: ReturnType<typeof usePrivateStore>) =>
+    store.pins.set(USER_C.id, {
+      peerUserId: USER_C.id,
+      keyId: "kc",
+      publicKey: "pub-c",
+      verifiedAt: new Date().toISOString(),
+    });
+
+  it("auto-declines an incoming invite with reason=busy while a session is live", async () => {
+    const { sa, sb, ra, rb } = await twoParties();
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+    expect(sb.hasLiveSession).toBe(true);
+
+    rb.emit({
+      type: "relay.invite",
+      data: { sessionId: "s-c", from: USER_C, ttlSeconds: 600, burnOnRead: false, strict: false },
+    });
+    // the invite never becomes a session and is declined busy
+    expect(sb.sessions.has("s-c")).toBe(false);
+    expect(rb.sent).toContainEqual({
+      type: "relay.decline",
+      data: { sessionId: "s-c", reason: "busy" },
+    });
+    expect(sb.missedInvites.get("uc")?.peerName).toBe("Carol");
+    void sa;
+  });
+
+  it("inviter learns the decline reason — busy vs plain", async () => {
+    const { sa, ra } = await twoParties();
+    sa.startInvite(USER_B);
+    await flush();
+    ra.emit({ type: "relay.invited", data: { sessionId: "s-out", to: USER_B, ttlSeconds: 600, burnOnRead: false, strict: false } });
+    ra.emit({ type: "relay.declined", data: { sessionId: "s-out", reason: "busy" } });
+    expect(sa.sessions.has("s-out")).toBe(false);
+    expect(sa.declinedOutgoing.get("ub")).toEqual({ peerName: "Bob", busy: true });
+    // retrying the same peer clears the note
+    sa.startInvite(USER_B);
+    await flush();
+    expect(sa.declinedOutgoing.has("ub")).toBe(false);
+  });
+
+  it("accept after a session went live declines busy instead of stacking", async () => {
+    const { sb, ra, rb } = await twoParties();
+    pinC(sb);
+    // invite arrives while free — it stays incoming
+    rb.emit({
+      type: "relay.invite",
+      data: { sessionId: "s-c", from: USER_C, ttlSeconds: 600, burnOnRead: false, strict: false },
+    });
+    expect(sb.sessions.get("s-c")?.status).toBe("incoming");
+    // another session goes live first
+    established(ra, "s1", USER_B);
+    established(rb, "s1", USER_A);
+    await flush();
+    sb.accept("s-c");
+    await flush();
+    expect(rb.sent).toContainEqual({
+      type: "relay.decline",
+      data: { sessionId: "s-c", reason: "busy" },
+    });
+    expect(rb.sent.some((f) => f.type === "relay.accept" && f.data.sessionId === "s-c")).toBe(false);
+    expect(sb.missedInvites.has("uc")).toBe(true);
+  });
+
+  it("starting or accepting drops our stale outgoing invites to other peers", async () => {
+    const { sa } = await twoParties();
+    pinC(sa);
+    sa.startInvite(USER_B);
+    await flush();
+    expect(sa.pendingInvites.has("ub")).toBe(true);
+    sa.startInvite(USER_C);
+    await flush();
+    expect(sa.pendingInvites.has("ub")).toBe(false);
+    expect(sa.pendingInvites.has("uc")).toBe(true);
   });
 });
 

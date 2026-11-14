@@ -71,6 +71,12 @@ export interface PrivateInvitesView {
   incoming: readonly PrivateInviteView[];
   /** peerIds with our unanswered outgoing invite */
   outgoing: readonly string[];
+  /** peers whose invite was auto-declined while we had a live
+   *  session — volatile "they tried to invite you" notes */
+  missed: readonly { peerId: string; peerName: string }[];
+  /** peers who declined our outgoing invite — busy means they were
+   *  inside a live session, so "can't join right now" is honest */
+  declined: readonly { peerId: string; peerName: string; busy: boolean }[];
 }
 
 /** UI-safe view of one of the peer's published device keys — public
@@ -222,6 +228,15 @@ export function createPrivateRemote(
         burnOnRead: s.burnOnRead,
       })),
       outgoing: [...store.outgoingInvites],
+      missed: [...store.missedInvites.entries()].map(([peerId, v]) => ({
+        peerId,
+        peerName: v.peerName,
+      })),
+      declined: [...store.declinedOutgoing.entries()].map(([peerId, v]) => ({
+        peerId,
+        peerName: v.peerName,
+        busy: v.busy,
+      })),
     };
   }
 
