@@ -28,9 +28,6 @@ try {
   const saved = JSON.parse(localStorage.getItem("og.private.prefs") ?? "null");
   plainBg.value = saved?.pattern === false;
 } catch { /* malformed local value is ignored */ }
-// timeline cards: invite sent / session started / session ended —
-// derived from observed transitions, never persisted
-const endedInfo = ref<{ messages: number } | null>(null);
 const off = [
   remote.watchSession(props.peerId, (value) => { session.value = value; }),
   remote.watchVerification(props.peerId, (value) => { verification.value = value; }),
@@ -48,14 +45,6 @@ watch(() => session.value?.messages.map((message) => `${message.id}:${message.re
   if (session.value?.status === "verified") remote.markDisplayed(session.value.sessionId);
 }, { immediate: true });
 watch(() => session.value?.sessionId, () => { text.value = ""; error.value = ""; });
-// session end → timeline card with the erased message count; a reload
-// loses the session entirely (volatile by design) so "lost" can't be
-// distinguished from "never existed" — no false card is rendered
-watch(session, (next, prev) => {
-  const live = (s: PrivateSessionView | null | undefined) => !!s && s.status !== "closed" && s.status !== "incoming" && s.status !== "inviting";
-  if (live(prev) && !live(next)) endedInfo.value = { messages: prev!.messages.length };
-  if (live(next)) endedInfo.value = null;
-}, { immediate: true });
 onBeforeUnmount(() => {
   off.forEach((stop) => stop());
   if (session.value) remote.purgeRead(session.value.sessionId);
@@ -125,10 +114,7 @@ function burn() {
       <p v-if="session?.status === 'verified'" class="mb-3 text-center text-micro text-muted" data-testid="timeline-started">
         private session · verified — messages erased on close
       </p>
-      <p v-if="endedInfo" class="mb-3 text-center text-micro text-muted" data-testid="timeline-ended">
-        private session ended · {{ endedInfo.messages }} message{{ endedInfo.messages === 1 ? "" : "s" }} erased
-      </p>
-      <p v-if="!session?.messages.length && !endedInfo" class="text-center text-meta text-muted" data-testid="priv-empty">No private messages. Messages and session keys are not saved.</p>
+      <p v-if="!session?.messages.length" class="text-center text-meta text-muted" data-testid="priv-empty">No private messages. Messages and session keys are not saved.</p>
       <div v-for="message in session?.messages ?? []" :key="message.id" class="mb-2 flex" :class="message.fromMe ? 'justify-end' : 'justify-start'">
         <div class="max-w-[85%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-msg" :class="message.fromMe ? 'bg-bubble-own text-own-fg' : 'bg-bubble-in text-in-fg'">
           <svg viewBox="0 0 24 24" class="mr-1.5 inline-block size-3 align-[-2px] opacity-70" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{ message.text }}<span v-if="message.viewOnce" class="ml-2 text-micro">view once</span>

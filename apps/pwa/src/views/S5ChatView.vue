@@ -104,6 +104,9 @@ const headerTarget = computed(() => {
 // snapshot of this peer's session (null in the mvp build)
 const privateRemote = injectPrivateRemote();
 const privSession = shallowRef<PrivateSessionView | null>(null);
+// after the private pane collapses the end note belongs to the public
+// layer — the surface itself unmounts, so it can't render its own card
+const privateEnded = ref<{ messages: number } | null>(null);
 let stopPrivateWatch: (() => void) | null = null;
 watch(
   () => (privateEnabled ? peer.value?.id : undefined),
@@ -111,6 +114,7 @@ watch(
     stopPrivateWatch?.();
     stopPrivateWatch = null;
     privSession.value = null;
+    privateEnded.value = null;
     verification.value = null;
     // a deep intent (?layer=private, e.g. from the contact profile) opens
     // the private layer once; the URL stays the chat's own
@@ -126,7 +130,14 @@ watch(
 );
 onBeforeUnmount(() => stopPrivateWatch?.());
 watch(privSession, (current, previous) => {
-  if (!current && previous) privateLayer.value = false;
+  if (!current && previous) {
+    privateLayer.value = false;
+    if (previous.status !== "inviting" && previous.status !== "incoming") {
+      privateEnded.value = { messages: previous.messages.length };
+    }
+  } else if (current) {
+    privateEnded.value = null;
+  }
 });
 const typing = computed(() => chats.typingIn(chatId.value));
 const offline = computed(() => chats.connState !== "online");
@@ -603,6 +614,14 @@ watch(
       offline — composer disabled
     </div>
 
+    <div
+      v-if="privateEnded"
+      class="flex items-center gap-2 bg-pv px-6 py-2 text-meta text-pv-fg"
+      data-testid="private-ended"
+    >
+      <span class="flex-1">private session ended · {{ privateEnded.messages }} message{{ privateEnded.messages === 1 ? "" : "s" }} erased</span>
+      <button class="grid size-11 place-items-center" aria-label="dismiss" @click="privateEnded = null">✕</button>
+    </div>
     <div
       v-if="notContacts && peer"
       class="flex items-center gap-2 bg-soft px-6 py-2 text-meta text-body"
