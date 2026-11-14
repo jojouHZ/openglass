@@ -8,6 +8,7 @@ import type { ConnState, PrivateInviteView, PrivateSessionView, VerificationView
 import { usePrivateRemote } from "../../privateRemote";
 import ConfirmDialog from "../ConfirmDialog.vue";
 import PrivateSheet from "./PrivateSheet.vue";
+import { useSessionGuard } from "./useSessionGuard";
 import "../../styles/private.css";
 
 const props = defineProps<{ peerId: string; peerName: string; blocked: boolean }>();
@@ -27,26 +28,7 @@ const confirmBurn = ref(false);
 const chats = useChatsStore();
 // rule 5 — one private session per client: starting/accepting while
 // another is live asks, then terminates the previous one
-const activeSessions = shallowRef<readonly PrivateSessionView[]>([]);
-const pendingSwitch = ref<{ burnSessionId: string; run: () => void } | null>(null);
-const otherLive = computed(() => activeSessions.value.find((s) => s.peerId !== props.peerId && s.status !== "closed"));
-const otherLiveName = computed(() => {
-  const other = otherLive.value;
-  if (!other) return "";
-  const chat = chats.chats.find((c) => c.type === "direct" && c.peer?.id === other.peerId);
-  return chat ? chats.chatTitle(chat) : "another chat";
-});
-function requestOrConfirm(run: () => void) {
-  if (otherLive.value) pendingSwitch.value = { burnSessionId: otherLive.value.sessionId, run };
-  else run();
-}
-function confirmSwitch() {
-  const pending = pendingSwitch.value;
-  pendingSwitch.value = null;
-  if (!pending) return;
-  remote.burn(pending.burnSessionId);
-  pending.run();
-}
+const { pendingSwitch, otherLiveName, requestOrConfirm, confirmSwitch } = useSessionGuard(() => props.peerId);
 const off = [
   remote.watchSession(props.peerId, (value) => { session.value = value; }),
   remote.watchVerification(props.peerId, (value) => { verification.value = value; }),
@@ -55,7 +37,6 @@ const off = [
     incoming.value = value.incoming.find((invite) => invite.peerId === props.peerId) ?? null;
     outgoing.value = value.outgoing.includes(props.peerId);
   }),
-  remote.watchActiveSessions((views) => { activeSessions.value = views; }),
 ];
 const trusted = computed(() => verification.value?.state === "verified");
 const enabled = computed(() => trusted.value && relay.value === "online" && !props.blocked);

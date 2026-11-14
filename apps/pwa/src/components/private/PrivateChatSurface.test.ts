@@ -15,7 +15,7 @@ import PrivateSheet from "./PrivateSheet.vue";
 const events = { typingStart: vi.fn(), typingStop: vi.fn() };
 bindApiClient({ events } as unknown as ApiClient);
 
-function setup(verified = true) {
+function setup(verified = true, opts: { incoming?: boolean; otherLive?: PrivateSessionView } = {}) {
   const snapshot: PrivateSessionView = {
     sessionId: "session", peerId: "peer", status: verified ? "verified" : "exchanging",
     sas: null, messages: [], ttlEndsAt: null, peerOfflineUntil: null, canSend: verified,
@@ -24,10 +24,21 @@ function setup(verified = true) {
     watchSession: (_: string, cb: (value: PrivateSessionView) => void) => { cb(snapshot); return vi.fn(); },
     watchVerification: (_: string, cb: (value: unknown) => void) => { cb({ state: "verified" }); return vi.fn(); },
     watchRelayState: (cb: (value: string) => void) => { cb("online"); return vi.fn(); },
-    watchInvites: (cb: (value: unknown) => void) => { cb({ incoming: [], outgoing: [] }); return vi.fn(); },
-    watchActiveSessions: (cb: (value: PrivateSessionView[]) => void) => { cb([snapshot]); return vi.fn(); },
+    watchInvites: (cb: (value: unknown) => void) => {
+      cb({
+        incoming: opts.incoming
+          ? [{ sessionId: "inc", peerId: "peer", peerName: "Bob", strict: false, burnOnRead: false }]
+          : [],
+        outgoing: [], missed: [], declined: [],
+      });
+      return vi.fn();
+    },
+    watchActiveSessions: (cb: (value: PrivateSessionView[]) => void) => {
+      cb(opts.otherLive ? [opts.otherLive] : [snapshot]);
+      return vi.fn();
+    },
     send: vi.fn(async () => {}), purgeRead: vi.fn(), markDisplayed: vi.fn(), burn: vi.fn(),
-    startInvite: vi.fn(), accept: vi.fn(),
+    startInvite: vi.fn(), accept: vi.fn(), decline: vi.fn(), cancelInvite: vi.fn(),
   };
   const pinia = createPinia();
   const chats = useChatsStore(pinia);
@@ -79,6 +90,21 @@ describe("same-window private surface", () => {
     await ready.wrapper.get("form").trigger("submit");
     expect(ready.remote.send).not.toHaveBeenCalled();
     ready.wrapper.unmount();
+  });
+
+  it("asks to end the other live session before accepting an invite", async () => {
+    const other: PrivateSessionView = {
+      sessionId: "other-session", peerId: "other-peer", status: "verified",
+      sas: null, messages: [], ttlEndsAt: null, peerOfflineUntil: null, canSend: true,
+    };
+    const { wrapper, remote } = setup(true, { incoming: true, otherLive: other });
+    await wrapper.get('[data-testid="invite-accept"]').trigger("click");
+    // no accept yet — the confirm dialog gates it
+    expect(remote.accept).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="confirm-action"]').trigger("click");
+    expect(remote.burn).toHaveBeenCalledWith("other-session");
+    expect(remote.accept).toHaveBeenCalledWith("inc");
+    wrapper.unmount();
   });
 });
 
