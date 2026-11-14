@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { Flame } from "lucide-vue-next";
-import { useChatsStore } from "@openglass/core";
+import { api, useChatsStore } from "@openglass/core";
 import type { ConnState, PrivateInviteView, PrivateSessionView, VerificationView } from "@openglass/core/private/remote";
 import { usePrivateRemote } from "../../privateRemote";
 import ConfirmDialog from "../ConfirmDialog.vue";
@@ -61,12 +61,33 @@ const trusted = computed(() => verification.value?.state === "verified");
 const enabled = computed(() => trusted.value && relay.value === "online" && !props.blocked);
 const canSend = computed(() => enabled.value && session.value?.status === "verified" && session.value.canSend);
 
+// private typing indicator: reuse the public typing.start/stop channel —
+// the relay already sees opaque private envelopes for this pair, so the
+// typing metadata leaks nothing new; the frames carry no content.
+const chatId = computed(() => chats.chats.find((c) => c.type === "direct" && c.peer?.id === props.peerId)?.id);
+let typingAt = 0;
+function pingTyping() {
+  const id = chatId.value;
+  if (!id || !canSend.value) return;
+  const now = Date.now();
+  if (now - typingAt < 3000) return;
+  typingAt = now;
+  api().events.typingStart(id);
+}
+function stopTyping() {
+  const id = chatId.value;
+  if (!id || !typingAt) return;
+  typingAt = 0;
+  api().events.typingStop(id);
+}
+
 watch(() => session.value?.messages.map((message) => `${message.id}:${message.read}`).join(","), () => {
   if (session.value?.status === "verified") remote.markDisplayed(session.value.sessionId);
 }, { immediate: true });
 watch(() => session.value?.sessionId, () => { text.value = ""; error.value = ""; });
 onBeforeUnmount(() => {
   off.forEach((stop) => stop());
+  stopTyping();
   if (session.value) remote.purgeRead(session.value.sessionId);
   text.value = "";
 });
@@ -80,6 +101,7 @@ async function send() {
   try {
     await remote.send(current.sessionId, message, { viewOnce: viewOnce.value });
     if (text.value.trim() === message) text.value = "";
+    stopTyping();
   } catch {
     error.value = "Private message was not sent. Check the session and retry.";
   } finally {
@@ -158,7 +180,7 @@ function burn() {
       <span v-else class="grid h-11 w-7 shrink-0 place-items-center text-muted" title="verify device first" data-testid="view-once-lock">
         <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </span>
-      <textarea v-model="text" class="min-h-11 min-w-0 flex-1 rounded-control border border-line bg-bg px-3 py-2 text-[16px] text-ink" :disabled="!canSend || busy" aria-label="private message" placeholder="Private message" data-testid="priv-input" />
+      <textarea v-model="text" class="min-h-11 min-w-0 flex-1 rounded-control border border-line bg-bg px-3 py-2 text-[16px] text-ink" :disabled="!canSend || busy" aria-label="private message" placeholder="Private message" data-testid="priv-input" @input="pingTyping" />
       <button class="min-h-11 rounded-pill bg-primary px-4 text-meta text-primary-foreground disabled:opacity-40" :disabled="!canSend || busy || !text.trim()" data-testid="priv-send">Send</button>
     </form>
     <div v-if="confirmBurn" role="alertdialog" aria-label="burn private session" class="border-t border-line bg-bg p-4">

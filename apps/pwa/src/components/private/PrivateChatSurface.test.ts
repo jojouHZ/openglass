@@ -6,9 +6,14 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
+import type { ApiClient, Chat } from "@openglass/core";
+import { bindApiClient, useChatsStore } from "@openglass/core";
 import type { PrivateSessionView } from "@openglass/core/private/remote";
 import PrivateChatSurface from "./PrivateChatSurface.vue";
 import PrivateSheet from "./PrivateSheet.vue";
+
+const events = { typingStart: vi.fn(), typingStop: vi.fn() };
+bindApiClient({ events } as unknown as ApiClient);
 
 function setup(verified = true) {
   const snapshot: PrivateSessionView = {
@@ -24,9 +29,15 @@ function setup(verified = true) {
     send: vi.fn(async () => {}), purgeRead: vi.fn(), markDisplayed: vi.fn(), burn: vi.fn(),
     startInvite: vi.fn(), accept: vi.fn(),
   };
+  const pinia = createPinia();
+  const chats = useChatsStore(pinia);
+  chats.chats.push({
+    id: "chat", type: "direct", title: null,
+    peer: { id: "peer", displayName: "Bob" } as Chat["peer"],
+  } as Chat);
   const wrapper = mount(PrivateChatSurface, {
     props: { peerId: "peer", peerName: "Bob", blocked: false },
-    global: { provide: { "og.private": remote }, plugins: [createPinia()] },
+    global: { provide: { "og.private": remote }, plugins: [pinia] },
   });
   return { wrapper, remote };
 }
@@ -42,6 +53,17 @@ describe("same-window private surface", () => {
     expect((wrapper.get('[data-testid="priv-input"]').element as HTMLTextAreaElement).value).toBe("");
     wrapper.unmount();
     expect(remote.purgeRead).toHaveBeenCalledWith("session");
+  });
+
+  it("emits typing.start over the public channel while typing privately", async () => {
+    events.typingStart.mockClear();
+    events.typingStop.mockClear();
+    const { wrapper } = setup();
+    await wrapper.get('[data-testid="priv-input"]').setValue("draft");
+    expect(events.typingStart).toHaveBeenCalledWith("chat");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(events.typingStop).toHaveBeenCalledWith("chat");
   });
 
   it("cannot send while keys are exchanging or contact consent is removed", async () => {
