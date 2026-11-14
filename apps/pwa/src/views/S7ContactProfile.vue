@@ -186,6 +186,7 @@ async function message() {
     <div
       v-else-if="loadFailed"
       class="grid flex-1 place-items-center px-6 text-center"
+      role="alert"
       data-testid="load-error"
     >
       <div class="flex flex-col items-center gap-3">

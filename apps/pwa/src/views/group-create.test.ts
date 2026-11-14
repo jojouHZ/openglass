@@ -114,6 +114,7 @@ describe("S8 load failure", () => {
       await router.push({ name: "s8-group-create" });
       const w = mount(S8GroupCreate, { global: { plugins: [router, pinia] } });
       await vi.waitFor(() => expect(w.find('[data-testid="load-error"]').exists()).toBe(true));
+      expect(w.find('[data-testid="load-error"]').attributes("role")).toBe("alert");
       expect(w.find('[data-testid="empty"]').exists()).toBe(false);
       ctx.api.contacts.list = orig;
       await w.find('[data-testid="load-retry"]').trigger("click");

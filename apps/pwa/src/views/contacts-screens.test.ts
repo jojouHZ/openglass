@@ -223,6 +223,7 @@ describe("S7 contact profile", () => {
       await router.push({ name: "s7-contact-profile", params: { userId: stranger.id } });
       const w = mount(S7ContactProfile, { global: { plugins: [router, pinia] } });
       await vi.waitFor(() => expect(w.find('[data-testid="load-error"]').exists()).toBe(true));
+      expect(w.find('[data-testid="load-error"]').attributes("role")).toBe("alert");
       expect(w.find('[data-testid="not-found"]').exists()).toBe(false);
       ctx.api.users.get = orig;
       await w.find('[data-testid="load-retry"]').trigger("click");
