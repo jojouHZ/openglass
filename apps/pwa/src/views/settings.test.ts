@@ -36,8 +36,10 @@ const session = () => useSessionStore(pinia);
 const chats = () => useChatsStore(pinia);
 const contacts = () => useContactsStore(pinia);
 
+// fixed settle time, then wait for in-flight mocked requests to finish
 async function flush(ms = 350) {
   await new Promise((r) => setTimeout(r, ms));
+  await ctx.idle();
 }
 
 beforeAll(async () => {

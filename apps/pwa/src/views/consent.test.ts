@@ -34,8 +34,10 @@ const router = createAppRouter(createMemoryHistory());
 const chats = () => useChatsStore(pinia);
 const contacts = () => useContactsStore(pinia);
 
+// fixed settle time, then wait for in-flight mocked requests to finish
 async function flush(ms = 400) {
   await new Promise((r) => setTimeout(r, ms));
+  await ctx.idle();
 }
 
 beforeAll(async () => {

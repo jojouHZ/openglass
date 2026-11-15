@@ -60,9 +60,14 @@ describe("AttachmentView", () => {
   it("renders a file chip with name and size; click triggers download", async () => {
     seed({ id: "a2000000-0000-4000-8000-000000000001", kind: "file", mimeType: "text/plain", fileName: "notes.txt" },
       new Uint8Array(2048));
+    const urlsBefore = vi.mocked(URL.createObjectURL).mock.calls.length;
     const w = mount(AttachmentView, {
       props: { att: { id: "a2000000-0000-4000-8000-000000000001", kind: "file", mimeType: "text/plain", fileName: "notes.txt", sizeBytes: 2048, url: "" } },
     });
+    // the blob must be fetched before the chip can download it
+    await vi.waitFor(() =>
+      expect(vi.mocked(URL.createObjectURL).mock.calls.length).toBeGreaterThan(urlsBefore),
+    );
     await flush();
     const chip = w.find('[data-testid="att-file"]');
     expect(chip.exists()).toBe(true);
@@ -70,7 +75,7 @@ describe("AttachmentView", () => {
     expect(chip.text()).toContain("2 kb");
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     await chip.trigger("click");
-    expect(click).toHaveBeenCalled();
+    await vi.waitFor(() => expect(click).toHaveBeenCalled());
   });
 
   it("shows the failed state when the download errors", async () => {

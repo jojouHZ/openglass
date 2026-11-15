@@ -16,6 +16,9 @@ export interface MockNodeContext {
   api: ApiClient;
   server: SetupServer;
   state: MockState;
+  /** Resolves once no mocked request is in flight (and stays quiet for a
+   *  moment) — lets tests wait for the network instead of a fixed sleep. */
+  idle(): Promise<void>;
 }
 
 export function createMockNodeApiClient(opts: CreateApiOptions): MockNodeContext {
@@ -23,5 +26,16 @@ export function createMockNodeApiClient(opts: CreateApiOptions): MockNodeContext
   const server = setupServer(...createHandlers(state));
   server.listen({ onUnhandledFrame: "bypass" });
   const api = new HttpApiClient(opts, new MockWsClient(state));
-  return { api, server, state };
+
+  let inFlight = 0;
+  server.events.on("request:start", () => void inFlight++);
+  server.events.on("request:end", () => void Math.max(0, inFlight--));
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const idle = async () => {
+    const deadline = Date.now() + 5000;
+    do await sleep(25);
+    while (inFlight > 0 && Date.now() < deadline);
+    await sleep(25);
+  };
+  return { api, server, state, idle };
 }

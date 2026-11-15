@@ -34,8 +34,10 @@ const router = createAppRouter(createMemoryHistory());
 const session = () => useSessionStore(pinia);
 const chats = () => useChatsStore(pinia);
 
+// fixed settle time, then wait for in-flight mocked requests to finish
 async function flush(ms = 350) {
   await new Promise((r) => setTimeout(r, ms));
+  await ctx.idle();
 }
 
 async function mountManage() {
@@ -118,8 +120,9 @@ describe("S9a group management", () => {
     const w = await mountManage();
     const dimaRow = w.findAll('[data-testid="member-row"]').find((r) => r.text().includes("dima"));
     await dimaRow!.find('[data-testid="member-manage"]').trigger("click");
+    // the sheet mounts through a portal/presence layer — wait for it
+    await vi.waitFor(() => expect(w.find('[data-testid="member-sheet"]').exists()).toBe(true));
     const sheet = w.find('[data-testid="member-sheet"]');
-    expect(sheet.exists()).toBe(true);
     // touch floor (class contract — E2E measures real boxes elsewhere)
     expect(sheet.find('[data-testid="right-pinMessages"]').classes()).toContain("min-h-11");
     expect(sheet.find('[data-testid="remove-member"]').classes()).toContain("min-h-11");

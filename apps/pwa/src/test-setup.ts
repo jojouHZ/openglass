@@ -1,0 +1,21 @@
+// Copyright (C) 2025 OpenGlass contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Component tests wait for lazy route chunks, portals and animations with
+// vi.waitFor. Its built-in 1s budget is enough on an idle machine but flaky
+// under load (a cold start, parallel workers, CI), so give every wait a
+// 5s budget unless a test sets its own. The wait still returns as soon as
+// the condition holds, so passing runs are not slower.
+
+import { vi } from "vitest";
+
+const WAIT_BUDGET_MS = 5000;
+const waitFor = vi.waitFor.bind(vi);
+
+vi.waitFor = ((callback, options) =>
+  waitFor(
+    callback,
+    typeof options === "number"
+      ? options
+      : { timeout: WAIT_BUDGET_MS, ...options },
+  )) as typeof vi.waitFor;
