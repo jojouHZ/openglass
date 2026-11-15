@@ -22,7 +22,11 @@ import { DEMO_INVITE, DEMO_OTP, demoAttachment, selfUser } from "./fixtures";
 import { freshId, MockState } from "./state";
 
 const API = "*/api/v1";
-const LATENCY_MS = 80;
+/** Simulated round-trip time. Tests shrink it (see the PWA test setup) so
+ *  that fixed settle times leave a wide margin even on a slow or jittery
+ *  machine; the dev mock keeps the realistic default. */
+const latencyMs = (): number =>
+  (globalThis as { __OG_MOCK_LATENCY_MS__?: number }).__OG_MOCK_LATENCY_MS__ ?? 80;
 
 const err = (status: number, code: string, message: string, details?: Record<string, unknown>) =>
   HttpResponse.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
@@ -63,13 +67,13 @@ export function createHandlers(state: MockState) {
   return [
     // ---------- system ----------
     http.get("*/healthz", async () => {
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({ status: "ok", postgres: "up", redis: "up" });
     }),
 
     // ---------- auth ----------
     http.post(`${API}/auth/otp/request`, async ({ request }) => {
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { email, inviteCode } = (await request.json()) as {
         email: string;
         inviteCode?: string;
@@ -85,7 +89,7 @@ export function createHandlers(state: MockState) {
     }),
 
     http.post(`${API}/auth/otp/verify`, async ({ request }) => {
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { email, code } = (await request.json()) as { email: string; code: string };
       if (code !== DEMO_OTP)
         return err(400, "otp_invalid", "Wrong code", { attemptsLeft: 4 });
@@ -102,7 +106,7 @@ export function createHandlers(state: MockState) {
     }),
 
     http.post(`${API}/auth/profile`, async ({ request }) => {
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const g = guard(request);
       if (g) return g;
       if (!state.session) return err(401, "unauthorized", "No session — verify OTP first");
@@ -163,7 +167,7 @@ export function createHandlers(state: MockState) {
     }),
 
     http.post(`${API}/auth/refresh`, async () => {
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({
         accessToken: ACCESS,
         accessTokenExpiresInS: 900,
@@ -174,7 +178,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/auth/logout`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       state.session = null;
       return empty();
     }),
@@ -182,14 +186,14 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/auth/sessions`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({ sessions: state.sessions });
     }),
 
     http.delete(`${API}/auth/sessions/:sessionId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.sessions.findIndex((s) => s.id === params.sessionId);
       if (i === -1) return err(404, "not_found", "Session not found");
       state.sessions.splice(i, 1);
@@ -200,7 +204,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/users/me`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const user = state.session?.user ?? selfUser;
       return ok({ user, email: state.session?.email ?? "jojou@openglass.demo" });
     }),
@@ -208,7 +212,7 @@ export function createHandlers(state: MockState) {
     http.patch(`${API}/users/me`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const body = (await request.json()) as { displayName?: string; avatarUrl?: string | null };
       const user = state.session?.user ?? selfUser;
       if (body.displayName) user.displayName = body.displayName;
@@ -219,7 +223,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/users/search`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const q = new URL(request.url).searchParams.get("q")?.toLowerCase() ?? "";
       const users = [...state.users.values()].filter(
         (u) =>
@@ -232,7 +236,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/users/:userId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const user = state.findUser(String(params.userId));
       if (!user) return err(404, "not_found", "User not found");
       return ok({ user, relationship: state.relationship(user.id) });
@@ -242,14 +246,14 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/contacts`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({ contacts: state.contacts });
     }),
 
     http.post(`${API}/contacts`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { userId } = (await request.json()) as { userId: string };
       if (userId === selfUser.id) return err(400, "validation_failed", "You cannot add yourself");
       const user = state.findUser(userId);
@@ -276,14 +280,14 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/contacts/requests`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({ incoming: state.incomingRequests, outgoing: state.outgoingRequests });
     }),
 
     http.post(`${API}/contacts/requests/:userId/accept`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.incomingRequests.findIndex((r) => r.user.id === params.userId);
       if (i === -1) return err(404, "not_found", "Request not found");
       const [req] = state.incomingRequests.splice(i, 1);
@@ -295,7 +299,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/contacts/requests/:userId/decline`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.incomingRequests.findIndex((r) => r.user.id === params.userId);
       if (i === -1) return err(404, "not_found", "Request not found");
       state.incomingRequests.splice(i, 1);
@@ -305,7 +309,7 @@ export function createHandlers(state: MockState) {
     http.delete(`${API}/contacts/requests/:userId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.outgoingRequests.findIndex((r) => r.user.id === params.userId);
       if (i === -1) return err(404, "not_found", "Request not found");
       state.outgoingRequests.splice(i, 1);
@@ -315,7 +319,7 @@ export function createHandlers(state: MockState) {
     http.delete(`${API}/contacts/:userId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.contacts.findIndex((c) => c.user.id === params.userId);
       if (i === -1) return err(404, "not_found", "Contact not found");
       state.contacts.splice(i, 1);
@@ -326,7 +330,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/chats`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const chats = [...state.chatSummaries.values()].sort(
         (a, b) =>
           Number(b.pinned ?? false) - Number(a.pinned ?? false) ||
@@ -338,7 +342,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/chats`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { userId } = (await request.json()) as { userId: string };
       const peer = state.findUser(userId);
       if (!peer) return err(404, "not_found", "User not found");
@@ -370,7 +374,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/chats/:chatId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const chat = state.chats.get(String(params.chatId));
       if (!chat) return err(404, "not_found", "Chat not found");
       return ok({ chat });
@@ -379,7 +383,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/chats/:chatId/pin`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { pinned } = (await request.json()) as { pinned: boolean };
       const s = state.chatSummaries.get(String(params.chatId));
       if (!s) return err(404, "not_found", "Chat not found");
@@ -391,7 +395,7 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/chats/:chatId/messages`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const url = new URL(request.url);
       const limit = Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 100);
       const q = url.searchParams.get("q")?.toLowerCase();
@@ -452,7 +456,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/chats/:chatId/messages`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const chatId = String(params.chatId);
       if (!state.chats.has(chatId)) return err(404, "not_found", "Chat not found");
       const body = (await request.json()) as {
@@ -520,7 +524,7 @@ export function createHandlers(state: MockState) {
     http.patch(`${API}/messages/:messageId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const m = findMessage(String(params.messageId));
       if (!m) return err(404, "not_found", "Message not found");
       const { text } = (await request.json()) as { text: string };
@@ -532,7 +536,7 @@ export function createHandlers(state: MockState) {
     http.delete(`${API}/messages/:messageId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const m = findMessage(String(params.messageId));
       if (!m) return err(404, "not_found", "Message not found");
       m.deletedAt = new Date().toISOString();
@@ -546,7 +550,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/messages/:messageId/pin`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const m = findMessage(String(params.messageId));
       if (!m) return err(404, "not_found", "Message not found");
       const { pinned } = (await request.json()) as { pinned: boolean };
@@ -557,7 +561,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/chats/:chatId/attachments`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const chatId = String(params.chatId);
       if (!state.chats.has(chatId)) return err(404, "not_found", "Chat not found");
       const fd = await request.formData();
@@ -598,7 +602,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/chats/:chatId/read`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const s = state.chatSummaries.get(String(params.chatId));
       if (s) s.unreadCount = 0;
       return empty();
@@ -608,7 +612,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/groups`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { title, memberIds } = (await request.json()) as { title: string; memberIds: string[] };
       const members: GroupMember[] = [
         {
@@ -647,7 +651,7 @@ export function createHandlers(state: MockState) {
     http.patch(`${API}/groups/:chatId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const chat = state.chats.get(String(params.chatId));
       if (!chat) return err(404, "not_found", "Chat not found");
       const { title } = (await request.json()) as { title?: string };
@@ -662,7 +666,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/groups/:chatId/members`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { memberIds } = (await request.json()) as { memberIds: string[] };
       const members = state.members.get(String(params.chatId));
       const chat = state.chats.get(String(params.chatId));
@@ -681,7 +685,7 @@ export function createHandlers(state: MockState) {
     http.delete(`${API}/groups/:chatId/members/:userId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const members = state.members.get(String(params.chatId));
       if (!members) return err(404, "not_found", "Chat not found");
       const i = members.findIndex((m) => m.user.id === params.userId);
@@ -697,7 +701,7 @@ export function createHandlers(state: MockState) {
     http.patch(`${API}/groups/:chatId/members/:userId`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const members = state.members.get(String(params.chatId));
       const member = members?.find((m) => m.user.id === params.userId);
       if (!member) return err(404, "not_found", "Member not found");
@@ -709,14 +713,14 @@ export function createHandlers(state: MockState) {
     http.get(`${API}/group-invites`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       return ok({ invites: state.groupInvites });
     }),
 
     http.post(`${API}/group-invites/:chatId/accept`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.groupInvites.findIndex((x) => x.chatId === params.chatId);
       if (i === -1) return err(404, "not_found", "Invitation not found");
       const [inv] = state.groupInvites.splice(i, 1);
@@ -739,7 +743,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/group-invites/:chatId/decline`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const i = state.groupInvites.findIndex((x) => x.chatId === params.chatId);
       if (i === -1) return err(404, "not_found", "Invitation not found");
       state.groupInvites.splice(i, 1);
@@ -749,7 +753,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/groups/:chatId/ownership`, async ({ request, params }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const members = state.members.get(String(params.chatId));
       const { newOwnerId } = (await request.json()) as { newOwnerId: string };
       const target = members?.find((m) => m.user.id === newOwnerId);
@@ -762,7 +766,7 @@ export function createHandlers(state: MockState) {
     http.post(`${API}/reports`, async ({ request }) => {
       const g = guard(request);
       if (g) return g;
-      await delay(LATENCY_MS);
+      await delay(latencyMs());
       const { userId, reason } = (await request.json()) as { userId?: string; reason?: string };
       const text = (reason ?? "").trim();
       if (!userId || text.length < 1 || [...text].length > 1024)
