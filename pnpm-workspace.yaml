@@ -14,3 +14,9 @@ allowBuilds:
 # covers the fixed 1.2.2; force the lockfile past the vulnerable range.
 overrides:
   source-map-js: ^1.2.2
+# GHSA glob (AbortSignal bypass, fixed in 14.0.2) and minimatch (globparts
+# amplification DoS, fixed in 11.0.1). Both arrive only through the test-only
+# chain @vue/test-utils -> js-beautify 2.0.3, which pins glob ^13 and has no
+# newer release. Exact versions: the newest ones older than 7 days.
+  glob: 14.0.4
+  minimatch: 11.0.5
