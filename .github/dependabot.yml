@@ -2,12 +2,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 version: 2
+
+# Cooldown: a new release is proposed only once it is 7 days old, so a yanked
+# or compromised release is usually gone before it reaches a PR. Security
+# updates ignore the cooldown and still arrive immediately.
 updates:
   # Go modules — weekly, grouped to keep PR noise low
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       go-minor-patch:
         update-types: [minor, patch]
@@ -17,6 +23,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
@@ -26,9 +34,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   # Docker base images
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
