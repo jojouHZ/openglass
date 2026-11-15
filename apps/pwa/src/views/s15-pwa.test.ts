@@ -55,10 +55,9 @@ describe("S15 PWA prompts", () => {
     const btn = w.find('[data-testid="install-prompt"]');
     expect(btn.exists()).toBe(true);
     await btn.trigger("click");
-    await flush();
-    expect(ev.prompt).toHaveBeenCalled();
+    await vi.waitFor(() => expect(ev.prompt).toHaveBeenCalled());
     // accepted → installed state
-    expect(w.find('[data-testid="install-done"]').exists()).toBe(true);
+    await vi.waitFor(() => expect(w.find('[data-testid="install-done"]').exists()).toBe(true));
   });
 
   it("reflects the realtime connectivity state in the offline card", async () => {
