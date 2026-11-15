@@ -40,6 +40,21 @@ unless you prefer to stay anonymous.
 The project is pre-1.0: only `main` and the latest tagged release
 receive fixes.
 
+## Dependency policy
+
+- Dependabot proposes updates weekly and waits 7 days after a release
+  before proposing it (`cooldown` in `.github/dependabot.yml`). Security
+  updates ignore the cooldown.
+- GitHub Actions are pinned to full commit SHAs; Docker base images are
+  pinned to digests.
+- When a vulnerable package arrives only through a transitive dependency
+  that its parent has not released a fix for, it is forced to a fixed
+  version through `overrides` in `pnpm-workspace.yaml`, choosing the newest
+  version that is at least 7 days old.
+- Advisories that affect only test or CI tooling (not the production
+  bundle or the server binary) are still fixed, but are triaged below
+  advisories that reach the shipped artifacts.
+
 ## Hardening notes for operators
 
 - Terminate TLS at a reverse proxy; never expose :8081 publicly
