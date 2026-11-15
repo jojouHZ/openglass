@@ -8,7 +8,7 @@
 
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { bindApiClient, useChatsStore, useSessionStore } from "@openglass/core";
 import { createMockNodeApiClient } from "@openglass/core/api/mock/node";
@@ -24,7 +24,11 @@ bindApiClient(ctx.api);
 const router = createAppRouter(createMemoryHistory());
 const session = () => useSessionStore(pinia);
 const chats = () => useChatsStore(pinia);
-const flush = async (ms = 400) => new Promise((r) => setTimeout(r, ms));
+// fixed settle time, then wait for in-flight mocked requests to finish
+const flush = async (ms = 400) => {
+  await new Promise((r) => setTimeout(r, ms));
+  await ctx.idle();
+};
 
 beforeAll(async () => {
   localStorage.clear();
@@ -54,8 +58,18 @@ describe("S5 in-chat search", () => {
     const count = w.find('[data-testid="search-count"]');
     expect(count.exists()).toBe(true);
     expect(count.text()).toMatch(/^1 of \d+$/);
-    // the window was re-centered around the match via `around`
-    expect(chats().window(DIRECT).messages.some((m) => m.id === target.id)).toBe(true);
+    // the window was re-centered around the focused match via `around`: the
+    // highlighted message is in the window and contains the query (the
+    // focused match is the first result, not necessarily `target`)
+    const fragment = target.text!.slice(0, 6);
+    await vi.waitFor(() => {
+      // the highlight ring sits on the bubble inside the [data-mid] row
+      const ring = w.find("[data-mid] .ring-2");
+      expect(ring.exists()).toBe(true);
+      const id = (ring.element.closest("[data-mid]") as HTMLElement).dataset.mid;
+      const msg = chats().window(DIRECT).messages.find((m) => m.id === id);
+      expect(msg?.text).toContain(fragment);
+    });
     w.unmount();
   });
 
