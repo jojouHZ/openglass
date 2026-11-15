@@ -120,6 +120,10 @@ describe("S4 chat list", () => {
   });
 
   it("load failure shows a retry banner instead of a false empty", async () => {
+    // drain requests left in flight by earlier specs: a stale success landing
+    // after our failure would clear the banner (the store applies responses
+    // in arrival order)
+    await ctx.idle();
     const orig = ctx.api.chats.list;
     ctx.api.chats.list = () =>
       Promise.reject(
@@ -160,9 +164,8 @@ describe("S5 chat view", () => {
 
     await w.find('[data-testid="composer-input"]').setValue("hello from s5 test");
     await w.find('[data-testid="send"]').trigger("click");
-    await flush(400);
 
-    expect(w.text()).toContain("hello from s5 test");
+    await vi.waitFor(() => expect(w.text()).toContain("hello from s5 test"));
   });
 
   it("context menu shows edit only on own messages", async () => {
@@ -252,9 +255,8 @@ describe("S5 chat view", () => {
       document
         .querySelector('[data-testid="mi-delete"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await flush(150);
-      expect(w.find('[data-testid="action-error"]').text()).toContain(
-        "delete failed",
+      await vi.waitFor(() =>
+        expect(w.find('[data-testid="action-error"]').text()).toContain("delete failed"),
       );
       w.unmount();
     } finally {

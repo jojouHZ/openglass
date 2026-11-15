@@ -58,9 +58,15 @@ describe("private invite card", () => {
     );
     await wrapper.get('[data-testid="private-accept"]').trigger("click");
     expect(remote.accept).not.toHaveBeenCalled();
+    // the confirm dialog renders through a portal and the handler is async
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="confirm-action"]').exists()).toBe(true),
+    );
     await wrapper.get('[data-testid="confirm-action"]').trigger("click");
-    expect(remote.burn).toHaveBeenCalledWith("s-other-peer");
-    expect(remote.accept).toHaveBeenCalledWith("inc");
+    await vi.waitFor(() => {
+      expect(remote.burn).toHaveBeenCalledWith("s-other-peer");
+      expect(remote.accept).toHaveBeenCalledWith("inc");
+    });
   });
 
   it("cancel keeps the other session and ignores the invite", async () => {

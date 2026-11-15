@@ -257,13 +257,23 @@ describe("S7 report (F4)", () => {
     });
     return w;
   }
+  // the dialog mounts a tick after the click — wait for it before typing
+  async function openReportDialog(w: ReturnType<typeof mount>) {
+    // a click before the profile is interactive is lost, so click until it opens
+    await vi.waitFor(async () => {
+      if (!w.find('[data-testid="report-dialog"]').exists()) {
+        await w.find('[data-testid="action-report"]').trigger("click");
+      }
+      expect(w.find('[data-testid="report-dialog"]').exists()).toBe(true);
+    });
+  }
   const submit = (w: ReturnType<typeof mount>) =>
     w.find('[data-testid="report-submit"]').element as HTMLButtonElement;
 
   it("offers a report action; empty or whitespace-only reasons cannot be sent", async () => {
     const w = await openProfile();
     expect(w.find('[data-testid="report-dialog"]').exists()).toBe(false);
-    await w.find('[data-testid="action-report"]').trigger("click");
+    await openReportDialog(w);
     expect(w.find('[data-testid="report-dialog"]').text()).toContain("not told");
     expect(submit(w).disabled).toBe(true);
     await w.find('[data-testid="report-reason"]').setValue("   \n ");
@@ -276,7 +286,7 @@ describe("S7 report (F4)", () => {
 
   it("more than 1024 characters disables sending and flags the counter", async () => {
     const w = await openProfile();
-    await w.find('[data-testid="action-report"]').trigger("click");
+    await openReportDialog(w);
     await w.find('[data-testid="report-reason"]').setValue("x".repeat(1025));
     expect(submit(w).disabled).toBe(true);
     expect(w.find('[data-testid="report-counter"]').classes()).toContain("text-danger");
@@ -294,7 +304,7 @@ describe("S7 report (F4)", () => {
     };
     try {
       const w = await openProfile();
-      await w.find('[data-testid="action-report"]').trigger("click");
+      await openReportDialog(w);
       await w.find('[data-testid="report-reason"]').setValue("  rude in group  ");
       await w.find('[data-testid="report-submit"]').trigger("click");
       await vi.waitFor(() => {
@@ -316,7 +326,7 @@ describe("S7 report (F4)", () => {
       Promise.reject(new ApiRequestError(429, { code: "rate_limited", message: "slow down" }));
     try {
       const w = await openProfile();
-      await w.find('[data-testid="action-report"]').trigger("click");
+      await openReportDialog(w);
       await w.find('[data-testid="report-reason"]').setValue("again");
       await w.find('[data-testid="report-submit"]').trigger("click");
       await vi.waitFor(() => {
@@ -342,7 +352,7 @@ describe("S7 report (F4)", () => {
       );
     try {
       const w = await openProfile();
-      await w.find('[data-testid="action-report"]').trigger("click");
+      await openReportDialog(w);
       await w.find('[data-testid="report-reason"]').setValue("one more");
       await w.find('[data-testid="report-submit"]').trigger("click");
       await vi.waitFor(() => {
@@ -364,7 +374,7 @@ describe("S7 report (F4)", () => {
     };
     try {
       const w = await openProfile();
-      await w.find('[data-testid="action-report"]').trigger("click");
+      await openReportDialog(w);
       await w.find('[data-testid="report-reason"]').setValue("never mind");
       await w.find('[data-testid="report-cancel"]').trigger("click");
       expect(w.find('[data-testid="report-dialog"]').exists()).toBe(false);
