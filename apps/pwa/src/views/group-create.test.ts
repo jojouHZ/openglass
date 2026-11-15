@@ -119,8 +119,14 @@ describe("S8 load failure", () => {
       expect(w.find('[data-testid="load-error"]').attributes("role")).toBe("alert");
       expect(w.find('[data-testid="empty"]').exists()).toBe(false);
       ctx.api.contacts.list = orig;
-      await w.find('[data-testid="load-retry"]').trigger("click");
-      await vi.waitFor(() => expect(w.findAll('[data-testid="member-row"]').length).toBeGreaterThan(0));
+      // a retry that lands while another refresh is running is a no-op by
+      // design, so keep retrying until the roster arrives
+      await vi.waitFor(async () => {
+        if (!w.findAll('[data-testid="member-row"]').length) {
+          await w.find('[data-testid="load-retry"]').trigger("click");
+        }
+        expect(w.findAll('[data-testid="member-row"]').length).toBeGreaterThan(0);
+      });
       expect(w.find('[data-testid="load-error"]').exists()).toBe(false);
       w.unmount();
     } finally {

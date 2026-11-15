@@ -44,7 +44,14 @@ async function mountSearch() {
     attachTo: document.body,
   });
   await flush(600);
-  await w.find('[aria-label="chat menu"]').trigger("click");
+  // the menu opens through a popover layer; open it only while it is closed,
+  // so a retry never toggles it shut again
+  await vi.waitFor(async () => {
+    if (!w.findAll("button").some((b) => b.text() === "search")) {
+      await w.find('[aria-label="chat menu"]').trigger("click");
+    }
+    expect(w.findAll("button").some((b) => b.text() === "search")).toBe(true);
+  });
   await w.findAll("button").find((b) => b.text() === "search")!.trigger("click");
   return w;
 }

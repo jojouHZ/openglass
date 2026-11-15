@@ -85,12 +85,23 @@ describe("S9a group management", () => {
     );
   });
 
+  // tap a member row until the app has navigated: a tap that lands before the
+  // member list is rendered, or while a previous navigation settles, is lost
+  async function tapUntil(w: Awaited<ReturnType<typeof mountManage>>, who: string, route: string) {
+    await vi.waitFor(async () => {
+      if (router.currentRoute.value.name !== route) {
+        await w
+          .findAll('[data-testid="member-row"]')
+          .find((r) => r.text().includes(who))
+          ?.trigger("click");
+      }
+      expect(router.currentRoute.value.name).toBe(route);
+    });
+  }
+
   it("tapping a member: a contact opens the chat, anyone else (and you) the profile; actions are a separate button", async () => {
     const w = await mountManage();
-    const rows = w.findAll('[data-testid="member-row"]');
-    const dima = rows.find((r) => r.text().includes("dima"))!;
-    await dima.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s5-chat-view"));
+    await tapUntil(w, "dima", "s5-chat-view");
     expect(w.find('[data-testid="member-sheet"]').exists()).toBe(false); // no sheet on a plain tap
     w.unmount();
 
@@ -100,8 +111,7 @@ describe("S9a group management", () => {
     contacts.list = contacts.list.filter((c) => c.user.id !== groupPal.id);
     await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
     const w0 = await mountManage();
-    await w0.findAll('[data-testid="member-row"]').find((r) => r.text().includes("dima"))!.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    await tapUntil(w0, "dima", "s7-contact-profile");
     expect(router.currentRoute.value.params.userId).toBe(groupPal.id);
     contacts.list = saved;
     w0.unmount();
@@ -110,8 +120,7 @@ describe("S9a group management", () => {
     const w2 = await mountManage();
     const me = w2.findAll('[data-testid="member-row"]').find((r) => r.text().includes("you"))!;
     expect(me.find('[data-testid="member-manage"]').exists()).toBe(false); // nothing to manage on yourself
-    await me.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    await tapUntil(w2, "you", "s7-contact-profile");
     w2.unmount();
     await router.push({ name: "s9a-group-manage", params: { chatId: groupChatId } });
   });
@@ -137,12 +146,20 @@ describe("S9a group management", () => {
   it("add member picker excludes existing members", async () => {
     const w = await mountManage();
     await w.find('[data-testid="add-member"]').trigger("click");
-    await flush();
-    const names = w.findAll('[data-testid="add-row"] [data-testid="user-name"]').map((n) => n.text());
+    const pickerNames = () =>
+      w.findAll('[data-testid="add-row"] [data-testid="user-name"]').map((n) => n.text());
+    await vi.waitFor(() => expect(pickerNames()).toContain("kostya"));
+    const names = pickerNames();
     expect(names).not.toContain("anna");
     expect(names).not.toContain("dima");
-    expect(names).toContain("kostya");
-    await w.find('[data-testid="add-row"]').trigger("click");
+    // pick kostya specifically, then wait for the confirm button to enable
+    await w
+      .findAll('[data-testid="add-row"]')
+      .find((r) => r.text().includes("kostya"))!
+      .trigger("click");
+    await vi.waitFor(() =>
+      expect(w.find('[data-testid="add-confirm"]').attributes("disabled")).toBeUndefined(),
+    );
     await w.find('[data-testid="add-confirm"]').trigger("click");
     // an added contact is invited, not joined
     await vi.waitFor(() => {

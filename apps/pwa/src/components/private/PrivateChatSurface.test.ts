@@ -101,9 +101,15 @@ describe("same-window private surface", () => {
     await wrapper.get('[data-testid="invite-accept"]').trigger("click");
     // no accept yet — the confirm dialog gates it
     expect(remote.accept).not.toHaveBeenCalled();
+    // the confirm dialog renders through a portal and the handler is async
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="confirm-action"]').exists()).toBe(true),
+    );
     await wrapper.get('[data-testid="confirm-action"]').trigger("click");
-    expect(remote.burn).toHaveBeenCalledWith("other-session");
-    expect(remote.accept).toHaveBeenCalledWith("inc");
+    await vi.waitFor(() => {
+      expect(remote.burn).toHaveBeenCalledWith("other-session");
+      expect(remote.accept).toHaveBeenCalledWith("inc");
+    });
     wrapper.unmount();
   });
 });

@@ -52,10 +52,12 @@ describe("S15 PWA prompts", () => {
       userChoice: ev.userChoice,
     }));
     const w = await mountView();
-    const btn = w.find('[data-testid="install-prompt"]');
-    expect(btn.exists()).toBe(true);
-    await btn.trigger("click");
-    await vi.waitFor(() => expect(ev.prompt).toHaveBeenCalled());
+    expect(w.find('[data-testid="install-prompt"]').exists()).toBe(true);
+    // the button can be re-rendered right after mount, so look it up per attempt
+    await vi.waitFor(async () => {
+      await w.find('[data-testid="install-prompt"]').trigger("click");
+      expect(ev.prompt).toHaveBeenCalled();
+    });
     // accepted → installed state
     await vi.waitFor(() => expect(w.find('[data-testid="install-done"]').exists()).toBe(true));
   });

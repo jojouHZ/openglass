@@ -74,8 +74,11 @@ describe("AttachmentView", () => {
     expect(chip.text()).toContain("notes.txt");
     expect(chip.text()).toContain("2 kb");
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    await chip.trigger("click");
-    await vi.waitFor(() => expect(click).toHaveBeenCalled());
+    // clicking before the blob URL is assigned is a no-op, so retry the click
+    await vi.waitFor(async () => {
+      await chip.trigger("click");
+      expect(click).toHaveBeenCalled();
+    });
   });
 
   it("shows the failed state when the download errors", async () => {

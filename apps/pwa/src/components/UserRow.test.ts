@@ -74,6 +74,8 @@ describe("person row menu", () => {
     await vi.waitFor(() => expect(document.querySelector('[data-testid="um-profile"]')).toBeTruthy());
     (document.querySelector('[data-testid="um-profile"]') as HTMLElement).click();
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("s7-contact-profile"));
+    // the first menu must be gone, or its late close would swallow the next open
+    await vi.waitFor(() => expect(document.querySelector('[data-testid="um-profile"]')).toBeNull());
 
     await w.find('[data-testid="user-row"]').trigger("contextmenu", { clientX: 1, clientY: 1 });
     await vi.waitFor(() => expect(document.querySelector('[data-testid="um-message"]')).toBeTruthy());
